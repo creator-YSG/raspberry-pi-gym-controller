@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>세로 모드 테스트 - 락카키 대여기</title>
+    <link rel="stylesheet" href="web/static/css/portrait.css">
+</head>
+<body>
+    <div class="portrait-container">
+        <header class="header">
+            🏋️ 헬스장 락카키 대여기
+        </header>
+        
+        <main class="main-content">
+            <div class="barcode-scan-area">
+                <div class="barcode-icon">📱</div>
+                <div class="barcode-text large-text">
+                    회원 바코드를 스캔해주세요
+                </div>
+            </div>
+            
+            <div class="status-message status-info">
+                CSS 회전 테스트 중입니다<br>
+                이 화면이 세로로 보이나요?
+            </div>
+            
+            <div class="touch-button">테스트 버튼</div>
+        </main>
+        
+        <footer class="footer">
+            <button class="touch-button">홈</button>
+            <button class="touch-button">새로고침</button>
+            <button class="touch-button">관리자</button>
+        </footer>
+        
+        <div class="debug-info">
+            해상도: <span id="resolution"></span><br>
+            화면 크기: <span id="screen-size"></span><br>
+            회전 상태: CSS 90도 회전 적용됨
+        </div>
+    </div>
+
+    <script>
+        // 디버그 정보 업데이트
+        function updateDebugInfo() {
+            document.getElementById('resolution').textContent = 
+                `${window.screen.width}x${window.screen.height}`;
+            document.getElementById('screen-size').textContent = 
+                `${window.innerWidth}x${window.innerHeight}`;
+        }
+        
+        updateDebugInfo();
+        window.addEventListener('resize', updateDebugInfo);
+        
+        // 터치 테스트
+        document.addEventListener('touchstart', function(e) {
+            console.log('터치 시작:', e.touches[0].clientX, e.touches[0].clientY);
+        });
+        
+        document.addEventListener('click', function(e) {
+            console.log('클릭:', e.clientX, e.clientY);
+        });
+    </script>
+</body>
+</html>

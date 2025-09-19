@@ -62,14 +62,30 @@ class RentalRecord:
 class GoogleSheetsManager:
     """구글시트 연동 매니저"""
     
-    def __init__(self, credentials_file: str, spreadsheet_id: str):
+    def __init__(self, credentials_file: str = None, spreadsheet_id: str = None):
         """
         Args:
             credentials_file: 구글 서비스 계정 JSON 파일 경로
-            spreadsheet_file: 구글시트 ID
+            spreadsheet_id: 구글시트 ID
         """
-        self.credentials_file = credentials_file
-        self.spreadsheet_id = spreadsheet_id
+        # 설정 파일에서 읽기
+        config_file = Path(__file__).parent.parent / "config" / "google_sheets_config.json"
+        if config_file.exists():
+            import json
+            with open(config_file, 'r') as f:
+                config = json.load(f)
+            
+            self.spreadsheet_id = spreadsheet_id or config.get("spreadsheet_id")
+            creds_file = credentials_file or config.get("credentials_file")
+            
+            if creds_file and not creds_file.startswith('/'):
+                # 상대 경로면 config 디렉토리 기준으로 변환
+                self.credentials_file = str(Path(__file__).parent.parent / "config" / creds_file)
+            else:
+                self.credentials_file = creds_file
+        else:
+            self.credentials_file = credentials_file
+            self.spreadsheet_id = spreadsheet_id
         
         self.client: Optional['gspread.Client'] = None
         self.spreadsheet: Optional['gspread.Spreadsheet'] = None

@@ -3,8 +3,10 @@
 # 필수 - 시리얼 통신 (ESP32와 통신)
 pyserial>=3.5
 
-# 필수 - 터치스크린 GUI
-PyQt5>=5.15.0
+# 필수 - 웹 기반 GUI
+Flask>=2.3.0
+Flask-SocketIO>=5.3.0
+eventlet>=0.33.0
 
 # 필수 - 구글시트 연동 (WiFi)
 gspread>=5.10.0
