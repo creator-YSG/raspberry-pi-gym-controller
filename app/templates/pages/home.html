@@ -1,0 +1,149 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}헬스장 락카키 대여기{% endblock %}
+
+{% block body_class %}home-page{% endblock %}
+
+{% block content %}
+<div class="home-container">
+    <!-- 헤더 -->
+    <header class="home-header">
+        <h1 class="gym-title">🏋️ 헬스장 락카키 대여기</h1>
+        <div class="current-time" id="currentTime"></div>
+    </header>
+    
+    <!-- 메인 콘텐츠 -->
+    <main class="home-main">
+        <div class="main-button-area">
+            <!-- 메인 버튼 -->
+            <button class="locker-rental-btn" onclick="startLockerRental()">
+                <div class="btn-icon">🗝️</div>
+                <div class="btn-text">락카키 대여하기</div>
+                <div class="btn-subtitle">바코드를 스캔하여 시작하세요</div>
+            </button>
+        </div>
+        
+        <!-- 상태 표시 -->
+        <div class="status-area">
+            <div class="status-item">
+                <span class="status-label">사용 가능한 락카</span>
+                <span class="status-value" id="availableLockers">25개</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">시스템 상태</span>
+                <span class="status-value status-ok">정상</span>
+            </div>
+        </div>
+    </main>
+    
+    <!-- 하단 버튼 -->
+    <footer class="home-footer">
+        <div class="footer-buttons">
+            <button class="admin-btn" onclick="openAdmin()">⚙️ 관리자</button>
+            <button class="exit-btn" onclick="exitApplication()">❌ 종료</button>
+        </div>
+    </footer>
+</div>
+
+<!-- 확인 모달 -->
+<div id="exitModal" class="modal hidden">
+    <div class="modal-content">
+        <h3>프로그램 종료</h3>
+        <p>정말로 프로그램을 종료하시겠습니까?</p>
+        <div class="modal-buttons">
+            <button class="btn-cancel" onclick="closeExitModal()">취소</button>
+            <button class="btn-confirm" onclick="confirmExit()">종료</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// 현재 시간 업데이트
+function updateTime() {
+    const now = new Date();
+    const timeString = now.toLocaleString('ko-KR', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+    });
+    document.getElementById('currentTime').textContent = timeString;
+}
+
+// 1초마다 시간 업데이트
+setInterval(updateTime, 1000);
+updateTime(); // 초기 실행
+
+// 락카키 대여 시작
+function startLockerRental() {
+    // 풀스크린으로 전환
+    if (document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen();
+    } else if (document.documentElement.mozRequestFullScreen) {
+        document.documentElement.mozRequestFullScreen();
+    } else if (document.documentElement.webkitRequestFullscreen) {
+        document.documentElement.webkitRequestFullscreen();
+    }
+    
+    // 대여 화면으로 이동 (나중에 구현)
+    alert('락카키 대여 기능은 아직 구현되지 않았습니다.');
+}
+
+// 관리자 화면
+function openAdmin() {
+    // 간단한 비밀번호 확인
+    const password = prompt('관리자 비밀번호를 입력하세요:');
+    if (password === '1234') {
+        alert('관리자 기능은 아직 구현되지 않았습니다.');
+    } else if (password !== null) {
+        alert('비밀번호가 틀렸습니다.');
+    }
+}
+
+// 종료 확인 모달
+function exitApplication() {
+    document.getElementById('exitModal').classList.remove('hidden');
+}
+
+function closeExitModal() {
+    document.getElementById('exitModal').classList.add('hidden');
+}
+
+// 실제 종료
+function confirmExit() {
+    // 풀스크린 해제
+    if (document.exitFullscreen) {
+        document.exitFullscreen();
+    } else if (document.mozCancelFullScreen) {
+        document.mozCancelFullScreen();
+    } else if (document.webkitExitFullscreen) {
+        document.webkitExitFullscreen();
+    }
+    
+    // 브라우저 닫기 (키오스크 모드에서는 작동할 수 있음)
+    window.close();
+    
+    // 또는 Flask 서버에 종료 신호 전송
+    fetch('/api/system/shutdown', { method: 'POST' })
+        .then(() => {
+            // 화면에 종료 메시지 표시
+            document.body.innerHTML = '<div class="shutdown-message"><h1>프로그램이 종료되었습니다</h1><p>화면을 닫아주세요</p></div>';
+        })
+        .catch(() => {
+            // 오류 시에도 메시지 표시
+            document.body.innerHTML = '<div class="shutdown-message"><h1>프로그램 종료 중...</h1></div>';
+        });
+}
+
+// ESC 키로 풀스크린 해제 방지 (키오스크 모드)
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        e.preventDefault();
+    }
+});
+</script>
+{% endblock %}
