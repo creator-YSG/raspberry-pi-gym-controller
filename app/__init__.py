@@ -71,9 +71,106 @@ def create_app(config_name='default'):
     # 컨텍스트 프로세서 등록
     register_context_processors(app)
     
+    # ESP32 자동 연결 (백그라운드)
+    setup_esp32_connection(app)
+    
     app.logger.info("🚀 락카키 대여기 웹 애플리케이션 초기화 완료")
     
     return app
+
+
+def setup_esp32_connection(app):
+    """ESP32 자동 연결 설정"""
+    import asyncio
+    import threading
+    from core.esp32_manager import create_auto_esp32_manager
+    
+    # ESP32 매니저를 앱 컨텍스트에 저장
+    app.esp32_manager = None
+    
+    def esp32_connection_worker():
+        """ESP32 연결 워커 스레드"""
+        try:
+            app.logger.info("🔍 ESP32 자동 연결 시작...")
+            
+            # 새 이벤트 루프 생성 (스레드용)
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
+            # ESP32 자동 연결
+            manager = loop.run_until_complete(create_auto_esp32_manager())
+            app.esp32_manager = manager
+            
+            app.logger.info("✅ ESP32 연결 완료")
+            
+            # 이벤트 핸들러 등록
+            setup_esp32_event_handlers(app, manager)
+            
+        except Exception as e:
+            app.logger.error(f"❌ ESP32 연결 실패: {e}")
+            app.esp32_manager = None
+    
+    # 백그라운드 스레드에서 ESP32 연결
+    if not app.config.get('TESTING', False):
+        esp32_thread = threading.Thread(target=esp32_connection_worker, daemon=True)
+        esp32_thread.start()
+        app.logger.info("🚀 ESP32 연결 스레드 시작")
+
+
+def setup_esp32_event_handlers(app, esp32_manager):
+    """ESP32 이벤트 핸들러 설정"""
+    
+    async def handle_barcode_scanned(event_data):
+        """바코드 스캔 이벤트 처리"""
+        barcode = event_data.get("barcode", "")
+        device_id = event_data.get("device_id", "unknown")
+        
+        app.logger.info(f"🔍 바코드 스캔: {barcode} (from {device_id})")
+        
+        # WebSocket으로 프론트엔드에 알림
+        socketio.emit('barcode_scanned', {
+            'barcode': barcode,
+            'device_id': device_id,
+            'timestamp': event_data.get('timestamp')
+        })
+    
+    async def handle_sensor_triggered(event_data):
+        """센서 이벤트 처리"""
+        chip_idx = event_data.get("chip_idx", "?")
+        pin = event_data.get("pin", "?")
+        active = event_data.get("active", False)
+        
+        app.logger.info(f"📡 센서: Chip{chip_idx} Pin{pin} = {'ACTIVE' if active else 'INACTIVE'}")
+        
+        # WebSocket으로 센서 상태 전송
+        socketio.emit('sensor_status', {
+            'chip_idx': chip_idx,
+            'pin': pin,
+            'active': active,
+            'timestamp': event_data.get('timestamp')
+        })
+    
+    async def handle_motor_completed(event_data):
+        """모터 완료 이벤트 처리"""
+        action = event_data.get("action", "unknown")
+        status = event_data.get("status", "unknown")
+        
+        app.logger.info(f"⚙️ 모터: {action} - {status}")
+        
+        # WebSocket으로 모터 상태 전송
+        socketio.emit('motor_status', {
+            'action': action,
+            'status': status,
+            'details': event_data.get('details', {}),
+            'timestamp': event_data.get('timestamp')
+        })
+    
+    # 이벤트 핸들러 등록
+    esp32_manager.register_event_handler("barcode_scanned", handle_barcode_scanned)
+    esp32_manager.register_event_handler("sensor_triggered", handle_sensor_triggered)
+    esp32_manager.register_event_handler("motor_completed", handle_motor_completed)
+    
+    app.logger.info("📡 ESP32 이벤트 핸들러 등록 완료")
 
 
 def setup_logging(app):

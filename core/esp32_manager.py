@@ -76,6 +76,11 @@ class ESP32Manager:
         self._running = False
         self._read_tasks: List[asyncio.Task] = []
         
+        # 자동 감지 설정
+        self.auto_detect_enabled = True
+        self._last_scan_time = 0
+        self._scan_interval = 10.0  # 10초마다 재스캔
+        
         logger.info("ESP32Manager 초기화 완료")
     
     def add_device(self, device_id: str, serial_port: str, device_type: str):
@@ -146,6 +151,160 @@ class ESP32Manager:
             device.stats["last_error"] = str(e)
             return False
     
+    async def scan_and_connect_esp32_devices(self) -> int:
+        """ESP32 디바이스 자동 스캔 및 연결
+        
+        Returns:
+            연결된 디바이스 수
+        """
+        if not SERIAL_AVAILABLE:
+            logger.warning("pyserial 없음, ESP32 자동 감지 불가")
+            return 0
+        
+        logger.info("🔍 ESP32 디바이스 자동 스캔 시작...")
+        connected_count = 0
+        
+        try:
+            # 사용 가능한 시리얼 포트 스캔
+            ports = serial.tools.list_ports.comports()
+            
+            # ESP32 관련 키워드 및 USB ID
+            esp32_keywords = [
+                "esp32", "arduino", "cp210", "ch340", "ft232",
+                "usb serial", "silicon labs", "wch"
+            ]
+            
+            esp32_usb_ids = [
+                "10c4:ea60",  # CP2102 (ESP32 개발보드)
+                "1a86:7523",  # CH340G (ESP32 클론)
+                "0403:6001",  # FT232 (일부 ESP32)
+                "2341:0043",  # Arduino 호환
+                "1a86:55d4",  # CH9102 (새로운 ESP32)
+            ]
+            
+            detected_ports = []
+            
+            for port in ports:
+                description = (port.description or "").lower()
+                hwid = (port.hwid or "").lower()
+                manufacturer = (port.manufacturer or "").lower()
+                
+                # ESP32 장치인지 확인
+                is_esp32 = False
+                
+                # USB ID로 확인
+                for usb_id in esp32_usb_ids:
+                    if usb_id in hwid:
+                        is_esp32 = True
+                        logger.info(f"📱 ESP32 USB ID 매칭: {port.device} ({usb_id})")
+                        break
+                
+                # 키워드로 확인
+                if not is_esp32:
+                    for keyword in esp32_keywords:
+                        if (keyword in description or 
+                            keyword in manufacturer or 
+                            keyword in hwid):
+                            is_esp32 = True
+                            logger.info(f"📱 ESP32 키워드 매칭: {port.device} ({keyword})")
+                            break
+                
+                if is_esp32:
+                    detected_ports.append({
+                        "device": port.device,
+                        "description": port.description,
+                        "hwid": port.hwid,
+                        "manufacturer": port.manufacturer
+                    })
+            
+            logger.info(f"🔍 감지된 ESP32 후보: {len(detected_ports)}개")
+            
+            # 감지된 포트들에 연결 시도
+            for i, port_info in enumerate(detected_ports):
+                device_id = f"esp32_auto_{i}"
+                port_device = port_info["device"]
+                
+                # 이미 등록된 포트인지 확인
+                existing_device = None
+                for dev_id, dev in self.devices.items():
+                    if dev.serial_port == port_device:
+                        existing_device = dev
+                        device_id = dev_id
+                        break
+                
+                if not existing_device:
+                    # 새 디바이스 추가
+                    self.add_device(
+                        device_id=device_id,
+                        serial_port=port_device,
+                        device_type="gym_controller"
+                    )
+                    logger.info(f"➕ 새 ESP32 디바이스 추가: {device_id} @ {port_device}")
+                
+                # 연결 시도
+                device = self.devices[device_id]
+                if await self._connect_and_verify_esp32(device):
+                    connected_count += 1
+                    logger.info(f"✅ ESP32 연결 성공: {device_id} @ {port_device}")
+                else:
+                    logger.warning(f"❌ ESP32 연결 실패: {device_id} @ {port_device}")
+                    # 연결 실패한 자동 감지 디바이스는 제거
+                    if device_id.startswith("esp32_auto_"):
+                        del self.devices[device_id]
+            
+            logger.info(f"🎯 ESP32 자동 연결 완료: {connected_count}/{len(detected_ports)}")
+            self._last_scan_time = asyncio.get_event_loop().time()
+            
+            return connected_count
+            
+        except Exception as e:
+            logger.error(f"ESP32 자동 스캔 오류: {e}")
+            return 0
+    
+    async def _connect_and_verify_esp32(self, device: ESP32Device) -> bool:
+        """ESP32 연결 및 검증
+        
+        Args:
+            device: ESP32 디바이스 객체
+            
+        Returns:
+            연결 및 검증 성공 여부
+        """
+        # 기본 연결 시도
+        if not await self._connect_device(device):
+            return False
+        
+        try:
+            # ESP32인지 확인하기 위해 상태 요청
+            status_cmd = self.protocol_handler.create_esp32_status_command()
+            await self._send_raw_message(device, status_cmd)
+            
+            # 응답 대기 (3초)
+            for _ in range(30):  # 100ms * 30 = 3초
+                if device.serial_connection and device.serial_connection.in_waiting > 0:
+                    try:
+                        data = device.serial_connection.read(device.serial_connection.in_waiting)
+                        response = data.decode('utf-8', errors='ignore').strip()
+                        
+                        # ESP32 응답인지 확인
+                        if ('esp32' in response.lower() or 
+                            'device_id' in response or
+                            'message_type' in response):
+                            logger.info(f"✅ ESP32 검증 성공: {device.device_id}")
+                            return True
+                            
+                    except Exception as e:
+                        logger.debug(f"ESP32 응답 읽기 오류: {e}")
+                
+                await asyncio.sleep(0.1)
+            
+            logger.warning(f"⚠️ ESP32 응답 없음: {device.device_id}")
+            return True  # 연결은 되었으니 일단 유지
+            
+        except Exception as e:
+            logger.error(f"ESP32 검증 오류: {device.device_id}, {e}")
+            return False
+
     async def disconnect_all_devices(self):
         """모든 ESP32 디바이스 연결 해제"""
         for device in self.devices.values():
@@ -196,21 +355,25 @@ class ESP32Manager:
             return f"CMD:{command}"
     
     def _build_motor_command(self, command: str, **kwargs) -> str:
-        """모터 컨트롤러 명령 생성"""
+        """모터 컨트롤러 명령 생성 - ESP32 JSON 호환"""
+        # 새로운 ESP32는 JSON 명령을 받음
         if command == "OPEN_LOCKER":
             locker_id = kwargs.get("locker_id", "")
             duration = kwargs.get("duration_ms", 3000)
-            return f"OPEN:{locker_id}:{duration}"
-        elif command == "CLOSE_LOCKER":
-            locker_id = kwargs.get("locker_id", "")
-            return f"CLOSE:{locker_id}"
+            return self.protocol_handler.create_esp32_locker_open_command(locker_id, duration)
         elif command == "GET_STATUS":
-            return "STATUS?"
-        elif command == "CHECK_SENSOR":
-            sensor_id = kwargs.get("sensor_id", "")
-            return f"SENSOR:{sensor_id}"
+            return self.protocol_handler.create_esp32_status_command()
+        elif command == "SET_AUTO_MODE":
+            enabled = kwargs.get("enabled", True)
+            return self.protocol_handler.create_esp32_auto_mode_command(enabled)
+        elif command == "MOTOR_MOVE":
+            revs = kwargs.get("revs", 1.0)
+            rpm = kwargs.get("rpm", 60.0)
+            accel = kwargs.get("accel", True)
+            return self.protocol_handler.create_esp32_motor_command(revs, rpm, accel)
         else:
-            return f"CMD:{command}"
+            # 기본 JSON 명령
+            return self.protocol_handler.create_esp32_json_command(command, **kwargs)
     
     async def _send_raw_message(self, device: ESP32Device, message: str) -> bool:
         """원시 메시지 전송"""
@@ -428,3 +591,71 @@ def create_default_esp32_manager() -> ESP32Manager:
         )
     
     return manager
+
+
+async def create_auto_esp32_manager() -> ESP32Manager:
+    """ESP32 자동 감지 및 연결이 포함된 Manager 생성
+    
+    Returns:
+        연결된 ESP32들이 포함된 Manager
+    """
+    manager = ESP32Manager()
+    
+    logger.info("🚀 ESP32 자동 감지 및 연결 시작...")
+    
+    # 자동 스캔 및 연결
+    connected_count = await manager.scan_and_connect_esp32_devices()
+    
+    if connected_count > 0:
+        logger.info(f"✅ {connected_count}개 ESP32 디바이스 연결 완료")
+        
+        # 통신 시작
+        await manager.start_communication()
+        logger.info("📡 ESP32 통신 시작")
+        
+        return manager
+    else:
+        logger.warning("⚠️ 연결된 ESP32 디바이스 없음")
+        
+        # 기본 설정으로 폴백
+        logger.info("🔄 기본 설정으로 폴백...")
+        manager = create_default_esp32_manager()
+        
+        # 기본 설정으로 연결 시도
+        if await manager.connect_all_devices():
+            await manager.start_communication()
+            logger.info("✅ 기본 설정으로 연결 성공")
+        else:
+            logger.warning("❌ 기본 설정으로도 연결 실패")
+        
+        return manager
+
+
+async def test_esp32_auto_detection():
+    """ESP32 자동 감지 테스트 함수"""
+    print("🔍 ESP32 자동 감지 테스트 시작...")
+    
+    manager = await create_auto_esp32_manager()
+    
+    # 연결된 디바이스 목록 출력
+    devices = manager.get_all_devices_status()
+    print(f"\n📋 연결된 디바이스: {len(devices)}개")
+    
+    for device_id, status in devices.items():
+        online = "🟢 온라인" if status.get("is_online") else "🔴 오프라인"
+        port = status.get("serial_port", "unknown")
+        device_type = status.get("device_type", "unknown")
+        
+        print(f"  • {device_id}: {online} @ {port} ({device_type})")
+    
+    # 간단한 상태 요청 테스트
+    print("\n📊 상태 요청 테스트...")
+    for device_id in devices.keys():
+        if devices[device_id].get("is_online"):
+            success = await manager.send_command(device_id, "GET_STATUS")
+            result = "✅ 성공" if success else "❌ 실패"
+            print(f"  • {device_id}: {result}")
+    
+    print("\n🛑 연결 해제...")
+    await manager.disconnect_all_devices()
+    print("✅ 테스트 완료")

@@ -114,10 +114,17 @@ class ProtocolHandler:
                         raw_message=raw_message,
                     )
 
-            # 바코드 스캔: "BARCODE:123456789" 또는 JSON
-            elif raw_message.startswith("BARCODE:") or (
-                raw_message.startswith("{") and "BARCODE_SCAN" in raw_message
-            ):
+            # ESP32 JSON 이벤트들 (바코드, IR센서, 모터 등)
+            elif raw_message.startswith("{") and ("barcode_scanned" in raw_message or 
+                                                  "sensor_triggered" in raw_message or 
+                                                  "motor_completed" in raw_message or
+                                                  "BARCODE_SCAN" in raw_message):
+                parsed_event = self._parse_esp32_json_event(raw_message)
+                if parsed_event:
+                    return parsed_event
+            
+            # 기존 바코드 형식: "BARCODE:123456789"
+            elif raw_message.startswith("BARCODE:"):
                 barcode_data = self._parse_barcode_scan(raw_message)
                 if barcode_data:
                     return ParsedMessage(
@@ -226,18 +233,30 @@ class ProtocolHandler:
             return None
 
     def _parse_barcode_scan(self, raw_message: str) -> Optional[BarcodeScanData]:
-        """바코드 스캔 메시지 파싱"""
+        """바코드 스캔 메시지 파싱 - ESP32 호환 버전"""
         try:
-            # JSON 형태: {"type":"BARCODE_SCAN","data":"20240666",...}
-            if raw_message.startswith("{") and "BARCODE_SCAN" in raw_message:
+            # ESP32 JSON 형태: {"device_id":"esp32_gym","message_type":"event","event_type":"barcode_scanned","data":{"barcode":"123456"}}
+            if raw_message.startswith("{") and ("barcode_scanned" in raw_message or "BARCODE_SCAN" in raw_message):
                 import json
                 try:
-                    data = json.loads(raw_message)
-                    if data.get("type") == "BARCODE_SCAN" and "data" in data:
-                        barcode = str(data["data"]).strip()
+                    msg_data = json.loads(raw_message)
+                    
+                    # ESP32 새 형식
+                    if (msg_data.get("message_type") == "event" and 
+                        msg_data.get("event_type") == "barcode_scanned" and 
+                        "data" in msg_data):
+                        barcode = str(msg_data["data"].get("barcode", "")).strip()
                         if barcode:
-                            print(f"[ProtocolHandler] JSON 바코드 파싱: {barcode}")
+                            print(f"[ProtocolHandler] ESP32 바코드 파싱: {barcode}")
                             return BarcodeScanData(barcode=barcode)
+                    
+                    # 기존 형식 호환
+                    elif msg_data.get("type") == "BARCODE_SCAN" and "data" in msg_data:
+                        barcode = str(msg_data["data"]).strip()
+                        if barcode:
+                            print(f"[ProtocolHandler] 레거시 바코드 파싱: {barcode}")
+                            return BarcodeScanData(barcode=barcode)
+                            
                 except json.JSONDecodeError as json_err:
                     print(f"[ProtocolHandler] JSON 파싱 오류: {json_err}")
 
@@ -250,6 +269,109 @@ class ProtocolHandler:
             return None
         except Exception as e:
             print(f"[ProtocolHandler] 바코드 파싱 오류: {e}")
+            return None
+
+    def _parse_esp32_json_event(self, raw_message: str) -> Optional[ParsedMessage]:
+        """ESP32 JSON 이벤트 통합 파싱"""
+        try:
+            import json
+            msg_data = json.loads(raw_message)
+            timestamp = time.time()
+            
+            device_id = msg_data.get("device_id", "unknown")
+            message_type = msg_data.get("message_type", "")
+            event_type = msg_data.get("event_type", "")
+            data = msg_data.get("data", {})
+            
+            # 바코드 스캔 이벤트
+            if event_type == "barcode_scanned":
+                barcode = str(data.get("barcode", "")).strip()
+                if barcode:
+                    print(f"[ProtocolHandler] ESP32 바코드: {barcode}")
+                    return ParsedMessage(
+                        type=MessageType.BARCODE_SCAN,
+                        data={
+                            "barcode": barcode,
+                            "device_id": device_id,
+                            "scan_type": data.get("scan_type", "barcode"),
+                            "format": data.get("format", "unknown"),
+                            "quality": data.get("quality", 95)
+                        },
+                        timestamp=timestamp,
+                        raw_message=raw_message
+                    )
+            
+            # IR 센서 이벤트
+            elif event_type == "sensor_triggered":
+                print(f"[ProtocolHandler] ESP32 센서: chip={data.get('chip_idx')}, pin={data.get('pin')}")
+                return ParsedMessage(
+                    type=MessageType.STATUS_REPORT,
+                    data={
+                        "sensor_type": "ir_sensor",
+                        "device_id": device_id,
+                        "chip_idx": data.get("chip_idx"),
+                        "addr": data.get("addr"),
+                        "pin": data.get("pin"),
+                        "raw": data.get("raw"),
+                        "active": data.get("active")
+                    },
+                    timestamp=timestamp,
+                    raw_message=raw_message
+                )
+            
+            # 모터 완료 이벤트
+            elif event_type == "motor_completed":
+                print(f"[ProtocolHandler] ESP32 모터: {data.get('action')} {data.get('status')}")
+                return ParsedMessage(
+                    type=MessageType.COMMAND_RESPONSE,
+                    data={
+                        "response_type": "motor_event",
+                        "device_id": device_id,
+                        "action": data.get("action"),
+                        "status": data.get("status"),
+                        "enabled": data.get("enabled"),
+                        "direction": data.get("direction"),
+                        "busy": data.get("busy"),
+                        "details": data.get("details", {})
+                    },
+                    timestamp=timestamp,
+                    raw_message=raw_message
+                )
+            
+            # 상태 응답
+            elif message_type == "response":
+                print(f"[ProtocolHandler] ESP32 응답: {data.get('status', 'unknown')}")
+                return ParsedMessage(
+                    type=MessageType.STATUS_REPORT,
+                    data={
+                        "response_type": "status_response",
+                        "device_id": device_id,
+                        **data
+                    },
+                    timestamp=timestamp,
+                    raw_message=raw_message
+                )
+            
+            # 알 수 없는 이벤트
+            else:
+                print(f"[ProtocolHandler] 알 수 없는 ESP32 이벤트: {event_type}")
+                return ParsedMessage(
+                    type=MessageType.UNKNOWN,
+                    data={
+                        "device_id": device_id,
+                        "message_type": message_type,
+                        "event_type": event_type,
+                        **data
+                    },
+                    timestamp=timestamp,
+                    raw_message=raw_message
+                )
+                
+        except json.JSONDecodeError as e:
+            print(f"[ProtocolHandler] ESP32 JSON 파싱 오류: {e}")
+            return None
+        except Exception as e:
+            print(f"[ProtocolHandler] ESP32 이벤트 파싱 오류: {e}")
             return None
 
     def _parse_status_report(self, raw_message: str) -> Optional[StatusData]:
@@ -392,6 +514,53 @@ class ProtocolHandler:
     def create_ping_command(self) -> str:
         """핑 명령어 생성"""
         return self.create_command(CommandType.PING)
+    
+    def create_esp32_json_command(self, command: str, **kwargs) -> str:
+        """ESP32 JSON 명령어 생성
+        
+        Args:
+            command: 명령어 ("get_status", "open_locker", "set_auto_mode" 등)
+            **kwargs: 명령어별 파라미터
+            
+        Returns:
+            ESP32용 JSON 명령어 문자열
+        """
+        import json
+        
+        cmd_data = {
+            "command": command,
+            **kwargs
+        }
+        
+        return json.dumps(cmd_data, ensure_ascii=False)
+    
+    def create_esp32_locker_open_command(self, locker_id: str, duration_ms: int = 3000) -> str:
+        """ESP32용 락카 열기 명령"""
+        return self.create_esp32_json_command(
+            "open_locker",
+            locker_id=locker_id,
+            duration_ms=duration_ms
+        )
+    
+    def create_esp32_status_command(self) -> str:
+        """ESP32용 상태 요청 명령"""
+        return self.create_esp32_json_command("get_status")
+    
+    def create_esp32_motor_command(self, revs: float, rpm: float = 60.0, accel: bool = True) -> str:
+        """ESP32용 모터 제어 명령"""
+        return self.create_esp32_json_command(
+            "motor_move",
+            revs=revs,
+            rpm=rpm,
+            accel=accel
+        )
+    
+    def create_esp32_auto_mode_command(self, enabled: bool) -> str:
+        """ESP32용 자동 모드 설정 명령"""
+        return self.create_esp32_json_command(
+            "set_auto_mode",
+            enabled=enabled
+        )
 
     def mark_command_completed(self, command_id: str) -> bool:
         """명령어 완료 표시

@@ -40,6 +40,7 @@
     <footer class="home-footer">
         <div class="footer-buttons">
             <button class="admin-btn" onclick="openAdmin()">⚙️ 관리자</button>
+            <button class="test-btn" onclick="openHardwareTest()">🔧 하드웨어 테스트</button>
             <button class="exit-btn" onclick="exitApplication()">❌ 종료</button>
         </div>
     </footer>
@@ -102,6 +103,11 @@ function openAdmin() {
     } else if (password !== null) {
         alert('비밀번호가 틀렸습니다.');
     }
+}
+
+// 하드웨어 테스트 화면
+function openHardwareTest() {
+    window.location.href = '/hardware-test';
 }
 
 // 종료 확인 모달

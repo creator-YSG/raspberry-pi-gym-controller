@@ -105,3 +105,11 @@ def error():
                          error_type=error_type,
                          error_message=error_message,
                          page_class='error-page')
+
+
+@bp.route('/hardware-test')
+def hardware_test():
+    """ESP32 하드웨어 테스트 화면"""
+    return render_template('pages/hardware_test.html',
+                         title='ESP32 하드웨어 테스트',
+                         page_class='hardware-test-page')

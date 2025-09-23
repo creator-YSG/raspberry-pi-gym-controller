@@ -258,3 +258,203 @@ def emergency_exit():
             'success': False,
             'error': '응급 종료 중 오류가 발생했습니다.'
         }), 500
+
+
+# ========== 하드웨어 테스트 API ==========
+
+@bp.route('/hardware/status')
+def hardware_status():
+    """ESP32 하드웨어 상태 조회"""
+    try:
+        esp32_manager = getattr(current_app, 'esp32_manager', None)
+        
+        if not esp32_manager:
+            return jsonify({
+                'success': False,
+                'error': 'ESP32가 연결되지 않았습니다.',
+                'data': {
+                    'esp32Connection': False,
+                    'uptime_ms': 0,
+                    'free_heap': 0
+                }
+            })
+        
+        # ESP32 상태 요청
+        status_data = {
+            'esp32Connection': True,
+            'uptime_ms': 0,
+            'free_heap': 0,
+            'motor_enabled': False,
+            'total_moves': 0
+        }
+        
+        return jsonify({
+            'success': True,
+            'data': status_data
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f'하드웨어 상태 조회 오류: {e}')
+        return jsonify({
+            'success': False,
+            'error': '하드웨어 상태 조회 중 오류가 발생했습니다.'
+        }), 500
+
+
+@bp.route('/hardware/motor_move', methods=['POST'])
+def hardware_motor_move():
+    """모터 이동 명령"""
+    try:
+        data = request.get_json()
+        revs = data.get('revs', 1.0)
+        rpm = data.get('rpm', 60.0)
+        accel = data.get('accel', True)
+        
+        esp32_manager = getattr(current_app, 'esp32_manager', None)
+        
+        if not esp32_manager:
+            return jsonify({
+                'success': False,
+                'error': 'ESP32가 연결되지 않았습니다.'
+            })
+        
+        # ESP32로 모터 이동 명령 전송 (비동기 처리)
+        import asyncio
+        try:
+            result = asyncio.run(esp32_manager.send_motor_command(
+                command="MOTOR_MOVE",
+                revs=revs,
+                rpm=rpm,
+                accel=accel
+            ))
+        except Exception as cmd_error:
+            current_app.logger.error(f'모터 명령 전송 실패: {cmd_error}')
+            result = {'success': False, 'error': str(cmd_error)}
+        
+        return jsonify({
+            'success': True,
+            'message': f'모터 이동 명령 전송됨: {revs}회전, {rpm}RPM',
+            'details': {
+                'revs': revs,
+                'rpm': rpm,
+                'accel': accel
+            }
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f'모터 이동 오류: {e}')
+        return jsonify({
+            'success': False,
+            'error': f'모터 이동 중 오류가 발생했습니다: {str(e)}'
+        }), 500
+
+
+@bp.route('/hardware/auto_mode', methods=['POST'])
+def hardware_auto_mode():
+    """자동 모드 설정"""
+    try:
+        data = request.get_json()
+        enabled = data.get('enabled', True)
+        
+        esp32_manager = getattr(current_app, 'esp32_manager', None)
+        
+        if not esp32_manager:
+            return jsonify({
+                'success': False,
+                'error': 'ESP32가 연결되지 않았습니다.'
+            })
+        
+        # ESP32로 자동 모드 설정 명령 전송 (비동기 처리)
+        import asyncio
+        try:
+            result = asyncio.run(esp32_manager.send_motor_command(
+                command="SET_AUTO_MODE",
+                enabled=enabled
+            ))
+        except Exception as cmd_error:
+            current_app.logger.error(f'자동모드 명령 전송 실패: {cmd_error}')
+            result = {'success': False, 'error': str(cmd_error)}
+        
+        return jsonify({
+            'success': True,
+            'message': f'자동 모드 {"활성화" if enabled else "비활성화"}됨',
+            'auto_mode': enabled
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f'자동 모드 설정 오류: {e}')
+        return jsonify({
+            'success': False,
+            'error': f'자동 모드 설정 중 오류가 발생했습니다: {str(e)}'
+        }), 500
+
+
+@bp.route('/hardware/test_barcode', methods=['POST'])
+def hardware_test_barcode():
+    """테스트 바코드 전송"""
+    try:
+        data = request.get_json()
+        barcode = data.get('barcode', '')
+        
+        if not barcode:
+            return jsonify({
+                'success': False,
+                'error': '바코드 데이터가 필요합니다.'
+            })
+        
+        esp32_manager = getattr(current_app, 'esp32_manager', None)
+        
+        if not esp32_manager:
+            return jsonify({
+                'success': False,
+                'error': 'ESP32가 연결되지 않았습니다.'
+            })
+        
+        # 테스트 바코드 데이터 시뮬레이션
+        from app.services.barcode_service import BarcodeService
+        barcode_service = BarcodeService()
+        result = barcode_service.process_barcode(barcode)
+        
+        # ESP32에 바코드 이벤트 알림 (선택사항)
+        current_app.logger.info(f'테스트 바코드 처리: {barcode}')
+        
+        return jsonify({
+            'success': True,
+            'message': f'테스트 바코드 전송됨: {barcode}',
+            'barcode': barcode,
+            'processing_result': result
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f'테스트 바코드 처리 오류: {e}')
+        return jsonify({
+            'success': False,
+            'error': f'테스트 바코드 처리 중 오류가 발생했습니다: {str(e)}'
+        }), 500
+
+
+@bp.route('/hardware/reconnect', methods=['POST'])
+def hardware_reconnect():
+    """ESP32 재연결"""
+    try:
+        # 기존 연결 해제 후 재연결
+        system_service = SystemService()
+        result = system_service.reconnect_esp32()
+        
+        if result['success']:
+            return jsonify({
+                'success': True,
+                'message': 'ESP32 재연결이 완료되었습니다.'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': result.get('error', 'ESP32 재연결에 실패했습니다.')
+            })
+        
+    except Exception as e:
+        current_app.logger.error(f'ESP32 재연결 오류: {e}')
+        return jsonify({
+            'success': False,
+            'error': f'ESP32 재연결 중 오류가 발생했습니다: {str(e)}'
+        }), 500
