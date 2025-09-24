@@ -288,6 +288,30 @@ inline unsigned long rpmToUS(double rpm) {
   return (unsigned long)us;
 }
 
+void moveMotorConstant(double revs, double rpm) {
+  if (revs == 0 || rpm <= 0) return;
+  
+  motorBusy = true;
+  motorLastMoveTime = millis();
+  
+  long totalSteps = llround(fabs(revs) * FULL_STEPS_PER_REV * MICROSTEP);
+  if (totalSteps <= 0) {
+    motorBusy = false;
+    return;
+  }
+
+  applyEffectiveDirForRevs(revs);
+  unsigned long us = rpmToUS(rpm);
+
+  for (long i = 0; i < totalSteps; i++) {
+    stepPulse();
+    delayMicroseconds(us);
+  }
+  
+  motorBusy = false;
+  totalMotorMoves++;
+}
+
 void moveMotorAccel(double revs, double targetRPM) {
   if (revs == 0 || targetRPM <= 0) return;
   
@@ -487,8 +511,8 @@ void handleAutoMotorForBarcode(String barcode) {
   if (!motorEnabled) setMotorEnable(true);
   
   // 정방향 회전
-  setMotorDir(1);
-  lastMoveDirection = 1;
+  setMotorDir(0);  // 정방향 (수정됨)
+  lastMoveDirection = 0;
   moveMotorAccel(BARCODE_ROTATION_REVS, motorDefaultRPM);
   
   // 5초 후 역방향 회전 예약
@@ -511,7 +535,7 @@ void checkReverseMoveTimer() {
       if (!motorEnabled) setMotorEnable(true);
       
       // 반대 방향으로 회전
-      setMotorDir(lastMoveDirection == 1 ? 0 : 1);
+      setMotorDir(lastMoveDirection == 0 ? 1 : 0);
       moveMotorAccel(BARCODE_ROTATION_REVS, motorDefaultRPM);
       
       // 모터 완료 이벤트 전송
@@ -589,13 +613,53 @@ void processJSONCommand(String jsonString) {
     if (!motorEnabled) setMotorEnable(true);
     
     // 락카 열기 = 330도 회전
-    setMotorDir(1);
+    setMotorDir(0);  // 정방향 (수정됨)
     moveMotorAccel(BARCODE_ROTATION_REVS, motorDefaultRPM);
     
     StaticJsonDocument<128> details;
     details["locker_id"] = lockerId;
     details["duration_ms"] = duration;
     sendMotorEvent("open_locker", "completed", details.as<JsonObject>());
+  }
+  
+  // 직접 모터 제어 (회전수, RPM, 가속 지원)
+  else if (cmd == "motor_move") {
+    if (motorBusy) {
+      sendErrorResponse("MOTOR_BUSY", "모터가 작동 중입니다");
+      return;
+    }
+    
+    double revs = doc["revs"] | 0.0;
+    double rpm = doc["rpm"] | motorDefaultRPM;
+    bool accel = doc["accel"] | true;
+    
+    if (revs == 0.0) {
+      sendErrorResponse("INVALID_REVS", "회전수가 0입니다");
+      return;
+    }
+    
+    if (!motorEnabled) setMotorEnable(true);
+    
+    // 회전 방향 설정 (음수면 역방향)
+    if (revs < 0) {
+      setMotorDir(1);  // 역방향 (0과 1을 바꿨습니다)
+      revs = -revs;    // 절댓값으로 변환
+    } else {
+      setMotorDir(0);  // 정방향 (0과 1을 바꿨습니다)
+    }
+    
+    // 모터 회전 실행
+    if (accel) {
+      moveMotorAccel(revs, rpm);
+    } else {
+      moveMotorConstant(revs, rpm);
+    }
+    
+    StaticJsonDocument<128> details;
+    details["revs"] = revs;
+    details["rpm"] = rpm;
+    details["accel"] = accel;
+    sendMotorEvent("motor_move", "completed", details.as<JsonObject>());
   }
   
   // 자동 모드 설정

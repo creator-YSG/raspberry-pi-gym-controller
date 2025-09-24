@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>간단한 모터 테스트</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #f0f0f0;
+        }
+        .test-button {
+            display: block;
+            width: 300px;
+            height: 80px;
+            margin: 20px auto;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 24px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .test-button:hover {
+            background: #45a049;
+            transform: scale(1.05);
+        }
+        .test-button:active {
+            transform: scale(0.95);
+        }
+        .status {
+            text-align: center;
+            margin: 20px;
+            padding: 10px;
+            background: white;
+            border-radius: 5px;
+            min-height: 100px;
+            overflow-y: auto;
+        }
+        .error {
+            color: red;
+        }
+        .success {
+            color: green;
+        }
+    </style>
+</head>
+<body>
+    <h1 style="text-align: center;">🔧 모터 테스트</h1>
+    
+    <button class="test-button" onclick="testMotor()">모터 330도 회전</button>
+    <button class="test-button" onclick="testAPI()">API 연결 테스트</button>
+    <button class="test-button" onclick="goBack()">돌아가기</button>
+    
+    <div class="status" id="status">
+        브라우저 JavaScript 테스트 준비됨<br>
+        버튼을 눌러서 테스트하세요.
+    </div>
+
+    <script>
+        function log(message, type = 'info') {
+            const status = document.getElementById('status');
+            const timestamp = new Date().toLocaleTimeString();
+            const className = type === 'error' ? 'error' : (type === 'success' ? 'success' : '');
+            status.innerHTML += `<div class="${className}">[${timestamp}] ${message}</div>`;
+            status.scrollTop = status.scrollHeight;
+        }
+
+        async function testMotor() {
+            log('모터 제어 테스트 시작...');
+            
+            try {
+                const response = await fetch('/api/hardware/motor_move', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        revs: 0.9167,
+                        rpm: 60,
+                        accel: true
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const result = await response.json();
+                log('API 응답: ' + JSON.stringify(result), 'success');
+                
+                if (result.success) {
+                    log('✅ 모터 제어 성공!', 'success');
+                } else {
+                    log('❌ 모터 제어 실패: ' + result.error, 'error');
+                }
+                
+            } catch (error) {
+                log('❌ 오류: ' + error.message, 'error');
+                console.error('모터 제어 오류:', error);
+            }
+        }
+
+        async function testAPI() {
+            log('API 연결 테스트 시작...');
+            
+            try {
+                const response = await fetch('/api/health');
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const result = await response.json();
+                log('Health API 응답: ' + JSON.stringify(result), 'success');
+                log('✅ API 연결 정상!', 'success');
+                
+            } catch (error) {
+                log('❌ API 연결 실패: ' + error.message, 'error');
+                console.error('API 연결 오류:', error);
+            }
+        }
+
+        function goBack() {
+            window.location.href = '/hardware-test';
+        }
+
+        // 페이지 로드시 초기 테스트
+        document.addEventListener('DOMContentLoaded', function() {
+            log('페이지 로드 완료');
+            log('User Agent: ' + navigator.userAgent);
+            
+            // fetch 지원 확인
+            if (typeof fetch === 'undefined') {
+                log('❌ 브라우저가 fetch API를 지원하지 않습니다', 'error');
+            } else {
+                log('✅ fetch API 지원됨');
+            }
+        });
+    </script>
+</body>
+</html>

@@ -535,7 +535,7 @@ class ProtocolHandler:
         return json.dumps(cmd_data, ensure_ascii=False)
     
     def create_esp32_locker_open_command(self, locker_id: str, duration_ms: int = 3000) -> str:
-        """ESP32용 락카 열기 명령"""
+        """ESP32용 락카 열기 명령 (330도 회전)"""
         return self.create_esp32_json_command(
             "open_locker",
             locker_id=locker_id,

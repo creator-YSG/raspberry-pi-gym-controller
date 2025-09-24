@@ -113,3 +113,11 @@ def hardware_test():
     return render_template('pages/hardware_test.html',
                          title='ESP32 하드웨어 테스트',
                          page_class='hardware-test-page')
+
+
+@bp.route('/simple-test')
+def simple_test():
+    """간단한 모터 테스트 화면"""
+    return render_template('pages/simple_test.html',
+                         title='간단한 모터 테스트',
+                         page_class='simple-test-page')

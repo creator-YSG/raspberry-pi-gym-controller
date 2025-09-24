@@ -5,554 +5,593 @@
 {% block body_class %}hardware-test-page{% endblock %}
 
 {% block content %}
+<style>
+    .hardware-test-container {
+        padding: 15px;
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        font-family: 'Noto Sans KR', sans-serif;
+        gap: 15px;
+        box-sizing: border-box;
+    }
+
+    /* 상단 모터 테스트 영역 (50%) */
+    .motor-test-section {
+        flex: 1;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 15px;
+        padding: 20px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        display: flex;
+        flex-direction: column;
+    }
+
+    .section-title {
+        font-size: 1.3em;
+        font-weight: bold;
+        margin-bottom: 20px;
+        color: #ffffff;
+        text-align: center;
+    }
+
+    .motor-controls {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 15px;
+        margin-bottom: 20px;
+    }
+
+    .motor-btn {
+        padding: 20px;
+        border: none;
+        border-radius: 12px;
+        font-size: 1.1em;
+        font-weight: bold;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        color: white;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .motor-btn-icon {
+        font-size: 1.5em;
+    }
+
+    .motor-btn-forward {
+        background: linear-gradient(45deg, #4CAF50, #66BB6A);
+    }
+
+    .motor-btn-reverse {
+        background: linear-gradient(45deg, #2196F3, #42A5F5);
+    }
+
+    .motor-btn-auto {
+        background: linear-gradient(45deg, #FF9800, #FFB74D);
+        grid-column: span 2;
+    }
+
+    .motor-btn:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+    }
+
+    .motor-btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+        transform: none;
+    }
+
+    .motor-status {
+        flex: 1;
+        background: rgba(0, 0, 0, 0.3);
+        border-radius: 8px;
+        padding: 15px;
+        font-family: 'Courier New', monospace;
+        font-size: 0.9em;
+        max-height: 150px;
+        overflow-y: auto;
+        color: #E0E0E0;
+    }
+
+    /* 하단 센서 상태 영역 (50%) */
+    .sensor-status-section {
+        flex: 1;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 15px;
+        padding: 20px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        display: flex;
+        flex-direction: column;
+    }
+
+    .sensor-grid {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 15px;
+        margin-top: 20px;
+        flex: 1;
+    }
+
+    .sensor-item {
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 12px;
+        padding: 15px;
+        text-align: center;
+        border: 2px solid rgba(255, 255, 255, 0.2);
+        font-size: 1em;
+        font-weight: bold;
+        color: white;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 5px;
+        transition: all 0.3s ease;
+        position: relative;
+    }
+
+    .sensor-number {
+        font-size: 1.3em;
+        margin-bottom: 5px;
+    }
+
+    .sensor-status {
+        font-size: 0.8em;
+        opacity: 0.8;
+    }
+
+    .sensor-connected {
+        background: rgba(46, 125, 50, 0.3);
+        border-color: #4CAF50;
+    }
+
+    .sensor-disconnected {
+        background: rgba(158, 158, 158, 0.3);
+        border-color: #9E9E9E;
+        color: #BDBDBD;
+    }
+
+    .sensor-triggered {
+        background: rgba(244, 67, 54, 0.8) !important;
+        border-color: #F44336 !important;
+        box-shadow: 0 0 20px rgba(244, 67, 54, 0.6);
+        animation: pulse 1s infinite;
+    }
+
+    @keyframes pulse {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.05); }
+        100% { transform: scale(1); }
+    }
+
+    .sensor-count {
+        position: absolute;
+        top: -8px;
+        right: -8px;
+        background: #FF5722;
+        color: white;
+        border-radius: 50%;
+        width: 20px;
+        height: 20px;
+        font-size: 0.7em;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+    }
+
+    .loading {
+        display: none;
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: rgba(0, 0, 0, 0.8);
+        color: white;
+        padding: 20px 40px;
+        border-radius: 10px;
+        z-index: 1000;
+    }
+
+    .home-btn {
+        position: fixed;
+        top: 20px;
+        left: 20px;
+        background: rgba(158, 158, 158, 0.8);
+        color: white;
+        border: none;
+        border-radius: 50%;
+        width: 50px;
+        height: 50px;
+        font-size: 1.2em;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        z-index: 100;
+    }
+
+    .home-btn:hover {
+        background: rgba(158, 158, 158, 1);
+        transform: scale(1.1);
+    }
+
+    .log-entry {
+        margin-bottom: 5px;
+        padding: 3px 6px;
+        border-radius: 3px;
+        font-size: 0.8em;
+    }
+
+    .log-success {
+        background: rgba(76, 175, 80, 0.3);
+        color: #A5D6A7;
+    }
+
+    .log-error {
+        background: rgba(244, 67, 54, 0.3);
+        color: #EF9A9A;
+    }
+
+    .log-info {
+        background: rgba(33, 150, 243, 0.3);
+        color: #90CAF9;
+    }
+</style>
+
 <div class="hardware-test-container">
-    <!-- 헤더 -->
-    <header class="test-header">
-        <h1 class="test-title">🔧 ESP32 하드웨어 테스트</h1>
-        <div class="connection-status">
-            <span id="connectionStatus" class="status-disconnected">연결 확인 중...</span>
-        </div>
-    </header>
+    <!-- 홈 버튼 -->
+    <button class="home-btn" onclick="goHome()">🏠</button>
     
-    <!-- 모터 제어 섹션 -->
-    <section class="motor-control-section">
-        <h2>⚙️ 모터 제어</h2>
+    <!-- 로딩 인디케이터 -->
+    <div id="loading" class="loading">처리 중...</div>
+    
+    <!-- 상단: 모터 테스트 영역 -->
+    <div class="motor-test-section">
+        <div class="section-title">⚙️ 모터 제어 테스트</div>
+        
         <div class="motor-controls">
-            <button class="test-btn motor-btn" onclick="rotateMotor330()">
-                <div class="btn-icon">🔄</div>
-                <div class="btn-text">330도 회전</div>
+            <button class="motor-btn motor-btn-forward" onclick="rotateMotor330()">
+                <div class="motor-btn-icon">🔄</div>
+                <div>330도 회전</div>
             </button>
             
-            <button class="test-btn motor-btn" onclick="rotateMotorReverse()">
-                <div class="btn-icon">↩️</div>
-                <div class="btn-text">원위치 복귀</div>
+            <button class="motor-btn motor-btn-reverse" onclick="rotateMotorReverse()">
+                <div class="motor-btn-icon">↩️</div>
+                <div>원위치 복귀</div>
             </button>
             
-            <button class="test-btn motor-btn" onclick="toggleAutoMode()">
-                <div class="btn-icon">🤖</div>
-                <div class="btn-text" id="autoModeText">자동모드 ON</div>
+            <button class="motor-btn motor-btn-auto" onclick="toggleAutoMode()" id="autoModeBtn">
+                <div class="motor-btn-icon">🤖</div>
+                <div id="autoModeText">자동모드 활성화</div>
             </button>
         </div>
         
-        <div class="motor-status">
-            <div class="status-item">
-                <span class="label">모터 상태:</span>
-                <span id="motorStatus" class="value">대기중</span>
-            </div>
-            <div class="status-item">
-                <span class="label">총 회전 횟수:</span>
-                <span id="motorMoveCount" class="value">0</span>
-            </div>
+        <div class="motor-controls" style="margin-top: 10px;">
+            <button class="motor-btn" style="background: linear-gradient(45deg, #9C27B0, #BA68C8); grid-column: span 2;" onclick="testSensorTrigger()">
+                <div class="motor-btn-icon">🧪</div>
+                <div>센서 테스트 (센서1 트리거)</div>
+            </button>
         </div>
-    </section>
+        
+        <div class="motor-status" id="motorLog">
+            <div class="log-entry log-info">모터 제어 시스템 준비됨</div>
+        </div>
+    </div>
     
-    <!-- 센서 모니터링 섹션 -->
-    <section class="sensor-monitor-section">
-        <h2>📡 센서 모니터링</h2>
+    <!-- 하단: 센서 상태 영역 -->
+    <div class="sensor-status-section">
+        <div class="section-title">📡 센서 상태 모니터링 (실시간)</div>
         
         <div class="sensor-grid">
-            <!-- 센서 칩별 상태 -->
-            <div class="sensor-chip">
-                <h3>Chip 0 (0x20)</h3>
-                <div class="sensor-pins" id="sensorChip0">
-                    <!-- 동적으로 생성됨 -->
-                </div>
+            <!-- 센서 1-10번 -->
+            <div class="sensor-item sensor-disconnected" id="sensor1">
+                <div class="sensor-number">1</div>
+                <div class="sensor-status">연결 안됨</div>
+                <div class="sensor-count" id="count1" style="display: none;">0</div>
             </div>
-            
-            <div class="sensor-chip">
-                <h3>Chip 1 (0x21)</h3>
-                <div class="sensor-pins" id="sensorChip1">
-                    <!-- 동적으로 생성됨 -->
-                </div>
+            <div class="sensor-item sensor-disconnected" id="sensor2">
+                <div class="sensor-number">2</div>
+                <div class="sensor-status">연결 안됨</div>
+                <div class="sensor-count" id="count2" style="display: none;">0</div>
             </div>
-        </div>
-        
-        <!-- 센서 이벤트 로그 -->
-        <div class="sensor-log">
-            <h3>📋 센서 이벤트 로그</h3>
-            <div class="log-controls">
-                <button class="small-btn" onclick="clearSensorLog()">로그 지우기</button>
-                <label>
-                    <input type="checkbox" id="autoScroll" checked> 자동 스크롤
-                </label>
+            <div class="sensor-item sensor-disconnected" id="sensor3">
+                <div class="sensor-number">3</div>
+                <div class="sensor-status">연결 안됨</div>
+                <div class="sensor-count" id="count3" style="display: none;">0</div>
             </div>
-            <div class="log-container" id="sensorLogContainer">
-                <div class="log-message">센서 이벤트 대기 중...</div>
+            <div class="sensor-item sensor-disconnected" id="sensor4">
+                <div class="sensor-number">4</div>
+                <div class="sensor-status">연결 안됨</div>
+                <div class="sensor-count" id="count4" style="display: none;">0</div>
             </div>
-        </div>
-    </section>
-    
-    <!-- 바코드 테스트 섹션 -->
-    <section class="barcode-test-section">
-        <h2>🔍 바코드 테스트</h2>
-        
-        <div class="barcode-controls">
-            <input type="text" id="testBarcodeInput" placeholder="테스트용 바코드 입력..." maxlength="20">
-            <button class="test-btn" onclick="sendTestBarcode()">
-                <div class="btn-text">바코드 전송</div>
-            </button>
-        </div>
-        
-        <div class="barcode-log">
-            <h3>📋 바코드 스캔 로그</h3>
-            <div class="log-container" id="barcodeLogContainer">
-                <div class="log-message">바코드 스캔 대기 중...</div>
+            <div class="sensor-item sensor-disconnected" id="sensor5">
+                <div class="sensor-number">5</div>
+                <div class="sensor-status">연결 안됨</div>
+                <div class="sensor-count" id="count5" style="display: none;">0</div>
             </div>
-        </div>
-    </section>
-    
-    <!-- 시스템 상태 -->
-    <section class="system-status-section">
-        <h2>📊 시스템 상태</h2>
-        <div class="status-grid">
-            <div class="status-card">
-                <div class="status-label">ESP32 연결</div>
-                <div class="status-value" id="esp32Connection">확인 중</div>
+            <div class="sensor-item sensor-disconnected" id="sensor6">
+                <div class="sensor-number">6</div>
+                <div class="sensor-status">연결 안됨</div>
+                <div class="sensor-count" id="count6" style="display: none;">0</div>
             </div>
-            <div class="status-card">
-                <div class="status-label">업타임</div>
-                <div class="status-value" id="systemUptime">0초</div>
+            <div class="sensor-item sensor-disconnected" id="sensor7">
+                <div class="sensor-number">7</div>
+                <div class="sensor-status">연결 안됨</div>
+                <div class="sensor-count" id="count7" style="display: none;">0</div>
             </div>
-            <div class="status-card">
-                <div class="status-label">메모리</div>
-                <div class="status-value" id="memoryUsage">--</div>
+            <div class="sensor-item sensor-disconnected" id="sensor8">
+                <div class="sensor-number">8</div>
+                <div class="sensor-status">연결 안됨</div>
+                <div class="sensor-count" id="count8" style="display: none;">0</div>
             </div>
-            <div class="status-card">
-                <div class="status-label">센서 이벤트</div>
-                <div class="status-value" id="sensorEventCount">0</div>
+            <div class="sensor-item sensor-disconnected" id="sensor9">
+                <div class="sensor-number">9</div>
+                <div class="sensor-status">연결 안됨</div>
+                <div class="sensor-count" id="count9" style="display: none;">0</div>
+            </div>
+            <div class="sensor-item sensor-disconnected" id="sensor10">
+                <div class="sensor-number">10</div>
+                <div class="sensor-status">연결 안됨</div>
+                <div class="sensor-count" id="count10" style="display: none;">0</div>
             </div>
         </div>
-    </section>
-    
-    <!-- 하단 네비게이션 -->
-    <footer class="test-footer">
-        <div class="footer-buttons">
-            <button class="nav-btn" onclick="goHome()">🏠 홈으로</button>
-            <button class="nav-btn" onclick="requestStatus()">🔄 상태 갱신</button>
-            <button class="nav-btn" onclick="reconnectESP32()">🔌 재연결</button>
-        </div>
-    </footer>
-</div>
-
-<!-- 로딩 모달 -->
-<div id="loadingModal" class="modal hidden">
-    <div class="modal-content">
-        <div class="loading-spinner"></div>
-        <h3 id="loadingText">명령 전송 중...</h3>
     </div>
 </div>
-{% endblock %}
 
-{% block styles %}
-<style>
-.hardware-test-container {
-    max-width: 100%;
-    padding: 20px;
-    font-family: 'Noto Sans KR', sans-serif;
-}
-
-.test-header {
-    text-align: center;
-    margin-bottom: 30px;
-    padding: 20px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    border-radius: 15px;
-}
-
-.test-title {
-    margin: 0 0 10px 0;
-    font-size: 28px;
-}
-
-.connection-status {
-    font-size: 16px;
-}
-
-.status-connected { color: #4CAF50; }
-.status-disconnected { color: #f44336; }
-.status-connecting { color: #ff9800; }
-
-/* 섹션 공통 스타일 */
-section {
-    background: white;
-    border-radius: 15px;
-    padding: 20px;
-    margin-bottom: 20px;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-}
-
-section h2 {
-    margin: 0 0 20px 0;
-    font-size: 22px;
-    color: #333;
-    border-bottom: 2px solid #e0e0e0;
-    padding-bottom: 10px;
-}
-
-/* 모터 제어 */
-.motor-controls {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 15px;
-    margin-bottom: 20px;
-}
-
-.test-btn {
-    background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
-    color: white;
-    border: none;
-    border-radius: 12px;
-    padding: 20px;
-    font-size: 16px;
-    font-weight: bold;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-}
-
-.test-btn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(0,0,0,0.2);
-}
-
-.test-btn:active {
-    transform: translateY(0);
-}
-
-.motor-btn {
-    background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
-}
-
-.btn-icon {
-    font-size: 24px;
-}
-
-.btn-text {
-    font-size: 14px;
-}
-
-.motor-status {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 15px;
-}
-
-.status-item {
-    display: flex;
-    justify-content: space-between;
-    padding: 10px 15px;
-    background: #f5f5f5;
-    border-radius: 8px;
-}
-
-.label {
-    font-weight: bold;
-    color: #666;
-}
-
-.value {
-    color: #333;
-}
-
-/* 센서 모니터링 */
-.sensor-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-    gap: 20px;
-    margin-bottom: 20px;
-}
-
-.sensor-chip {
-    border: 2px solid #e0e0e0;
-    border-radius: 10px;
-    padding: 15px;
-}
-
-.sensor-chip h3 {
-    margin: 0 0 15px 0;
-    font-size: 18px;
-    color: #333;
-}
-
-.sensor-pins {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 8px;
-}
-
-.sensor-pin {
-    width: 50px;
-    height: 50px;
-    border-radius: 8px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 12px;
-    font-weight: bold;
-    color: white;
-    background: #ccc;
-    transition: all 0.3s ease;
-}
-
-.sensor-pin.high {
-    background: #4CAF50;
-    transform: scale(1.1);
-}
-
-.sensor-pin.low {
-    background: #f44336;
-}
-
-/* 로그 컨테이너 */
-.log-container {
-    height: 200px;
-    overflow-y: auto;
-    background: #f8f9fa;
-    border: 1px solid #e9ecef;
-    border-radius: 8px;
-    padding: 10px;
-    font-family: 'Courier New', monospace;
-    font-size: 13px;
-}
-
-.log-message {
-    padding: 5px 0;
-    border-bottom: 1px solid #e9ecef;
-}
-
-.log-message:last-child {
-    border-bottom: none;
-}
-
-.log-message.sensor-event {
-    color: #2196F3;
-}
-
-.log-message.barcode-event {
-    color: #4CAF50;
-}
-
-.log-message.motor-event {
-    color: #FF9800;
-}
-
-.log-message.error {
-    color: #f44336;
-}
-
-.log-controls {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 10px;
-}
-
-.small-btn {
-    background: #6c757d;
-    color: white;
-    border: none;
-    border-radius: 6px;
-    padding: 8px 12px;
-    font-size: 12px;
-    cursor: pointer;
-}
-
-/* 바코드 테스트 */
-.barcode-controls {
-    display: flex;
-    gap: 10px;
-    margin-bottom: 20px;
-}
-
-#testBarcodeInput {
-    flex: 1;
-    padding: 15px;
-    border: 2px solid #e0e0e0;
-    border-radius: 8px;
-    font-size: 16px;
-}
-
-/* 시스템 상태 */
-.status-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    gap: 15px;
-}
-
-.status-card {
-    text-align: center;
-    padding: 20px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    border-radius: 10px;
-}
-
-.status-label {
-    display: block;
-    font-size: 12px;
-    opacity: 0.8;
-    margin-bottom: 5px;
-}
-
-.status-value {
-    display: block;
-    font-size: 20px;
-    font-weight: bold;
-}
-
-/* 푸터 */
-.test-footer {
-    text-align: center;
-    margin-top: 30px;
-}
-
-.footer-buttons {
-    display: flex;
-    justify-content: center;
-    gap: 15px;
-}
-
-.nav-btn {
-    background: #6c757d;
-    color: white;
-    border: none;
-    border-radius: 10px;
-    padding: 15px 25px;
-    font-size: 14px;
-    cursor: pointer;
-    transition: all 0.3s ease;
-}
-
-.nav-btn:hover {
-    background: #5a6268;
-    transform: translateY(-1px);
-}
-
-/* 로딩 모달 */
-.modal {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0,0,0,0.5);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-}
-
-.modal.hidden {
-    display: none;
-}
-
-.modal-content {
-    background: white;
-    border-radius: 15px;
-    padding: 30px;
-    text-align: center;
-    max-width: 300px;
-}
-
-.loading-spinner {
-    width: 50px;
-    height: 50px;
-    border: 5px solid #f3f3f3;
-    border-top: 5px solid #3498db;
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-    margin: 0 auto 20px;
-}
-
-@keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-}
-
-/* 반응형 */
-@media (max-width: 768px) {
-    .hardware-test-container {
-        padding: 10px;
-    }
-    
-    .motor-controls {
-        grid-template-columns: 1fr;
-    }
-    
-    .sensor-grid {
-        grid-template-columns: 1fr;
-    }
-    
-    .status-grid {
-        grid-template-columns: repeat(2, 1fr);
-    }
-}
-</style>
-{% endblock %}
-
-{% block scripts %}
 <script>
 // 전역 변수
-let socket = null;
-let autoMode = true;
-let sensorEventCount = 0;
-let startTime = Date.now();
+let eventSource = null;
+let autoModeEnabled = false;
+let sensorCounts = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0, 8: 0, 9: 0, 10: 0};
+let sensorTimers = {};
 
-// 페이지 로드시 초기화
+// 실제 로그에서 확인된 연결 센서들 (4,7,8,9번 등)
+const connectedSensors = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+
+// 페이지 로드 시 초기화
 document.addEventListener('DOMContentLoaded', function() {
-    initializeWebSocket();
-    initializeSensorGrid();
-    startSystemMonitoring();
+    // 연결된 센서 상태 먼저 설정
+    initializeSensorStates();
+    
+    // 실시간 이벤트 연결 시작
+    initializeEventStream();
 });
 
-// WebSocket 연결
-function initializeWebSocket() {
-    socket = io();
-    
-    socket.on('connect', function() {
-        updateConnectionStatus('connected', 'ESP32 연결됨');
-        requestStatus();
-    });
-    
-    socket.on('disconnect', function() {
-        updateConnectionStatus('disconnected', '연결 끊김');
-    });
-    
-    // ESP32 이벤트 핸들러
-    socket.on('barcode_scanned', handleBarcodeEvent);
-    socket.on('sensor_status', handleSensorEvent);
-    socket.on('motor_status', handleMotorEvent);
-    socket.on('esp32_status', handleStatusUpdate);
+// 실시간 이벤트 스트림 초기화
+function initializeEventStream() {
+    try {
+        addMotorLog('🔄 실시간 센서 모니터링 시작', 'info');
+        
+        // 1. 새로운 이벤트 확인 (1초마다)
+        setInterval(async function() {
+            try {
+                const response = await fetch('/api/hardware/sensor_events');
+                if (response.ok) {
+                    const events = await response.json();
+                    if (events.length > 0) {
+                        console.log('🔥 [이벤트] 센서 이벤트 수신:', events.length, '개');
+                        events.forEach(event => {
+                            console.log('🔥 [이벤트] 이벤트 처리:', event);
+                            handleSensorEventDirect(event);
+                        });
+                    }
+                }
+            } catch (error) {
+                console.error('🔥 [이벤트] 오류:', error);
+            }
+        }, 1000);
+        
+        // 2. 현재 센서 상태 주기적 확인 (3초마다)
+        setInterval(async function() {
+            try {
+                const response = await fetch('/api/hardware/sensor_status');
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success && data.sensors) {
+                        console.log('🔥 [상태폴링] 센서 상태 업데이트:', data.sensors);
+                        
+                        // 각 센서의 현재 상태를 UI에 반영
+                        Object.entries(data.sensors).forEach(([sensorNum, state]) => {
+                            updateSensorStatusDirect(parseInt(sensorNum), state);
+                        });
+                    }
+                }
+            } catch (error) {
+                console.error('🔥 [상태폴링] 오류:', error);
+            }
+        }, 3000); // 3초마다 상태 폴링
+        
+        addMotorLog('✅ 혼합 모니터링 활성화 (이벤트 + 상태폴링)', 'success');
+        
+    } catch (error) {
+        addMotorLog('❌ 실시간 모니터링 실패: ' + error.message, 'error');
+        console.error('이벤트 스트림 오류:', error);
+    }
 }
 
-// 연결 상태 업데이트
-function updateConnectionStatus(status, message) {
-    const statusElement = document.getElementById('connectionStatus');
-    statusElement.textContent = message;
-    statusElement.className = `status-${status}`;
+// 폴링 모드 (WebSocket 실패시 대안)
+function startPollingMode() {
+    addMotorLog('센서 폴링 모드 시작', 'info');
+    
+    // 1초마다 센서 상태 확인
+    setInterval(async function() {
+        try {
+            const response = await fetch('/api/hardware/status');
+            const data = await response.json();
+            // 센서 데이터가 있으면 처리
+            if (data.sensor_events) {
+                data.sensor_events.forEach(event => {
+                    handleSensorEventDirect(event);
+                });
+            }
+        } catch (error) {
+            console.log('폴링 오류:', error);
+        }
+    }, 1000);
 }
 
-// 센서 그리드 초기화
-function initializeSensorGrid() {
-    for (let chip = 0; chip < 2; chip++) {
-        const container = document.getElementById(`sensorChip${chip}`);
-        for (let pin = 0; pin < 16; pin++) {
-            const pinElement = document.createElement('div');
-            pinElement.className = 'sensor-pin low';
-            pinElement.textContent = pin;
-            pinElement.id = `sensor_${chip}_${pin}`;
-            container.appendChild(pinElement);
+// 센서 초기 상태 설정
+function initializeSensorStates() {
+    addMotorLog('센서 상태 초기화 중...', 'info');
+    
+    // 모든 센서를 먼저 연결 안됨으로 설정
+    for (let i = 1; i <= 10; i++) {
+        const sensorElement = document.getElementById(`sensor${i}`);
+        if (sensorElement) {
+            sensorElement.className = 'sensor-item sensor-disconnected';
+            sensorElement.querySelector('.sensor-status').textContent = '연결 안됨';
+        }
+    }
+    
+    // 연결된 센서만 연결됨으로 변경
+    connectedSensors.forEach(sensorNum => {
+        const sensorElement = document.getElementById(`sensor${sensorNum}`);
+        if (sensorElement) {
+            sensorElement.className = 'sensor-item sensor-connected';
+            sensorElement.querySelector('.sensor-status').textContent = '미감지';
+            addMotorLog(`센서 ${sensorNum}번 연결됨`, 'success');
+        }
+    });
+    
+    addMotorLog(`총 ${connectedSensors.length}개 센서 연결 완료`, 'success');
+}
+
+// ESP32 이벤트 처리
+function handleESP32Event(data) {
+    console.log('ESP32 이벤트:', data);
+    
+    if (data.event_type === 'sensor_triggered') {
+        handleSensorEvent(data.data);
+    } else if (data.event_type === 'motor_completed') {
+        handleMotorEvent(data.data);
+    } else if (data.event_type === 'barcode_scanned') {
+        addMotorLog(`바코드 스캔: ${data.data.barcode}`, 'info');
+    }
+}
+
+// 센서 이벤트 처리 (WebSocket)
+function handleSensorEvent(sensorData) {
+    const addr = sensorData.addr;
+    const pin = sensorData.pin;
+    const state = sensorData.raw;
+    
+    // 핀 번호를 센서 번호로 매핑
+    const pinToSensor = {0: 1, 1: 2, 2: 3, 3: 4, 4: 5, 8: 9, 9: 10};
+    const sensorNum = pinToSensor[pin];
+    
+    if (sensorNum && connectedSensors.includes(sensorNum)) {
+        updateSensorStatus(sensorNum, state);
+        addMotorLog(`센서 ${sensorNum}: ${state}`, 'info');
+    }
+}
+
+// 센서 이벤트 처리 (폴링 모드)
+function handleSensorEventDirect(eventData) {
+    // 직접 센서 번호와 상태를 받는 경우
+    if (eventData.sensor_num && eventData.state) {
+        updateSensorStatus(eventData.sensor_num, eventData.state);
+        addMotorLog(`센서 ${eventData.sensor_num}: ${eventData.state}`, 'info');
+    }
+}
+
+// 센서 상태 업데이트 (실시간 반영)
+function updateSensorStatus(sensorNum, state) {
+    const sensorElement = document.getElementById(`sensor${sensorNum}`);
+    const countElement = document.getElementById(`count${sensorNum}`);
+    
+    if (!sensorElement) return;
+    
+    // 상태에 따른 시각적 변화 (실시간)
+    if (state === 'LOW') {
+        // 센서 트리거됨 (물체 감지) - 계속 유지
+        if (sensorElement.className !== 'sensor-item sensor-triggered') {
+            // 처음 감지될 때만 카운트 증가
+            sensorCounts[sensorNum]++;
+            countElement.textContent = sensorCounts[sensorNum];
+            countElement.style.display = 'flex';
+            
+            addMotorLog(`센서 ${sensorNum}: 감지됨 (물체 있음)`, 'info');
+        }
+        
+        sensorElement.className = 'sensor-item sensor-triggered';
+        sensorElement.querySelector('.sensor-status').textContent = '감지됨!';
+        
+    } else {
+        // 센서 미감지 (물체 없음)
+        if (sensorElement.className === 'sensor-item sensor-triggered') {
+            addMotorLog(`센서 ${sensorNum}: 미감지 (물체 제거됨)`, 'info');
+        }
+        
+        sensorElement.className = 'sensor-item sensor-connected';
+        sensorElement.querySelector('.sensor-status').textContent = '미감지';
+    }
+}
+
+// 직접 센서 상태 업데이트 (카운트 증가 없이)
+function updateSensorStatusDirect(sensorNum, state) {
+    const sensorElement = document.getElementById(`sensor${sensorNum}`);
+    
+    if (!sensorElement) return;
+    
+    // 현재 상태와 다른 경우에만 업데이트
+    const currentTriggered = sensorElement.className.includes('sensor-triggered');
+    const shouldBeTriggered = (state === 'LOW');
+    
+    if (currentTriggered !== shouldBeTriggered) {
+        if (shouldBeTriggered) {
+            sensorElement.className = 'sensor-item sensor-triggered';
+            sensorElement.querySelector('.sensor-status').textContent = '감지됨!';
+            console.log(`🔥 [직접업데이트] 센서 ${sensorNum}: 감지됨`);
+        } else {
+            sensorElement.className = 'sensor-item sensor-connected';
+            sensorElement.querySelector('.sensor-status').textContent = '미감지';
+            console.log(`🔥 [직접업데이트] 센서 ${sensorNum}: 미감지`);
         }
     }
 }
 
+// 모터 이벤트 처리
+function handleMotorEvent(motorData) {
+    const action = motorData.action;
+    const status = motorData.status;
+    addMotorLog(`모터 ${action}: ${status}`, 'success');
+}
+
+// 모터 로그 추가
+function addMotorLog(message, type = 'info') {
+    const logContainer = document.getElementById('motorLog');
+    const timestamp = new Date().toLocaleTimeString();
+    const logEntry = document.createElement('div');
+    logEntry.className = `log-entry log-${type}`;
+    logEntry.textContent = `[${timestamp}] ${message}`;
+    logContainer.appendChild(logEntry);
+    logContainer.scrollTop = logContainer.scrollHeight;
+    
+    // 최대 50개 로그만 유지
+    const entries = logContainer.children;
+    if (entries.length > 50) {
+        logContainer.removeChild(entries[0]);
+    }
+}
+
+// 로딩 표시/숨기기
+function showLoading(message = '처리 중...') {
+    const loading = document.getElementById('loading');
+    loading.textContent = message;
+    loading.style.display = 'block';
+}
+
+function hideLoading() {
+    document.getElementById('loading').style.display = 'none';
+}
+
 // 모터 제어 함수들
 async function rotateMotor330() {
-    showLoading('모터 330도 회전 중...');
+    showLoading('모터 회전 중...');
+    addMotorLog('330도 정방향 회전 시작', 'info');
     
     try {
         const response = await fetch('/api/hardware/motor_move', {
@@ -570,19 +609,20 @@ async function rotateMotor330() {
         const result = await response.json();
         
         if (result.success) {
-            addMotorLog('330도 회전', '성공', '정방향 회전 완료');
+            addMotorLog('330도 회전 명령 전송 완료', 'success');
         } else {
-            addMotorLog('330도 회전', '실패', result.error || '알 수 없는 오류');
+            addMotorLog(`회전 실패: ${result.error}`, 'error');
         }
     } catch (error) {
-        addMotorLog('330도 회전', '오류', error.message);
+        addMotorLog(`오류: ${error.message}`, 'error');
     } finally {
         hideLoading();
     }
 }
 
 async function rotateMotorReverse() {
-    showLoading('모터 원위치 복귀 중...');
+    showLoading('원위치 복귀 중...');
+    addMotorLog('330도 역방향 회전 시작', 'info');
     
     try {
         const response = await fetch('/api/hardware/motor_move', {
@@ -600,19 +640,20 @@ async function rotateMotorReverse() {
         const result = await response.json();
         
         if (result.success) {
-            addMotorLog('원위치 복귀', '성공', '역방향 회전 완료');
+            addMotorLog('원위치 복귀 명령 전송 완료', 'success');
         } else {
-            addMotorLog('원위치 복귀', '실패', result.error || '알 수 없는 오류');
+            addMotorLog(`복귀 실패: ${result.error}`, 'error');
         }
     } catch (error) {
-        addMotorLog('원위치 복귀', '오류', error.message);
+        addMotorLog(`오류: ${error.message}`, 'error');
     } finally {
         hideLoading();
     }
 }
 
 async function toggleAutoMode() {
-    autoMode = !autoMode;
+    showLoading('자동모드 설정 중...');
+    autoModeEnabled = !autoModeEnabled;
     
     try {
         const response = await fetch('/api/hardware/auto_mode', {
@@ -621,246 +662,56 @@ async function toggleAutoMode() {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                enabled: autoMode
+                enabled: autoModeEnabled
             })
         });
         
         const result = await response.json();
         
         if (result.success) {
-            document.getElementById('autoModeText').textContent = 
-                autoMode ? '자동모드 ON' : '자동모드 OFF';
-            addMotorLog('자동모드', autoMode ? '활성화' : '비활성화', '설정 변경됨');
-        }
-    } catch (error) {
-        addMotorLog('자동모드', '오류', error.message);
-    }
-}
-
-// 테스트 바코드 전송
-async function sendTestBarcode() {
-    const barcode = document.getElementById('testBarcodeInput').value.trim();
-    
-    if (!barcode) {
-        alert('바코드를 입력해주세요.');
-        return;
-    }
-    
-    try {
-        const response = await fetch('/api/hardware/test_barcode', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                barcode: barcode
-            })
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            addBarcodeLog(barcode, '테스트 전송', '성공');
-            document.getElementById('testBarcodeInput').value = '';
+            const btnText = document.getElementById('autoModeText');
+            const btn = document.getElementById('autoModeBtn');
+            
+            if (autoModeEnabled) {
+                btnText.textContent = '자동모드 비활성화';
+                btn.style.background = 'linear-gradient(45deg, #F44336, #EF5350)';
+                addMotorLog('자동모드 활성화됨', 'success');
+            } else {
+                btnText.textContent = '자동모드 활성화';
+                btn.style.background = 'linear-gradient(45deg, #FF9800, #FFB74D)';
+                addMotorLog('자동모드 비활성화됨', 'info');
+            }
         } else {
-            addBarcodeLog(barcode, '테스트 전송', '실패: ' + (result.error || '알 수 없는 오류'));
+            addMotorLog(`자동모드 설정 실패: ${result.error}`, 'error');
         }
     } catch (error) {
-        addBarcodeLog(barcode, '테스트 전송', '오류: ' + error.message);
-    }
-}
-
-// 이벤트 핸들러들
-function handleBarcodeEvent(data) {
-    const barcode = data.barcode || '알 수 없음';
-    const format = data.format || 'Unknown';
-    addBarcodeLog(barcode, '스캔됨', `형식: ${format}`);
-}
-
-function handleSensorEvent(data) {
-    const chip = data.chip_idx || 0;
-    const pin = data.pin || 0;
-    const active = data.active || false;
-    const raw = data.raw || 'UNKNOWN';
-    
-    // 센서 핀 상태 업데이트
-    const pinElement = document.getElementById(`sensor_${chip}_${pin}`);
-    if (pinElement) {
-        pinElement.className = `sensor-pin ${active ? 'high' : 'low'}`;
-    }
-    
-    // 로그 추가
-    sensorEventCount++;
-    document.getElementById('sensorEventCount').textContent = sensorEventCount;
-    
-    addSensorLog(chip, pin, raw, active ? 'ACTIVE' : 'INACTIVE');
-}
-
-function handleMotorEvent(data) {
-    const action = data.action || '알 수 없음';
-    const status = data.status || '알 수 없음';
-    const details = data.details || {};
-    
-    addMotorLog(action, status, JSON.stringify(details));
-    
-    // 모터 상태 업데이트
-    document.getElementById('motorStatus').textContent = 
-        data.busy ? '동작 중' : '대기 중';
-        
-    if (data.total_moves !== undefined) {
-        document.getElementById('motorMoveCount').textContent = data.total_moves;
-    }
-}
-
-function handleStatusUpdate(data) {
-    // ESP32 상태 업데이트
-    if (data.esp32Connection !== undefined) {
-        document.getElementById('esp32Connection').textContent = 
-            data.esp32Connection ? '연결됨' : '연결 안됨';
-    }
-    
-    if (data.uptime_ms !== undefined) {
-        const uptime = Math.floor(data.uptime_ms / 1000);
-        document.getElementById('systemUptime').textContent = `${uptime}초`;
-    }
-    
-    if (data.free_heap !== undefined) {
-        const memoryMB = Math.floor(data.free_heap / 1024);
-        document.getElementById('memoryUsage').textContent = `${memoryMB}KB`;
-    }
-}
-
-// 로그 추가 함수들
-function addSensorLog(chip, pin, raw, status) {
-    const container = document.getElementById('sensorLogContainer');
-    const timestamp = new Date().toLocaleTimeString();
-    const message = `[${timestamp}] Chip${chip} Pin${pin}: ${raw} → ${status}`;
-    
-    const logElement = document.createElement('div');
-    logElement.className = 'log-message sensor-event';
-    logElement.textContent = message;
-    
-    container.appendChild(logElement);
-    
-    // 자동 스크롤
-    if (document.getElementById('autoScroll').checked) {
-        container.scrollTop = container.scrollHeight;
-    }
-    
-    // 로그 개수 제한 (최대 100개)
-    if (container.children.length > 100) {
-        container.removeChild(container.firstChild);
-    }
-}
-
-function addBarcodeLog(barcode, action, status) {
-    const container = document.getElementById('barcodeLogContainer');
-    const timestamp = new Date().toLocaleTimeString();
-    const message = `[${timestamp}] ${barcode} - ${action}: ${status}`;
-    
-    const logElement = document.createElement('div');
-    logElement.className = 'log-message barcode-event';
-    logElement.textContent = message;
-    
-    if (container.children.length === 1 && 
-        container.children[0].textContent.includes('대기 중')) {
-        container.innerHTML = '';
-    }
-    
-    container.appendChild(logElement);
-    container.scrollTop = container.scrollHeight;
-}
-
-function addMotorLog(action, status, details) {
-    // 모터 로그는 센서 로그에 함께 표시
-    const container = document.getElementById('sensorLogContainer');
-    const timestamp = new Date().toLocaleTimeString();
-    const message = `[${timestamp}] 모터 ${action}: ${status} - ${details}`;
-    
-    const logElement = document.createElement('div');
-    logElement.className = 'log-message motor-event';
-    logElement.textContent = message;
-    
-    container.appendChild(logElement);
-    
-    if (document.getElementById('autoScroll').checked) {
-        container.scrollTop = container.scrollHeight;
-    }
-}
-
-// 유틸리티 함수들
-function clearSensorLog() {
-    document.getElementById('sensorLogContainer').innerHTML = 
-        '<div class="log-message">센서 이벤트 대기 중...</div>';
-    sensorEventCount = 0;
-    document.getElementById('sensorEventCount').textContent = '0';
-}
-
-function showLoading(text) {
-    document.getElementById('loadingText').textContent = text;
-    document.getElementById('loadingModal').classList.remove('hidden');
-}
-
-function hideLoading() {
-    document.getElementById('loadingModal').classList.add('hidden');
-}
-
-async function requestStatus() {
-    try {
-        const response = await fetch('/api/hardware/status');
-        const result = await response.json();
-        
-        if (result.success) {
-            handleStatusUpdate(result.data);
-        }
-    } catch (error) {
-        console.error('상태 요청 실패:', error);
-    }
-}
-
-async function reconnectESP32() {
-    showLoading('ESP32 재연결 중...');
-    
-    try {
-        const response = await fetch('/api/hardware/reconnect', {
-            method: 'POST'
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            updateConnectionStatus('connected', 'ESP32 재연결됨');
-            requestStatus();
-        } else {
-            updateConnectionStatus('disconnected', '재연결 실패');
-        }
-    } catch (error) {
-        updateConnectionStatus('disconnected', '재연결 오류');
+        addMotorLog(`오류: ${error.message}`, 'error');
     } finally {
         hideLoading();
     }
 }
 
+// 센서 테스트 (시뮬레이션)
+function testSensorTrigger() {
+    addMotorLog('센서 1번 테스트 트리거', 'info');
+    
+    // 센서 1번을 트리거 상태로 변경
+    updateSensorStatus(1, 'LOW');
+    
+    // 2초 후 원래 상태로 복원
+    setTimeout(() => {
+        const sensorElement = document.getElementById('sensor1');
+        if (sensorElement) {
+            sensorElement.className = 'sensor-item sensor-connected';
+            sensorElement.querySelector('.sensor-status').textContent = '미감지';
+        }
+        addMotorLog('센서 1번 테스트 완료', 'success');
+    }, 2000);
+}
+
+// 홈으로 돌아가기
 function goHome() {
     window.location.href = '/';
 }
-
-// 시스템 모니터링
-function startSystemMonitoring() {
-    setInterval(() => {
-        const uptime = Math.floor((Date.now() - startTime) / 1000);
-        document.getElementById('systemUptime').textContent = `${uptime}초`;
-    }, 1000);
-    
-    // 주기적으로 상태 요청
-    setInterval(requestStatus, 10000); // 10초마다
-}
-
-// Enter 키로 바코드 전송
-document.getElementById('testBarcodeInput').addEventListener('keypress', function(e) {
-    if (e.key === 'Enter') {
-        sendTestBarcode();
-    }
-});
 </script>
 {% endblock %}

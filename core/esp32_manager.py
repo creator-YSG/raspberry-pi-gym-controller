@@ -337,6 +337,9 @@ class ESP32Manager:
             message = self._build_barcode_command(command, **kwargs)
         elif device.device_type == "motor_controller":
             message = self._build_motor_command(command, **kwargs)
+        elif device.device_type == "gym_controller":
+            # 통합 ESP32 디바이스 - 모터 명령 사용
+            message = self._build_motor_command(command, **kwargs)
         else:
             logger.error(f"알 수 없는 디바이스 타입: {device.device_type}")
             return False
@@ -455,10 +458,17 @@ class ESP32Manager:
             return
         
         try:
-            # 시리얼 데이터 읽기
+            # 시리얼 데이터 읽기 (더 안정적인 방식)
             if device.serial_connection.in_waiting > 0:
-                data = device.serial_connection.read(device.serial_connection.in_waiting)
+                # 한 번에 읽을 바이트 수 제한 (버퍼 오버플로우 방지)
+                max_read = min(device.serial_connection.in_waiting, 1024)
+                data = device.serial_connection.read(max_read)
                 device.read_buffer += data.decode('utf-8', errors='ignore')
+                
+                # 버퍼가 너무 커지면 일부 삭제 (메모리 보호)
+                if len(device.read_buffer) > 4096:
+                    device.read_buffer = device.read_buffer[-2048:]
+                    logger.warning(f"ESP32 버퍼 크기 제한: {device.device_id}")
                 
                 # 완성된 메시지 처리 (줄바꿈으로 구분)
                 while '\n' in device.read_buffer:
@@ -511,7 +521,17 @@ class ESP32Manager:
         elif message.type == MessageType.QR_SCAN:
             event_type = "qr_scanned"
         elif message.type == MessageType.STATUS_REPORT:
-            event_type = "device_status"
+            # 센서 이벤트인지 확인
+            if message.data.get("sensor_type") == "ir_sensor":
+                event_type = "sensor_triggered"
+            else:
+                event_type = "device_status"
+        elif message.type == MessageType.COMMAND_RESPONSE:
+            # 모터 이벤트인지 확인
+            if message.data.get("response_type") == "motor_event":
+                event_type = "motor_completed"
+            else:
+                event_type = "device_status"
         elif message.type == MessageType.ERROR:
             event_type = "device_error"
         

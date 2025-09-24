@@ -106,6 +106,10 @@ def setup_esp32_connection(app):
             # 이벤트 핸들러 등록
             setup_esp32_event_handlers(app, manager)
             
+            # 🔥 핵심: 이벤트 루프를 계속 실행하여 시리얼 데이터 읽기 유지
+            app.logger.info("🔄 ESP32 백그라운드 통신 루프 시작")
+            loop.run_forever()
+            
         except Exception as e:
             app.logger.error(f"❌ ESP32 연결 실패: {e}")
             app.esp32_manager = None
@@ -128,26 +132,68 @@ def setup_esp32_event_handlers(app, esp32_manager):
         app.logger.info(f"🔍 바코드 스캔: {barcode} (from {device_id})")
         
         # WebSocket으로 프론트엔드에 알림
-        socketio.emit('barcode_scanned', {
-            'barcode': barcode,
-            'device_id': device_id,
-            'timestamp': event_data.get('timestamp')
+        socketio.emit('esp32_event', {
+            'event_type': 'barcode_scanned',
+            'data': {
+                'barcode': barcode,
+                'device_id': device_id,
+                'timestamp': event_data.get('timestamp')
+            }
         })
     
     async def handle_sensor_triggered(event_data):
         """센서 이벤트 처리"""
+        app.logger.info(f"🔥 [DEBUG] 센서 이벤트 핸들러 호출됨! event_data: {event_data}")
+        
         chip_idx = event_data.get("chip_idx", "?")
         pin = event_data.get("pin", "?")
         active = event_data.get("active", False)
+        raw_state = event_data.get("raw", "HIGH")
         
-        app.logger.info(f"📡 센서: Chip{chip_idx} Pin{pin} = {'ACTIVE' if active else 'INACTIVE'}")
+        app.logger.info(f"📡 센서: Chip{chip_idx} Pin{pin} = {raw_state} ({'ACTIVE' if active else 'INACTIVE'})")
         
-        # WebSocket으로 센서 상태 전송
-        socketio.emit('sensor_status', {
-            'chip_idx': chip_idx,
-            'pin': pin,
-            'active': active,
-            'timestamp': event_data.get('timestamp')
+        # 실제 로그에서 확인된 핀 매핑 (2025-09-24 테스트 결과)
+        pin_to_sensor = {
+            0: 1,   # 센서 1번 = Pin 0 (확인됨)
+            1: 2,   # 센서 2번 = Pin 1 (확인됨)  
+            2: 3,   # 센서 3번 = Pin 2 (추정)
+            3: 4,   # 센서 4번 = Pin 3 (확인됨 18:17:43)
+            4: 5,   # 센서 5번 = Pin 4 (추정)
+            8: 9,   # 센서 9번 = Pin 8 (확인됨)
+            9: 10,  # 센서 10번 = Pin 9 (추정)
+            10: 6,  # 센서 6번 = Pin 10 (추가)
+            11: 7,  # 센서 7번 = Pin 11 (로그에서 확인됨)
+            12: 8,  # 센서 8번 = Pin 12 (로그에서 확인됨)
+            14: None,  # Pin 14는 매핑 제외 (경고 발생한 핀)
+        }
+        
+        sensor_num = pin_to_sensor.get(pin, None)
+        
+        # 매핑되지 않은 핀 감지 시 경고
+        if sensor_num is None:
+            app.logger.warning(f"🔍 매핑되지 않은 핀 {pin} 감지됨!")
+        
+        app.logger.info(f"🔥 [DEBUG] 핀 {pin} -> 센서 {sensor_num} 매핑")
+        
+        if sensor_num:
+            # 센서 이벤트 저장 (API에서 사용)
+            from app.api.routes import add_sensor_event
+            add_sensor_event(sensor_num, raw_state)
+            app.logger.info(f"🔥 [DEBUG] 센서 이벤트 저장됨: 센서{sensor_num}, 상태{raw_state}")
+        else:
+            app.logger.warning(f"🔥 [DEBUG] 알 수 없는 핀 번호: {pin}")
+        
+        # WebSocket으로 센서 상태 전송 (호환성 유지)
+        socketio.emit('esp32_event', {
+            'event_type': 'sensor_triggered',
+            'data': {
+                'chip_idx': chip_idx,
+                'pin': pin,
+                'active': active,
+                'raw': raw_state,
+                'sensor_num': sensor_num,
+                'timestamp': event_data.get('timestamp')
+            }
         })
     
     async def handle_motor_completed(event_data):
@@ -158,11 +204,14 @@ def setup_esp32_event_handlers(app, esp32_manager):
         app.logger.info(f"⚙️ 모터: {action} - {status}")
         
         # WebSocket으로 모터 상태 전송
-        socketio.emit('motor_status', {
-            'action': action,
-            'status': status,
-            'details': event_data.get('details', {}),
-            'timestamp': event_data.get('timestamp')
+        socketio.emit('esp32_event', {
+            'event_type': 'motor_completed',
+            'data': {
+                'action': action,
+                'status': status,
+                'details': event_data.get('details', {}),
+                'timestamp': event_data.get('timestamp')
+            }
         })
     
     # 이벤트 핸들러 등록
