@@ -1,45 +1,28 @@
-# Python
+# SQLite 데이터베이스 파일들
+locker.db
+locker.db-shm
+locker.db-wal
+*.db-journal
+
+# 임시 파일들
 __pycache__/
-*.py[cod]
-*$py.class
-*.so
+*.pyc
+*.pyo
+*.pyd
 .Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
+*.so
+.pytest_cache/
 
-# Virtual Environment
-venv/
-env/
-ENV/
-
-# IDE
+# IDE 파일들
 .vscode/
 .idea/
 *.swp
 *.swo
 
-# OS
-.DS_Store
-Thumbs.db
+# 로그 파일들
+logs/*.log
 
-# Config
-*.env
-!raspberry_pi.env
-
-# Logs
-*.log
-config/google_credentials.json
-config/google_sheets_config.json
+# 환경 설정 파일들 (민감 정보)
+config/*.json
+!config/*.template
+!config/*.example
