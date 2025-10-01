@@ -1,6 +1,6 @@
 # 🏗️ 라즈베리파이 헬스장 락카키 대여기
 
-> **최신 업데이트**: SQLite 기반 트랜잭션 시스템 구현 완료 (2025.10.01)
+> **최신 업데이트**: Phase 3 서비스 로직 통합 완료 - 완전한 대여/반납 플로우 구현 (2025.10.01)
 
 ## 📋 프로젝트 개요
 
@@ -28,7 +28,14 @@
 
 ## 🚀 구현 현황
 
-### ✅ 완료된 기능 (2단계/4단계)
+### ✅ 완료된 기능 (3단계/4단계)
+
+**🔄 서비스 로직 통합 (3단계 완료)**
+- MemberService SQLite 기반 완전 재작성
+- LockerService 트랜잭션 기반 안전한 대여/반납
+- ESP32 센서 이벤트 실시간 연동 (48개 센서)
+- API 엔드포인트 비동기 처리 업데이트
+- 완전한 대여 플로우: 회원검증 → 트랜잭션생성 → 하드웨어제어 → 센서검증 → 완료
 
 **🗄️ 데이터베이스 시스템 (1단계 완료)**
 - SQLite 데이터베이스 구조 설계 및 구현
@@ -77,24 +84,36 @@ raspberry-pi-gym-controller/
 │   │   ├── member.py            # SQLite 연동 Member 모델
 │   │   ├── locker.py            # 락카 모델
 │   │   └── rental.py            # 대여 기록 모델
-│   ├── services/                 # 비즈니스 로직 (3단계 예정)
+│   ├── services/                 # 🔄 비즈니스 로직 (3단계 완료)
+│   │   ├── member_service.py    # SQLite 기반 회원 관리
+│   │   ├── locker_service.py    # 트랜잭션 기반 락카 관리
+│   │   └── sensor_event_handler.py # 센서 이벤트 처리
 │   ├── main/routes.py           # 메인 웹 라우트
 │   ├── api/routes.py            # REST API 엔드포인트
 │   └── events.py                # WebSocket 이벤트
 ├── 🔌 core/esp32_manager.py       # ESP32 자동감지/통신
 ├── 🔧 hardware/                   # 하드웨어 제어 모듈
 ├── 📊 data_sources/               # Google Sheets API
-├── 🧪 tests/database/             # 🆕 완전한 테스트 스위트
-│   ├── test_database_manager.py  # DB 매니저 테스트 (9개)
-│   ├── test_member_model.py      # Member 모델 테스트 (7개)
-│   └── test_transaction_manager.py # 트랜잭션 테스트 (8개)
+├── 🧪 tests/                      # 🆕 완전한 테스트 스위트
+│   ├── database/                # 데이터베이스 레이어 테스트
+│   │   ├── test_database_manager.py  # DB 매니저 테스트 (13개)
+│   │   ├── test_member_model.py      # Member 모델 테스트 (8개)
+│   │   └── test_transaction_manager.py # 트랜잭션 테스트 (9개)
+│   └── services/                # 서비스 레이어 테스트
+│       └── test_member_service.py    # MemberService 테스트 (13개)
 ├── 🛠️ scripts/                    # 시스템 스크립트
 │   ├── init_database.py         # 🆕 DB 초기화
+│   ├── add_test_members.py      # 테스트 회원 데이터 추가
+│   ├── test_complete_flow.py    # 완전한 대여 플로우 테스트
+│   ├── test_api_direct.py       # API 기능 직접 테스트
 │   └── start_kiosk.sh           # 키오스크 시작
 ├── 📝 docs/                       # 🆕 완전한 문서화
 │   ├── SYSTEM_OVERVIEW.md       # 전체 시스템 가이드
 │   ├── DATABASE_DESIGN.md       # DB 설계 문서
-│   └── IMPLEMENTATION_PLAN.md   # 구현 계획서
+│   ├── IMPLEMENTATION_PLAN.md   # 구현 계획서
+│   ├── PHASE3_DETAILED_PLAN.md  # Phase 3 상세 계획
+│   ├── PHASE3_COMPLETION_REPORT.md # Phase 3 완료 보고서
+│   └── GETTING_STARTED.md       # 빠른 시작 가이드
 ├── 📋 locker.db                   # 🆕 SQLite 데이터베이스
 └── ⚙️ config/                     # 설정 파일
 ```

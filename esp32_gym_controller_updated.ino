@@ -1,18 +1,25 @@
-// ESP32 완전 통합 시스템: GM65 바코드 + MCP23017 IR센서 + A4988 스테퍼모터
-// 라즈베리파이 호환 버전 - JSON 프로토콜 통합
+// ESP32 완전 통합 시스템: GM65 바코드 + MCP23017 IR센서 + TB6600 스테퍼모터
+// OTA 업데이트 지원 버전 - JSON 프로토콜 통합
 // 하드웨어 구성:
 // - GM65 Scanner: UART2 (RX2=GPIO16, TX2=GPIO17)
 // - MCP23017: I2C (SDA=GPIO21, SCL=GPIO22)
-// - A4988 Stepper: STEP=GPIO25, DIR=GPIO26, EN=GPIO27
+// - TB6600 Stepper: STEP=GPIO25, DIR=GPIO26, EN=GPIO27
 // - LED: GPIO2, Buzzer: GPIO4
 
 #include <Wire.h>
 #include <Adafruit_MCP23X17.h>
 #include <ArduinoJson.h>
+#include <WiFi.h>
+#include <ArduinoOTA.h>
+
+// ==================== WiFi 설정 ====================
+const char* ssid = "sya";
+const char* password = "fitbox9497748";
+const char* hostname = "ESP32-GYM-LOCKER-V1";
 
 // ==================== 디바이스 식별 ====================
-const String DEVICE_ID = "esp32_gym";  // 라즈베리파이에서 인식할 ID
-const String DEVICE_TYPE = "gym_controller";  // 통합 컨트롤러
+const String DEVICE_ID = "esp32_gym";
+const String DEVICE_TYPE = "gym_controller";
 
 // ==================== 하드웨어 핀 설정 ====================
 // UART2 (바코드 스캐너)
@@ -24,10 +31,10 @@ constexpr int SDA_PIN = 21;
 constexpr int SCL_PIN = 22;
 constexpr uint32_t I2C_CLOCK_HZ = 100000;
 
-// A4988 스테퍼 모터
-constexpr int PIN_STEP = 25;
-constexpr int PIN_DIR = 26;
-constexpr int PIN_EN = 27;
+// TB6600 스테퍼 모터 (공통음극 방식)
+constexpr int PIN_STEP = 25;  // PUL+ 연결
+constexpr int PIN_DIR = 26;   // DIR+ 연결
+constexpr int PIN_EN = 27;    // ENA+ 연결
 
 // 출력 장치
 constexpr int LED_PIN = 2;
@@ -39,15 +46,15 @@ constexpr uint32_t SCN_BAUD = 9600;
 
 // ==================== 스테퍼 모터 설정 ====================
 constexpr int FULL_STEPS_PER_REV = 200;
-constexpr int MICROSTEP = 2;
-constexpr unsigned int STEP_PULSE_HIGH_US = 8;
-constexpr unsigned int STEP_PULSE_LOW_US = 8;
-constexpr unsigned int DIR_SETUP_US = 12;
+constexpr int MICROSTEP = 2;  // 1/2 스텝 (부드러움과 토크 균형)
+constexpr unsigned int STEP_PULSE_HIGH_US = 5;    // TB6600용 펄스 폭 (5μs)
+constexpr unsigned int STEP_PULSE_LOW_US = 5;     // TB6600용 펄스 간격 (5μs)
+constexpr unsigned int DIR_SETUP_US = 100;        // 방향 설정 시간
 
-// 모터 가속 파라미터
-float motorStartRPM = 5.0;
-float motorAccelRPMps = 300.0;
-float motorDefaultRPM = 60.0;
+// 모터 가속 파라미터 (속도 감소로 토크 증가)
+float motorStartRPM = 2.0;        // 시작 속도를 더 낮게
+float motorAccelRPMps = 150.0;    // 가속도를 절반으로 감소
+float motorDefaultRPM = 25.0;     // 기본 속도를 절반 이하로 감소
 
 // 모터 상태
 bool motorEnabled = false;
@@ -104,15 +111,85 @@ bool hexMode = false;
 bool debugMode = false;
 bool systemReady = false;
 bool autoMotorMode = true;  // 바코드 스캔 시 자동 회전
+bool wifiConnected = false;
 unsigned long systemStartTime = 0;
 
 uint32_t totalBarcodeScans = 0;
 uint32_t totalIREvents = 0;
 uint32_t totalMotorMoves = 0;
 
+// OTA 상태
+unsigned long lastOTACheck = 0;
+constexpr unsigned long OTA_CHECK_INTERVAL = 100;  // 100ms마다 체크
+
+// ==================== WiFi 및 OTA 초기화 ====================
+void setupWiFi() {
+  Serial.print("[WiFi] 연결 중: ");
+  Serial.println(ssid);
+  
+  WiFi.mode(WIFI_STA);
+  WiFi.setHostname(hostname);
+  WiFi.begin(ssid, password);
+  
+  // 최대 10초 대기
+  int attempts = 0;
+  while (WiFi.status() != WL_CONNECTED && attempts < 20) {
+    delay(500);
+    Serial.print(".");
+    attempts++;
+  }
+  
+  if (WiFi.status() == WL_CONNECTED) {
+    wifiConnected = true;
+    Serial.println("\n[WiFi] 연결 성공!");
+    Serial.print("[WiFi] IP 주소: ");
+    Serial.println(WiFi.localIP());
+  } else {
+    Serial.println("\n[WiFi] 연결 실패 - WiFi 없이 계속 실행");
+    wifiConnected = false;
+  }
+}
+
+void setupOTA() {
+  if (!wifiConnected) return;
+  
+  ArduinoOTA.setHostname(hostname);
+  ArduinoOTA.setPassword("gym1234");  // OTA 비밀번호
+  
+  ArduinoOTA.onStart([]() {
+    Serial.println("\n[OTA] 업데이트 시작...");
+    // 모터 정지
+    digitalWrite(PIN_EN, HIGH);
+    motorBusy = true;  // OTA 중 모터 동작 차단
+  });
+  
+  ArduinoOTA.onEnd([]() {
+    Serial.println("\n[OTA] 업데이트 완료!");
+  });
+  
+  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+    Serial.printf("[OTA] 진행률: %u%%\r", (progress / (total / 100)));
+    // LED 깜빡임
+    digitalWrite(LED_PIN, (progress / 10) % 2);
+  });
+  
+  ArduinoOTA.onError([](ota_error_t error) {
+    Serial.printf("[OTA] 오류[%u]: ", error);
+    if (error == OTA_AUTH_ERROR) Serial.println("인증 실패");
+    else if (error == OTA_BEGIN_ERROR) Serial.println("시작 실패");
+    else if (error == OTA_CONNECT_ERROR) Serial.println("연결 실패");
+    else if (error == OTA_RECEIVE_ERROR) Serial.println("수신 실패");
+    else if (error == OTA_END_ERROR) Serial.println("종료 실패");
+    motorBusy = false;  // 모터 동작 재개
+  });
+  
+  ArduinoOTA.begin();
+  Serial.println("[OTA] 준비 완료");
+  Serial.println("[OTA] Arduino IDE에서 도구 > 포트에서 네트워크 포트 선택");
+}
+
 // ==================== 라즈베리파이 호환 메시지 함수 ====================
 String getCurrentTimestamp() {
-  // ISO 8601 형식으로 타임스탬프 생성
   unsigned long ms = millis();
   unsigned long seconds = ms / 1000;
   unsigned long minutes = seconds / 60;
@@ -191,6 +268,12 @@ void sendStatusResponse(String status, String message) {
   dataDoc["message"] = message;
   dataDoc["uptime_ms"] = millis() - systemStartTime;
   dataDoc["free_heap"] = ESP.getFreeHeap();
+  dataDoc["wifi_connected"] = wifiConnected;
+  
+  if (wifiConnected) {
+    dataDoc["ip_address"] = WiFi.localIP().toString();
+    dataDoc["rssi"] = WiFi.RSSI();
+  }
   
   // 스캐너 상태
   JsonObject scanner = dataDoc.createNestedObject("scanner");
@@ -257,7 +340,7 @@ bool isDigitsOnly(String str) {
 // ==================== 스테퍼 모터 함수 ====================
 void setMotorEnable(bool on) {
   motorEnabled = on;
-  digitalWrite(PIN_EN, on ? LOW : HIGH);  // A4988: LOW=Enable
+  digitalWrite(PIN_EN, on ? LOW : HIGH);  // TB6600: LOW=Enable
 }
 
 void setMotorDir(int d) {
@@ -272,15 +355,16 @@ inline void applyEffectiveDirForRevs(double revs) {
   delayMicroseconds(DIR_SETUP_US);
 }
 
+// TB6600용 펄스 함수 (LOW→HIGH 엣지 트리거)
 inline void stepPulse() {
-  digitalWrite(PIN_STEP, HIGH);
-  delayMicroseconds(STEP_PULSE_HIGH_US);
   digitalWrite(PIN_STEP, LOW);
+  delayMicroseconds(STEP_PULSE_HIGH_US);
+  digitalWrite(PIN_STEP, HIGH);
   delayMicroseconds(STEP_PULSE_LOW_US);
 }
 
 inline unsigned long rpmToUS(double rpm) {
-  if (rpm < 0.05) rpm = 0.05;
+  if (rpm < 0.1) rpm = 0.1;  // 최소 RPM을 더 안전한 값으로 설정
   const double spr = FULL_STEPS_PER_REV * (double)MICROSTEP;
   const double sps = rpm * spr / 60.0;
   double us = 1e6 / sps;
@@ -289,13 +373,15 @@ inline unsigned long rpmToUS(double rpm) {
 }
 
 void moveMotorConstant(double revs, double rpm) {
-  if (revs == 0 || rpm <= 0) return;
+  if (revs == 0 || rpm <= 0 || motorBusy) return;
   
   motorBusy = true;
+  setMotorEnable(true);  // 회전 직전 활성화
   motorLastMoveTime = millis();
   
   long totalSteps = llround(fabs(revs) * FULL_STEPS_PER_REV * MICROSTEP);
   if (totalSteps <= 0) {
+    setMotorEnable(false);  // 발열 방지
     motorBusy = false;
     return;
   }
@@ -308,18 +394,23 @@ void moveMotorConstant(double revs, double rpm) {
     delayMicroseconds(us);
   }
   
+  // 모터 회전 완료 후 잠시 대기 (실제 회전 보장)
+  delay(500);  // 500ms 대기 후 비활성화
+  setMotorEnable(false);  // 발열 방지를 위한 비활성화
   motorBusy = false;
   totalMotorMoves++;
 }
 
 void moveMotorAccel(double revs, double targetRPM) {
-  if (revs == 0 || targetRPM <= 0) return;
+  if (revs == 0 || targetRPM <= 0 || motorBusy) return;
   
   motorBusy = true;
+  setMotorEnable(true);  // 회전 직전 활성화
   motorLastMoveTime = millis();
   
   long totalSteps = llround(fabs(revs) * FULL_STEPS_PER_REV * MICROSTEP);
   if (totalSteps <= 0) {
+    setMotorEnable(false);  // 발열 방지
     motorBusy = false;
     return;
   }
@@ -362,6 +453,9 @@ void moveMotorAccel(double revs, double targetRPM) {
     delayMicroseconds((unsigned int)us);
   }
   
+  // 모터 회전 완료 후 잠시 대기 (실제 회전 보장)
+  delay(500);  // 500ms 대기 후 비활성화
+  setMotorEnable(false);  // 발열 방지를 위한 비활성화
   motorBusy = false;
   totalMotorMoves++;
 }
@@ -507,11 +601,8 @@ void checkScanTimeout() {
 
 // ==================== 자동 모터 제어 ====================
 void handleAutoMotorForBarcode(String barcode) {
-  // 바코드 스캔 시 항상 330도 회전 (정방향)
-  if (!motorEnabled) setMotorEnable(true);
-  
-  // 정방향 회전
-  setMotorDir(0);  // 정방향 (수정됨)
+  // 정방향 회전 (moveMotorAccel이 Enable 처리)
+  setMotorDir(0);
   lastMoveDirection = 0;
   moveMotorAccel(BARCODE_ROTATION_REVS, motorDefaultRPM);
   
@@ -532,9 +623,7 @@ void checkReverseMoveTimer() {
     if (millis() >= reverseMoveScheduledTime) {
       reverseMoveScheduled = false;
       
-      if (!motorEnabled) setMotorEnable(true);
-      
-      // 반대 방향으로 회전
+      // 반대 방향으로 회전 (moveMotorAccel이 Enable 처리)
       setMotorDir(lastMoveDirection == 0 ? 1 : 0);
       moveMotorAccel(BARCODE_ROTATION_REVS, motorDefaultRPM);
       
@@ -610,10 +699,8 @@ void processJSONCommand(String jsonString) {
       return;
     }
     
-    if (!motorEnabled) setMotorEnable(true);
-    
     // 락카 열기 = 330도 회전
-    setMotorDir(0);  // 정방향 (수정됨)
+    setMotorDir(0);  // 정방향
     moveMotorAccel(BARCODE_ROTATION_REVS, motorDefaultRPM);
     
     StaticJsonDocument<128> details;
@@ -638,14 +725,12 @@ void processJSONCommand(String jsonString) {
       return;
     }
     
-    if (!motorEnabled) setMotorEnable(true);
-    
     // 회전 방향 설정 (음수면 역방향)
     if (revs < 0) {
-      setMotorDir(1);  // 역방향 (0과 1을 바꿨습니다)
+      setMotorDir(1);  // 역방향
       revs = -revs;    // 절댓값으로 변환
     } else {
-      setMotorDir(0);  // 정방향 (0과 1을 바꿨습니다)
+      setMotorDir(0);  // 정방향
     }
     
     // 모터 회전 실행
@@ -668,6 +753,27 @@ void processJSONCommand(String jsonString) {
     sendStatusResponse("AUTO_MODE", autoMotorMode ? "활성화" : "비활성화");
   }
   
+  // 모터 속도 파라미터 설정
+  else if (cmd == "set_motor_params") {
+    if (doc["default_rpm"].is<float>()) {
+      motorDefaultRPM = doc["default_rpm"];
+    }
+    if (doc["start_rpm"].is<float>()) {
+      motorStartRPM = doc["start_rpm"];
+    }
+    if (doc["accel_rpmps"].is<float>()) {
+      motorAccelRPMps = doc["accel_rpmps"];
+    }
+    
+    StaticJsonDocument<128> response;
+    response["default_rpm"] = motorDefaultRPM;
+    response["start_rpm"] = motorStartRPM;
+    response["accel_rpmps"] = motorAccelRPMps;
+    
+    JsonObject data = response.as<JsonObject>();
+    sendRPiMessage("response", "", data);
+  }
+  
   else {
     sendErrorResponse("UNKNOWN_COMMAND", cmd);
   }
@@ -682,6 +788,16 @@ void processTextCommand(String command) {
     blinkLED(3, 100, 100);
     beep(200);
     sendStatusResponse("TEST", "LED/부저 테스트 완료");
+  } else if (command == "wifi") {
+    if (wifiConnected) {
+      Serial.print("WiFi 연결됨: ");
+      Serial.println(WiFi.localIP());
+      Serial.print("신호 강도: ");
+      Serial.print(WiFi.RSSI());
+      Serial.println(" dBm");
+    } else {
+      Serial.println("WiFi 연결 안됨");
+    }
   } else if (command == "reset") {
     ESP.restart();
   } else {
@@ -700,7 +816,7 @@ void setup() {
   
   digitalWrite(LED_PIN, LOW);
   digitalWrite(BUZZER_PIN, LOW);
-  digitalWrite(PIN_STEP, LOW);
+  digitalWrite(PIN_STEP, LOW);  // TB6600용 초기값 (LOW에서 시작)
   setMotorEnable(false);
   setMotorDir(0);
   
@@ -712,10 +828,16 @@ void setup() {
   
   // 시작 메시지 (디버그용)
   Serial.println("\n" + repeatString("=", 70));
-  Serial.println("ESP32 헬스장 컨트롤러 v5.0 - 라즈베리파이 호환");
+  Serial.println("ESP32 헬스장 컨트롤러 v6.0 - TB6600 드라이버 + OTA");
   Serial.println("Device ID: " + DEVICE_ID);
   Serial.println("Device Type: " + DEVICE_TYPE);
   Serial.println(repeatString("=", 70));
+  
+  // WiFi 연결
+  setupWiFi();
+  
+  // OTA 초기화
+  setupOTA();
   
   // I2C 초기화
   Wire.begin(SDA_PIN, SCL_PIN);
@@ -739,6 +861,12 @@ void setup() {
 }
 
 void loop() {
+  // OTA 처리 (WiFi 연결된 경우만)
+  if (wifiConnected && millis() - lastOTACheck > OTA_CHECK_INTERVAL) {
+    ArduinoOTA.handle();
+    lastOTACheck = millis();
+  }
+  
   // 라즈베리파이 명령 처리
   handleRPiCommands();
   
