@@ -3,6 +3,10 @@ locker.db
 locker.db-shm
 locker.db-wal
 *.db-journal
+locker_backup_*.db
+test_*.db
+test_*.db-shm
+test_*.db-wal
 
 # 임시 파일들
 __pycache__/
@@ -26,3 +30,10 @@ logs/*.log
 config/*.json
 !config/*.template
 !config/*.example
+.env
+*.env
+!*.env.template
+!*.env.example
+
+# 테스트 서버 관련
+test_server_*.log
