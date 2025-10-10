@@ -51,11 +51,11 @@ class LockerService:
         except Exception as e:
             print(f"의존성 초기화 오류: {e}")
     
-    def get_available_lockers(self, zone: str = 'A') -> List[Locker]:
+    def get_available_lockers(self, zone: str = 'MALE') -> List[Locker]:
         """SQLite에서 사용 가능한 락카 목록 조회
         
         Args:
-            zone: 락카 구역 (A, B 등)
+            zone: 락카 구역 (MALE, FEMALE, STAFF 등)
             
         Returns:
             사용 가능한 Locker 객체 리스트
@@ -72,12 +72,19 @@ class LockerService:
                 available_lockers = []
                 
                 for row in rows:
+                    # device_id 안전하게 가져오기
+                    try:
+                        device_id = row['device_id'] if 'device_id' in row.keys() else 'esp32_main'
+                    except:
+                        device_id = 'esp32_main'
+                    
                     locker = Locker(
                         id=row['locker_number'],
                         zone=row['zone'],
-                        number=int(row['locker_number'][1:]),  # A01 -> 1
+                        number=int(row['locker_number'][1:]),  # M01 -> 1, F01 -> 1, S01 -> 1
                         status='available',  # 사용 가능 상태
-                        size=row['size']
+                        size=row['size'],
+                        device_id=device_id
                     )
                     available_lockers.append(locker)
                 
@@ -91,11 +98,11 @@ class LockerService:
             logger.error(f"사용 가능한 락카 조회 오류: {zone}구역, {e}")
             return []
     
-    def get_occupied_lockers(self, zone: str = 'A') -> List[Locker]:
+    def get_occupied_lockers(self, zone: str = 'MALE') -> List[Locker]:
         """SQLite에서 사용중인 락카 목록 조회
         
         Args:
-            zone: 락카 구역 (A, B 등)
+            zone: 락카 구역 (MALE, FEMALE, STAFF 등)
             
         Returns:
             사용중인 Locker 객체 리스트
@@ -123,12 +130,19 @@ class LockerService:
                         except (ValueError, AttributeError):
                             rented_at = datetime.now()
                     
+                    # device_id 안전하게 가져오기
+                    try:
+                        device_id = row['device_id'] if 'device_id' in row.keys() else 'esp32_main'
+                    except:
+                        device_id = 'esp32_main'
+                    
                     locker = Locker(
                         id=row['locker_number'],
                         zone=row['zone'],
-                        number=int(row['locker_number'][1:]),  # A01 -> 1
+                        number=int(row['locker_number'][1:]),  # M01 -> 1, F01 -> 1, S01 -> 1
                         status='occupied',  # 사용중 상태
                         size=row['size'],
+                        device_id=device_id,
                         rented_at=rented_at,
                         rented_by=row['current_member'] or row['member_id']
                     )
@@ -144,7 +158,7 @@ class LockerService:
             logger.error(f"사용중인 락카 조회 오류: {zone}구역, {e}")
             return []
     
-    def get_all_lockers(self, zone: str = 'A') -> List[Locker]:
+    def get_all_lockers(self, zone: str = 'MALE') -> List[Locker]:
         """모든 락카 목록 조회"""
         available = self.get_available_lockers(zone)
         occupied = self.get_occupied_lockers(zone)
@@ -154,7 +168,7 @@ class LockerService:
         """트랜잭션 기반 안전한 락카 대여
         
         Args:
-            locker_id: 대여할 락카 번호 (예: A01)
+            locker_id: 대여할 락카 번호 (예: M01, F01, S01)
             member_id: 회원 바코드 ID
             
         Returns:
@@ -348,7 +362,7 @@ class LockerService:
     
     def get_locker_by_id(self, locker_id: str) -> Optional[Locker]:
         """락카 ID로 락카 조회"""
-        zone = locker_id[0] if locker_id else 'A'
+        zone = locker_id[0] if locker_id else 'M'
         all_lockers = self.get_all_lockers(zone)
         
         for locker in all_lockers:
@@ -385,13 +399,22 @@ class LockerService:
                 logger.info(f"🔓 락카 열기 성공 (시뮬레이션): {locker_id}")
                 return True
             
-            # 락카 ID에 따라 적절한 ESP32 모터 컨트롤러 선택
-            if locker_id.startswith('A'):
-                device_id = 'esp32_motor1'
-            elif locker_id.startswith('B'):
-                device_id = 'esp32_motor2'
+            # 락카 ID에 따라 적절한 ESP32 디바이스 선택
+            # M01~M70 → esp32_male, F01~F50 → esp32_female, S01~S20 → esp32_staff
+            if locker_id.startswith('M'):
+                device_id = 'esp32_male'
+            elif locker_id.startswith('F'):
+                device_id = 'esp32_female'
+            elif locker_id.startswith('S'):
+                device_id = 'esp32_staff'
             else:
-                device_id = 'esp32_motor1'  # 기본값
+                # 구 시스템 호환 (A, B)
+                if locker_id.startswith('A'):
+                    device_id = 'esp32_motor1'
+                elif locker_id.startswith('B'):
+                    device_id = 'esp32_motor2'
+                else:
+                    device_id = 'esp32_main'  # 기본값
             
             # 락카 열기 명령 전송
             success = await self.esp32_manager.send_command(
@@ -423,7 +446,9 @@ class LockerService:
         """락카 ID로 락카 조회 (SQLite 기반)"""
         try:
             cursor = self.db.execute_query("""
-                SELECT ls.*, r.member_id, r.rental_barcode_time 
+                SELECT ls.locker_number, ls.zone, ls.device_id, ls.size, 
+                       ls.sensor_status, ls.current_member, ls.maintenance_status,
+                       r.member_id, r.rental_barcode_time 
                 FROM locker_status ls
                 LEFT JOIN rentals r ON ls.locker_number = r.locker_number 
                     AND r.status = 'active'
@@ -449,12 +474,19 @@ class LockerService:
                     else:
                         status = 'available'
                     
+                    # device_id 안전하게 가져오기
+                    try:
+                        device_id = row['device_id'] if 'device_id' in row.keys() else 'esp32_main'
+                    except:
+                        device_id = 'esp32_main'
+                    
                     locker = Locker(
                         id=row['locker_number'],
                         zone=row['zone'],
-                        number=int(row['locker_number'][1:]),  # A01 -> 1
+                        number=int(row['locker_number'][1:]),  # M01 -> 1, F01 -> 1, S01 -> 1
                         status=status,
                         size=row['size'],
+                        device_id=device_id,
                         rented_at=rented_at,
                         rented_by=row['current_member'] or row['member_id']
                     )

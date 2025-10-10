@@ -15,3 +15,4 @@ rsync -avz --progress --exclude 'venv' --exclude '__pycache__' --exclude '.git' 
     $LOCAL_DIR raspberry-pi:$REMOTE_DIR/
 
 echo "✅ 동기화 완료!"
+

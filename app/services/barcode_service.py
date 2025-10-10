@@ -53,11 +53,17 @@ class BarcodeService:
     def _detect_barcode_type(self, barcode: str) -> str:
         """바코드 타입 자동 감지"""
         
-        # 락카키 바코드 패턴 (예: LOCKER_A01, KEY_B15)
-        if re.match(r'^(LOCKER|KEY)_[A-Z]\d{2}$', barcode):
+        # 락카키 바코드 패턴 (예: LOCKER_M01, KEY_F15, LOCKER_S05)
+        if re.match(r'^(LOCKER|KEY)_[MFS]\d{2}$', barcode):
             return 'locker_key'
         
-        # 락카 ID 패턴 (예: A01, B15)
+        # 락카 ID 패턴 (예: M01, F50, S20)
+        if re.match(r'^[MFS]\d{2}$', barcode):
+            return 'locker_key'
+        
+        # 구 시스템 호환 (A01, B15 등)
+        if re.match(r'^(LOCKER|KEY)_[A-Z]\d{2}$', barcode):
+            return 'locker_key'
         if re.match(r'^[A-Z]\d{2}$', barcode):
             return 'locker_key'
         
@@ -153,19 +159,33 @@ class BarcodeService:
     def _extract_locker_id(self, barcode: str) -> str:
         """바코드에서 락카 ID 추출"""
         
-        # LOCKER_A01, KEY_B15 형태
+        # LOCKER_M01, KEY_F15, LOCKER_S05 형태 (새 시스템)
+        match = re.match(r'^(LOCKER|KEY)_([MFS]\d{2})$', barcode)
+        if match:
+            return match.group(2)
+        
+        # M01, F50, S20 형태 (직접 락카 ID - 새 시스템)
+        if re.match(r'^[MFS]\d{2}$', barcode):
+            return barcode
+        
+        # 구 시스템 호환: LOCKER_A01, KEY_B15 형태
         match = re.match(r'^(LOCKER|KEY)_([A-Z]\d{2})$', barcode)
         if match:
             return match.group(2)
         
-        # A01, B15 형태 (직접 락카 ID)
+        # A01, B15 형태 (직접 락카 ID - 구 시스템)
         if re.match(r'^[A-Z]\d{2}$', barcode):
             return barcode
         
-        # 숫자만 있는 경우 (예: 101 -> A01)
-        if barcode.isdigit() and len(barcode) == 3:
-            zone = 'A' if barcode.startswith('1') else 'B'
-            number = barcode[1:]
-            return f"{zone}{number}"
+        # 숫자만 있는 경우 - 새 시스템 기준으로 변환
+        # 예: 001~070 → M01~M70, 071~120 → F01~F50, 121~140 → S01~S20
+        if barcode.isdigit():
+            num = int(barcode)
+            if 1 <= num <= 70:
+                return f"M{num:02d}"
+            elif 71 <= num <= 120:
+                return f"F{(num-70):02d}"
+            elif 121 <= num <= 140:
+                return f"S{(num-120):02d}"
         
         return ""

@@ -178,3 +178,4 @@ async def main():
 if __name__ == "__main__":
     # 비동기 메인 실행
     asyncio.run(main())
+

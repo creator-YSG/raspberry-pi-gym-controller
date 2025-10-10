@@ -50,7 +50,7 @@ def get_member(member_id):
 def get_lockers():
     """락카 목록 조회"""
     try:
-        zone = request.args.get('zone', 'A')
+        zone = request.args.get('zone', 'MALE')
         status = request.args.get('status', 'all')  # available, occupied, all
         
         locker_service = LockerService()
@@ -228,6 +228,9 @@ def validate_member(member_id):
         
         try:
             result = member_service.validate_member(member_id)
+            # Member 객체를 딕셔너리로 변환
+            if result.get('member'):
+                result['member'] = result['member'].to_dict()
             return jsonify(result)
         finally:
             member_service.close()
@@ -369,7 +372,7 @@ import asyncio
 recent_sensor_events = deque(maxlen=100)
 
 # 각 센서의 현재 상태 저장 (지속적 상태 관리)
-current_sensor_states = {i: 'HIGH' for i in range(1, 49)}  # 1-48번 센서 초기값 HIGH
+current_sensor_states = {i: 'HIGH' for i in range(1, 141)}  # 1-140번 센서 초기값 HIGH
 
 # 센서 이벤트 핸들러 (전역 인스턴스)
 _sensor_handler = None
@@ -387,10 +390,16 @@ def add_sensor_event(sensor_num, state, timestamp=None):
     if timestamp is None:
         timestamp = time.time()
     
+    # Flask 애플리케이션 컨텍스트 확인 및 생성
+    from flask import has_app_context
+    
     # 🔥 현재 센서 상태 즉시 업데이트 (지속적 상태 관리)
     if sensor_num in current_sensor_states:
         current_sensor_states[sensor_num] = state
-        current_app.logger.info(f"🔥 [상태업데이트] 센서{sensor_num}: {state} (지속상태)")
+        if has_app_context():
+            current_app.logger.info(f"🔥 [상태업데이트] 센서{sensor_num}: {state} (지속상태)")
+        else:
+            print(f"🔥 [상태업데이트] 센서{sensor_num}: {state} (지속상태)")
     
     # 기존 이벤트 저장 (호환성 유지)
     event = {
@@ -409,14 +418,23 @@ def add_sensor_event(sensor_num, state, timestamp=None):
         async def process_sensor_event():
             try:
                 result = await sensor_handler.handle_sensor_event(sensor_num, state, timestamp)
-                current_app.logger.info(f"센서 이벤트 처리 결과: {result}")
+                if has_app_context():
+                    current_app.logger.info(f"센서 이벤트 처리 결과: {result}")
+                else:
+                    print(f"센서 이벤트 처리 결과: {result}")
                 
                 # WebSocket으로 실시간 업데이트 전송 (향후 구현)
                 if result.get('completed'):
-                    current_app.logger.info(f"🎉 트랜잭션 완료: {result.get('event_type')}")
+                    if has_app_context():
+                        current_app.logger.info(f"🎉 트랜잭션 완료: {result.get('event_type')}")
+                    else:
+                        print(f"🎉 트랜잭션 완료: {result.get('event_type')}")
                 
             except Exception as e:
-                current_app.logger.error(f"센서 이벤트 비동기 처리 오류: {e}")
+                if has_app_context():
+                    current_app.logger.error(f"센서 이벤트 비동기 처리 오류: {e}")
+                else:
+                    print(f"센서 이벤트 비동기 처리 오류: {e}")
         
         # 이벤트 루프에서 실행
         try:
@@ -432,7 +450,10 @@ def add_sensor_event(sensor_num, state, timestamp=None):
             asyncio.run(process_sensor_event())
             
     except Exception as e:
-        current_app.logger.error(f"센서 이벤트 트랜잭션 연동 오류: {e}")
+        if has_app_context():
+            current_app.logger.error(f"센서 이벤트 트랜잭션 연동 오류: {e}")
+        else:
+            print(f"센서 이벤트 트랜잭션 연동 오류: {e}")
         # 트랜잭션 연동 실패해도 기본 이벤트 저장은 유지
 
 
@@ -776,14 +797,16 @@ def get_sensor_mapping():
         mapping = sensor_handler.get_sensor_locker_mapping()
         
         # 구역별로 정리
-        a_zone = {k: v for k, v in mapping.items() if v.startswith('A')}
-        b_zone = {k: v for k, v in mapping.items() if v.startswith('B')}
+        male_zone = {k: v for k, v in mapping.items() if v.startswith('M')}
+        female_zone = {k: v for k, v in mapping.items() if v.startswith('F')}
+        staff_zone = {k: v for k, v in mapping.items() if v.startswith('S')}
         
         return jsonify({
             'success': True,
             'mapping': {
-                'A_zone': a_zone,
-                'B_zone': b_zone,
+                'male_zone': male_zone,
+                'female_zone': female_zone,
+                'staff_zone': staff_zone,
                 'total_sensors': len(mapping)
             }
         })

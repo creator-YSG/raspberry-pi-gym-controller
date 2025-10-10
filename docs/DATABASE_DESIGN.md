@@ -5,9 +5,12 @@
 [구글 시트 - 마스터]
     ↓ (1일 2회 동기화)
 [라즈베리파이]
-    ├─ SQLite DB (locker.db)
+    ├─ SQLite DB (locker.db) - 140개 락카
     ├─ Python 제어 프로그램
-    └─ USB Serial ← → ESP32 (센서/모터)
+    └─ USB Serial ← → 3개 ESP32
+                      ├─ ESP32 #1 (esp32_male): 남성 락카 70개
+                      ├─ ESP32 #2 (esp32_female): 여성 락카 50개
+                      └─ ESP32 #3 (esp32_staff): 교직원 락카 20개
 ```
 
 ## 1. SQLite 데이터베이스 설계
@@ -67,14 +70,24 @@ CREATE INDEX idx_rental_member ON rentals(member_id);
 ### locker_status 테이블 (실시간 상태)
 ```sql
 CREATE TABLE locker_status (
-    locker_number TEXT PRIMARY KEY,      -- 락카 번호
+    locker_number TEXT PRIMARY KEY,      -- 락카 번호 (M01, F01, S01 등)
+    zone TEXT NOT NULL,                  -- 구역 (MALE, FEMALE, STAFF)
+    device_id TEXT DEFAULT 'esp32_main', -- 제어 ESP32 디바이스 ID
     sensor_status INTEGER DEFAULT 0,     -- 0:비어있음 1:키있음
     door_status INTEGER DEFAULT 0,       -- 0:닫힘 1:열림
     current_member TEXT,                 -- 현재 대여 회원
     current_transaction TEXT,            -- 진행중인 트랜잭션
     locked_until TIMESTAMP,              -- 잠금 해제 시각
-    last_change_time TIMESTAMP          -- 마지막 변경 시각
+    last_change_time TIMESTAMP,          -- 마지막 변경 시각
+    size TEXT DEFAULT 'medium',          -- 락카 크기 (small, medium, large)
+    maintenance_status TEXT DEFAULT 'normal' -- 유지보수 상태
 );
+CREATE INDEX idx_locker_zone ON locker_status(zone);
+
+-- 락카 구성 (총 140개)
+-- 남성 구역 (MALE): M01~M70 (70개) → esp32_male
+-- 여성 구역 (FEMALE): F01~F50 (50개) → esp32_female
+-- 교직원 구역 (STAFF): S01~S20 (20개) → esp32_staff
 ```
 
 ### active_transactions 테이블 (동시성 제어)
@@ -367,8 +380,11 @@ if __name__ == "__main__":
 
 ### 확장성
 - 모듈화된 클래스 설계
+- 다중 Zone 지원 (MALE, FEMALE, STAFF 등 자유롭게 확장 가능)
+- 다중 ESP32 디바이스 지원 (zone별 독립 제어)
 - 플러그인 방식의 센서/액추에이터 지원
 - 구글 시트와의 양방향 동기화
+- 락카 개수 유연하게 조정 가능 (schema.sql 수정)
 
 ### 안정성
 - 예외 처리 및 롤백 메커니즘

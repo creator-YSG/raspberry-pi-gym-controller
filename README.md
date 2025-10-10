@@ -1,6 +1,6 @@
 # 🏗️ 라즈베리파이 헬스장 락카키 대여기
 
-> **최신 업데이트**: Phase 3 서비스 로직 통합 완료 - 완전한 대여/반납 플로우 구현 (2025.10.01)
+> **최신 업데이트**: 다중 zone 락카 시스템 구현 완료 - 140개 락카 지원 (2025.10.10)
 
 ## 📋 프로젝트 개요
 
@@ -8,14 +8,18 @@
 
 ### 🎯 핵심 특징
 - **🛡️ 트랜잭션 기반 안전성**: 동시성 제어 및 데이터 무결성 보장
-- **⚡ 실시간 센서 연동**: ESP32를 통한 물리적 상태 동기화
+- **⚡ 실시간 센서 연동**: 3개 ESP32를 통한 물리적 상태 동기화
+- **🏢 다중 Zone 지원**: 남성(70개), 여성(50개), 교직원(20개) 구역 분리
 - **☁️ Google Sheets 동기화**: 기존 관리 시스템과의 호환성 유지
 - **📱 터치 최적화 UI**: 600x1024 세로 모드 키오스크
 
 ## 🏛️ 시스템 구성
 
 - **중앙 제어**: 라즈베리파이 4B + SQLite 데이터베이스
-- **하드웨어**: ESP32 통합 컨트롤러 (바코드/센서/모터)
+- **하드웨어**: 3개 ESP32 컨트롤러 (zone별 독립 제어)
+  - ESP32 #1: 남성 락카 70개 (M01~M70)
+  - ESP32 #2: 여성 락카 50개 (F01~F50)
+  - ESP32 #3: 교직원 락카 20개 (S01~S20)
 - **데이터**: SQLite (로컬) + Google Sheets (동기화)
 - **인터페이스**: Flask 웹 기반 터치스크린 키오스크
 
@@ -30,16 +34,24 @@
 
 ### ✅ 완료된 기능 (3단계/4단계)
 
+**🏢 다중 Zone 락카 시스템 (2025.10.10 완료)**
+- 3개 구역 독립 제어: 남성(MALE), 여성(FEMALE), 교직원(STAFF)
+- 총 140개 락카: 남성 70개, 여성 50개, 교직원 20개
+- zone별 ESP32 device_id 매핑 (esp32_male, esp32_female, esp32_staff)
+- 락카 번호 체계: M01~M70, F01~F50, S01~S20
+
 **🔄 서비스 로직 통합 (3단계 완료)**
 - MemberService SQLite 기반 완전 재작성
 - LockerService 트랜잭션 기반 안전한 대여/반납
-- ESP32 센서 이벤트 실시간 연동 (48개 센서)
+- ESP32 센서 이벤트 실시간 연동 (140개 센서)
+- zone별 락카 조회 및 필터링 지원
 - API 엔드포인트 비동기 처리 업데이트
 - 완전한 대여 플로우: 회원검증 → 트랜잭션생성 → 하드웨어제어 → 센서검증 → 완료
 
 **🗄️ 데이터베이스 시스템 (1단계 완료)**
 - SQLite 데이터베이스 구조 설계 및 구현
 - 5개 테이블 (members, rentals, locker_status, active_transactions, system_settings)
+- locker_status에 device_id 컬럼 추가 (ESP32 매핑)
 - 자동 인덱싱 및 트리거 시스템
 - Google Sheets 양방향 동기화
 
@@ -75,7 +87,7 @@
 ```
 raspberry-pi-gym-controller/
 ├── 📊 database/                    # 🆕 데이터베이스 레이어
-│   ├── schema.sql                 # SQLite 스키마 (5개 테이블)
+│   ├── schema.sql                 # SQLite 스키마 (5개 테이블, 140개 락카)
 │   ├── database_manager.py        # DB 연결 및 CRUD
 │   ├── transaction_manager.py     # 트랜잭션 관리 시스템
 │   └── sync_manager.py           # Google Sheets 동기화
@@ -94,6 +106,8 @@ raspberry-pi-gym-controller/
 ├── 🔌 core/esp32_manager.py       # ESP32 자동감지/통신
 ├── 🔧 hardware/                   # 하드웨어 제어 모듈
 ├── 📊 data_sources/               # Google Sheets API
+├── ⚙️ config/                      # 설정 파일
+│   ├── esp32_devices.json         # 🆕 ESP32 디바이스 설정 (3개)
 ├── 🧪 tests/                      # 🆕 완전한 테스트 스위트
 │   ├── database/                # 데이터베이스 레이어 테스트
 │   │   ├── test_database_manager.py  # DB 매니저 테스트 (13개)
@@ -204,22 +218,29 @@ python3 run.py
 ## 📚 문서 가이드
 
 ### 🎯 시작하기
-- **[SYSTEM_OVERVIEW.md](docs/SYSTEM_OVERVIEW.md)** - 전체 시스템 구조 및 사용법
 - **[README.md](README.md)** - 이 문서 (프로젝트 개요)
+- **[ZONE_SYSTEM_UPDATE.md](ZONE_SYSTEM_UPDATE.md)** - 🆕 다중 Zone 시스템 업데이트 가이드
+- **[CHANGELOG.md](CHANGELOG.md)** - 🆕 변경 이력
+- **[SYSTEM_OVERVIEW.md](docs/SYSTEM_OVERVIEW.md)** - 전체 시스템 구조 및 사용법
 
 ### 🏗️ 설계 문서
 - **[DATABASE_DESIGN.md](docs/DATABASE_DESIGN.md)** - SQLite 데이터베이스 상세 설계
 - **[IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md)** - 4단계 구현 계획
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** - ESP32 통합 아키텍처
 
+### ⚙️ 설정 파일
+- **[config/esp32_devices.json](config/esp32_devices.json)** - 🆕 ESP32 디바이스 설정 (3개)
+
 ### 📊 현재 상태
-- **구현 진행률**: 2/4 단계 완료 (50%)
+- **구현 진행률**: 3/4 단계 완료 (75%)
 - **테스트 통과율**: 24/24 (100%)
-- **데이터베이스**: 5개 테이블, 48개 락카 초기화 완료
-- **다음 단계**: 서비스 로직 통합 (3단계)
+- **데이터베이스**: 5개 테이블, 140개 락카 (3개 zone)
+- **락카 구성**: 남성 70개, 여성 50개, 교직원 20개
+- **ESP32 디바이스**: 3개 (zone별 독립 제어)
+- **다음 단계**: 최종 통합 테스트 및 배포 준비 (4단계)
 
 ---
 
-**📝 최종 업데이트**: 2025년 10월 1일  
-**🏗️ 버전**: v2.0 (SQLite 트랜잭션 시스템)  
-**👨‍💻 상태**: 개발 진행 중 (2/4 단계 완료)
+**📝 최종 업데이트**: 2025년 10월 10일  
+**🏗️ 버전**: v2.1 (다중 Zone 락카 시스템)  
+**👨‍💻 상태**: 개발 진행 중 (3/4 단계 완료)

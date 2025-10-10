@@ -665,3 +665,4 @@ class ProtocolHandler:
             and 6 <= len(message) <= 15
             and not message.startswith("0")
         )
+

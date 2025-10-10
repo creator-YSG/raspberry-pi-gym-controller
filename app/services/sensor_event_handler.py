@@ -36,30 +36,38 @@ class SensorEventHandler:
         Returns:
             센서 번호 → 락카 ID 매핑 딕셔너리
         """
-        # A구역: 센서 1-24 → A01-A24
-        # B구역: 센서 25-48 → B01-B24 (향후 확장)
+        # 새로운 시스템 (140개 락카)
+        # 남성 구역: 센서 1-70 → M01-M70
+        # 여성 구역: 센서 71-120 → F01-F50
+        # 교직원 구역: 센서 121-140 → S01-S20
         mapping = {}
         
-        # A구역 매핑 (센서 1-24)
-        for i in range(1, 25):
+        # 남성 구역 매핑 (센서 1-70 → M01-M70)
+        for i in range(1, 71):
             sensor_num = i
-            locker_id = f"A{i:02d}"
+            locker_id = f"M{i:02d}"
             mapping[sensor_num] = locker_id
         
-        # B구역 매핑 (센서 25-48) - 향후 확장용
-        for i in range(1, 25):
-            sensor_num = i + 24
-            locker_id = f"B{i:02d}"
+        # 여성 구역 매핑 (센서 71-120 → F01-F50)
+        for i in range(1, 51):
+            sensor_num = i + 70
+            locker_id = f"F{i:02d}"
             mapping[sensor_num] = locker_id
         
-        logger.info(f"센서-락카 매핑 생성: {len(mapping)}개")
+        # 교직원 구역 매핑 (센서 121-140 → S01-S20)
+        for i in range(1, 21):
+            sensor_num = i + 120
+            locker_id = f"S{i:02d}"
+            mapping[sensor_num] = locker_id
+        
+        logger.info(f"센서-락카 매핑 생성: {len(mapping)}개 (남성 70개, 여성 50개, 교직원 20개)")
         return mapping
     
     async def handle_sensor_event(self, sensor_num: int, state: str, timestamp: Optional[float] = None) -> Dict:
         """센서 이벤트 처리 및 트랜잭션 연동
         
         Args:
-            sensor_num: 센서 번호 (1-48)
+            sensor_num: 센서 번호 (1-140)
             state: 센서 상태 ('HIGH' 또는 'LOW')
             timestamp: 이벤트 발생 시간 (None이면 현재 시간)
             

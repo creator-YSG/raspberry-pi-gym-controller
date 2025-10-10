@@ -98,13 +98,13 @@ class TestDatabaseManager(unittest.TestCase):
         available_lockers = self.db_manager.get_available_lockers()
         self.assertGreater(len(available_lockers), 0)
         
-        # A구역 락카만 조회
-        a_zone_lockers = self.db_manager.get_available_lockers('A')
-        self.assertGreater(len(a_zone_lockers), 0)
+        # 남성 구역 락카만 조회
+        male_zone_lockers = self.db_manager.get_available_lockers('MALE')
+        self.assertGreater(len(male_zone_lockers), 0)
         
-        # 모든 A구역 락카인지 확인
-        for locker in a_zone_lockers:
-            self.assertEqual(locker['zone'], 'A')
+        # 모든 MALE 구역 락카인지 확인
+        for locker in male_zone_lockers:
+            self.assertEqual(locker['zone'], 'MALE')
     
     def test_rental_operations(self):
         """대여 관련 작업 테스트"""
@@ -119,14 +119,14 @@ class TestDatabaseManager(unittest.TestCase):
         cursor = self.db_manager.execute_query("""
             INSERT INTO rentals (transaction_id, member_id, locker_number, status)
             VALUES (?, ?, ?, ?)
-        """, ('TX001', member_id, 'A01', 'active'))
+        """, ('TX001', member_id, 'M01', 'active'))
         
         self.assertIsNotNone(cursor)
         
         # 활성 대여 기록 조회
         active_rentals = self.db_manager.get_active_rentals(member_id)
         self.assertEqual(len(active_rentals), 1)
-        self.assertEqual(active_rentals[0]['locker_number'], 'A01')
+        self.assertEqual(active_rentals[0]['locker_number'], 'M01')
     
     def test_database_stats(self):
         """데이터베이스 통계 테스트"""

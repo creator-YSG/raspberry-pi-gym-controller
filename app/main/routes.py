@@ -43,7 +43,7 @@ def member_check():
 def locker_select():
     """락카 선택 화면"""
     member_id = request.args.get('member_id', '')
-    zone = request.args.get('zone', 'A')  # A, B 구역
+    zone = request.args.get('zone', 'MALE')  # MALE, FEMALE, STAFF 구역
     
     locker_service = LockerService()
     available_lockers = locker_service.get_available_lockers(zone)

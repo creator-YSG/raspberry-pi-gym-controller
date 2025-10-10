@@ -397,3 +397,4 @@ class SerialBarcodeScanner:
         """문자열 표현"""
         status = "connected" if self.is_connected else "disconnected"
         return f"SerialBarcodeScanner(port={self.port}, baudrate={self.baudrate}, {status})"
+
