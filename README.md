@@ -219,8 +219,10 @@ python3 run.py
 
 ### 🎯 시작하기
 - **[README.md](README.md)** - 이 문서 (프로젝트 개요)
-- **[ZONE_SYSTEM_UPDATE.md](ZONE_SYSTEM_UPDATE.md)** - 🆕 다중 Zone 시스템 업데이트 가이드
-- **[CHANGELOG.md](CHANGELOG.md)** - 🆕 변경 이력
+- **[DEPLOYMENT_PLAN.md](DEPLOYMENT_PLAN.md)** - 🆕 실제 도입 계획서 (단계별 가이드)
+- **[MEMBER_IMPORT_GUIDE.md](MEMBER_IMPORT_GUIDE.md)** - 🆕 회원 데이터 등록 가이드
+- **[ZONE_SYSTEM_UPDATE.md](ZONE_SYSTEM_UPDATE.md)** - 다중 Zone 시스템 업데이트 가이드
+- **[CHANGELOG.md](CHANGELOG.md)** - 변경 이력
 - **[SYSTEM_OVERVIEW.md](docs/SYSTEM_OVERVIEW.md)** - 전체 시스템 구조 및 사용법
 
 ### 🏗️ 설계 문서
