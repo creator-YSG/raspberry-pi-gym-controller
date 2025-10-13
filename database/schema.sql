@@ -16,6 +16,10 @@ CREATE TABLE IF NOT EXISTS members (
     daily_rental_count INTEGER DEFAULT 0, -- 오늘 대여 횟수
     last_rental_time TIMESTAMP,          -- 마지막 대여 시각
     sync_date TIMESTAMP,                 -- 구글시트 동기화 시각
+    -- 🆕 락커 권한 관련 필드들
+    gender TEXT DEFAULT 'male',          -- 성별 (male, female)
+    member_category TEXT DEFAULT 'general', -- 회원 구분 (general, staff)
+    customer_type TEXT DEFAULT '학부',    -- 고객구분 (학부, 대학교수, 대학직원, 기타 등)
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

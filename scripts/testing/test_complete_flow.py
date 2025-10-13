@@ -22,8 +22,8 @@ async def test_complete_rental_flow():
     print("🚀 완전한 대여/반납 플로우 테스트 시작...")
     
     # 서비스 초기화
-    locker_service = LockerService('locker.db')
-    sensor_handler = SensorEventHandler('locker.db')
+    locker_service = LockerService('instance/gym_system.db')
+    sensor_handler = SensorEventHandler('instance/gym_system.db')
     
     try:
         # 테스트 데이터
@@ -143,7 +143,7 @@ async def test_sensor_mapping():
     
     print("\n🗺️  센서-락카 매핑 테스트")
     
-    sensor_handler = SensorEventHandler('locker.db')
+    sensor_handler = SensorEventHandler('instance/gym_system.db')
     
     try:
         mapping = sensor_handler.get_sensor_locker_mapping()

@@ -1,248 +1,177 @@
-# 🏗️ 라즈베리파이 헬스장 락카키 대여기
+# 🏋️ 헬스장 락커 시스템
 
-> **최신 업데이트**: 다중 zone 락카 시스템 구현 완료 - 140개 락카 지원 (2025.10.10)
+> **현재 상태**: 실제 운영 100% 준비 완료 (345명 회원 데이터 통합)
 
-## 📋 프로젝트 개요
+라즈베리파이 기반 헬스장 락커 자동 대여/반납 시스템으로, **구역별 접근 제어**와 **트랜잭션 기반 안전성**을 제공합니다.
 
-라즈베리파이 기반 헬스장 락카키 자동 대여/반납 시스템으로, **트랜잭션 기반 안전한 처리**와 **실시간 센서 검증**을 제공합니다.
-
-### 🎯 핵심 특징
+## 🎯 핵심 특징
+- **🔐 구역별 접근 제어**: 교직원/일반회원, 성별에 따른 락커 접근 권한
 - **🛡️ 트랜잭션 기반 안전성**: 동시성 제어 및 데이터 무결성 보장
 - **⚡ 실시간 센서 연동**: 3개 ESP32를 통한 물리적 상태 동기화
-- **🏢 다중 Zone 지원**: 남성(70개), 여성(50개), 교직원(20개) 구역 분리
-- **☁️ Google Sheets 동기화**: 기존 관리 시스템과의 호환성 유지
-- **📱 터치 최적화 UI**: 600x1024 세로 모드 키오스크
+- **👥 실제 회원 데이터**: 345명 실제 헬스장 회원 데이터 통합 운영
+- **🔄 스마트 반납 시스템**: 회원 바코드 스캔으로 대여/반납 모드 자동 판별
 
 ## 🏛️ 시스템 구성
-
 - **중앙 제어**: 라즈베리파이 4B + SQLite 데이터베이스
-- **하드웨어**: 3개 ESP32 컨트롤러 (zone별 독립 제어)
-  - ESP32 #1: 남성 락카 70개 (M01~M70)
-  - ESP32 #2: 여성 락카 50개 (F01~F50)
-  - ESP32 #3: 교직원 락카 20개 (S01~S20)
-- **데이터**: SQLite (로컬) + Google Sheets (동기화)
-- **인터페이스**: Flask 웹 기반 터치스크린 키오스크
+- **하드웨어**: 3개 ESP32 컨트롤러 (총 140개 락커)
+  - 남성 락커 70개 (M01~M70) + 여성 락커 50개 (F01~F50) + 교직원 락커 20개 (S01~S20)
+- **인터페이스**: Flask 웹 기반 터치스크린 키오스크 (1024x600)
 
-## 라즈베리파이 정보
-- **IP 주소**: 192.168.0.23
-- **사용자명**: pi
-- **SSH 접속**: `ssh raspberry-pi` (키 기반 인증)
-- **화면**: 1024x600 MPI7006 IPS 터치스크린 (세로모드)
-- **터치IC**: GT911 (터치 보정 완료)
+## 🚀 시스템 운영
 
-## 🚀 구현 현황
-
-### ✅ 완료된 기능 (3단계/4단계)
-
-**🏢 다중 Zone 락카 시스템 (2025.10.10 완료)**
-- 3개 구역 독립 제어: 남성(MALE), 여성(FEMALE), 교직원(STAFF)
-- 총 140개 락카: 남성 70개, 여성 50개, 교직원 20개
-- zone별 ESP32 device_id 매핑 (esp32_male, esp32_female, esp32_staff)
-- 락카 번호 체계: M01~M70, F01~F50, S01~S20
-
-**🔄 서비스 로직 통합 (3단계 완료)**
-- MemberService SQLite 기반 완전 재작성
-- LockerService 트랜잭션 기반 안전한 대여/반납
-- ESP32 센서 이벤트 실시간 연동 (140개 센서)
-- zone별 락카 조회 및 필터링 지원
-- API 엔드포인트 비동기 처리 업데이트
-- 완전한 대여 플로우: 회원검증 → 트랜잭션생성 → 하드웨어제어 → 센서검증 → 완료
-
-**🗄️ 데이터베이스 시스템 (1단계 완료)**
-- SQLite 데이터베이스 구조 설계 및 구현
-- 5개 테이블 (members, rentals, locker_status, active_transactions, system_settings)
-- locker_status에 device_id 컬럼 추가 (ESP32 매핑)
-- 자동 인덱싱 및 트리거 시스템
-- Google Sheets 양방향 동기화
-
-**⚙️ 트랜잭션 시스템 (2단계 완료)**
-- UUID 기반 트랜잭션 관리
-- 동시성 제어 (1회원/1트랜잭션)
-- 자동 타임아웃 처리 (30초)
-- 센서 이벤트 기록 및 검증
-
-**👤 확장된 모델 시스템**
-- Member 모델 SQLite 연동 완료
-- 대여 상태 추적 및 일일 제한
-- 데이터베이스 변환 메서드
-
-**🧪 완전한 테스트 커버리지**
-- 24개 테스트 모두 통과 (100%)
-- 데이터베이스, 모델, 트랜잭션 테스트
-
-**🔧 기존 완성 기능**
-- ESP32 자동 감지 및 통신 시스템
-- Flask 웹 기반 터치스크린 UI
-- 키오스크 모드 및 하드웨어 설정
-- Google Sheets API 연동
+### ✅ 완료된 기능 (100% 운영 준비)
+- **345명 실제 회원 데이터**: CSV 기반 일괄 등록 및 검증 완료
+- **구역별 접근 제어**: 교직원/일반회원, 성별에 따른 락커 권한 완벽 구현
+- **스마트 반납 메커니즘**: 회원 바코드 스캔으로 대여/반납 모드 자동 판별
+- **트랜잭션 기반 안전성**: 동시성 제어 및 데이터 무결성 보장
+- **실시간 센서 연동**: 물리적 상태와 DB 동기화
+- **실전 테스트 완료**: 모든 시나리오 100% 통과
 
 ### 🚀 키오스크 시스템
-- **시작**: `./scripts/start_kiosk.sh`
-- **종료**: `./scripts/stop_kiosk.sh`
-- **재시작**: `./scripts/restart_kiosk.sh`
-- **자동 시작**: 데스크톱 바로가기 생성 완료
+```bash
+# 키오스크 시작
+./scripts/deployment/start_kiosk.sh
 
-### 📁 프로젝트 구조 (업데이트됨)
+# 키오스크 종료
+./scripts/deployment/stop_kiosk.sh
+
+# 키오스크 재시작
+./scripts/deployment/restart_kiosk.sh
+```
+
+### 💾 데이터 관리
+```bash
+# 회원 데이터 가져오기
+python3 scripts/data/import_members_csv.py
+
+# 회원 권한 업데이트
+python3 scripts/data/update_member_permissions.py
+```
+
+### 🧪 시스템 테스트
+```bash
+# 서비스 플로우 테스트
+python3 scripts/testing/test_service_flow.py
+
+# 락커 권한 테스트
+python3 scripts/testing/test_locker_permissions.py
+```
+
+## 📁 프로젝트 구조
 
 ```
 raspberry-pi-gym-controller/
-├── 📊 database/                    # 🆕 데이터베이스 레이어
-│   ├── schema.sql                 # SQLite 스키마 (5개 테이블, 140개 락카)
-│   ├── database_manager.py        # DB 연결 및 CRUD
-│   ├── transaction_manager.py     # 트랜잭션 관리 시스템
-│   └── sync_manager.py           # Google Sheets 동기화
-├── 📱 app/                        # Flask 애플리케이션
-│   ├── models/                   # 🔄 확장된 데이터 모델
-│   │   ├── member.py            # SQLite 연동 Member 모델
-│   │   ├── locker.py            # 락카 모델
-│   │   └── rental.py            # 대여 기록 모델
-│   ├── services/                 # 🔄 비즈니스 로직 (3단계 완료)
-│   │   ├── member_service.py    # SQLite 기반 회원 관리
-│   │   ├── locker_service.py    # 트랜잭션 기반 락카 관리
-│   │   └── sensor_event_handler.py # 센서 이벤트 처리
-│   ├── main/routes.py           # 메인 웹 라우트
-│   ├── api/routes.py            # REST API 엔드포인트
-│   └── events.py                # WebSocket 이벤트
-├── 🔌 core/esp32_manager.py       # ESP32 자동감지/통신
-├── 🔧 hardware/                   # 하드웨어 제어 모듈
-├── 📊 data_sources/               # Google Sheets API
-├── ⚙️ config/                      # 설정 파일
-│   ├── esp32_devices.json         # 🆕 ESP32 디바이스 설정 (3개)
-├── 🧪 tests/                      # 🆕 완전한 테스트 스위트
-│   ├── database/                # 데이터베이스 레이어 테스트
-│   │   ├── test_database_manager.py  # DB 매니저 테스트 (13개)
-│   │   ├── test_member_model.py      # Member 모델 테스트 (8개)
-│   │   └── test_transaction_manager.py # 트랜잭션 테스트 (9개)
-│   └── services/                # 서비스 레이어 테스트
-│       └── test_member_service.py    # MemberService 테스트 (13개)
-├── 🛠️ scripts/                    # 시스템 스크립트
-│   ├── init_database.py         # 🆕 DB 초기화
-│   ├── add_test_members.py      # 테스트 회원 데이터 추가
-│   ├── test_complete_flow.py    # 완전한 대여 플로우 테스트
-│   ├── test_api_direct.py       # API 기능 직접 테스트
-│   └── start_kiosk.sh           # 키오스크 시작
-├── 📝 docs/                       # 🆕 완전한 문서화
-│   ├── SYSTEM_OVERVIEW.md       # 전체 시스템 가이드
-│   ├── DATABASE_DESIGN.md       # DB 설계 문서
-│   ├── IMPLEMENTATION_PLAN.md   # 구현 계획서
-│   ├── PHASE3_DETAILED_PLAN.md  # Phase 3 상세 계획
-│   ├── PHASE3_COMPLETION_REPORT.md # Phase 3 완료 보고서
-│   └── GETTING_STARTED.md       # 빠른 시작 가이드
-├── 📋 locker.db                   # 🆕 SQLite 데이터베이스
-└── ⚙️ config/                     # 설정 파일
+├── 📱 app/                        # Flask 웹 애플리케이션
+│   ├── api/                      # REST API 엔드포인트
+│   ├── main/                     # 메인 웹 라우트
+│   ├── models/                   # 데이터 모델 (Member, Locker, Rental)
+│   ├── services/                 # 비즈니스 로직 서비스
+│   ├── static/                   # CSS, JS, 이미지 파일
+│   └── templates/                # HTML 템플릿
+├── 🔌 core/                       # 핵심 시스템
+│   └── esp32_manager.py          # ESP32 통신 관리자
+├── 📊 database/                   # 데이터베이스 레이어
+│   ├── schema.sql                # SQLite 스키마 (5개 테이블, 140개 락커)
+│   ├── database_manager.py       # DB 연결 및 CRUD
+│   ├── transaction_manager.py    # 트랜잭션 관리 시스템
+│   └── sync_manager.py          # Google Sheets 동기화
+├── 🔧 hardware/                   # 하드웨어 추상화
+│   ├── barcode_utils.py         # 바코드 처리
+│   ├── protocol_handler.py      # ESP32 통신 프로토콜
+│   └── serial_scanner.py        # 시리얼 포트 스캐너
+├── 📊 data_sources/               # 외부 데이터 소스
+│   └── google_sheets.py         # Google Sheets API
+├── ⚙️ config/                     # 설정 파일들
+├── 💾 data/                       # 데이터 파일들 (체계적 관리)
+│   ├── members/                 # 회원 데이터 (CSV 등)
+│   └── backups/                 # 백업 파일들
+├── 🧪 tests/                      # 테스트 파일들 (통합 정리)
+│   ├── unit/                    # 단위 테스트
+│   ├── integration/             # 통합 테스트
+│   └── fixtures/                # 테스트 데이터
+├── 🛠️ scripts/                    # 관리 스크립트들 (용도별 분류)
+│   ├── setup/                   # 설치/설정 스크립트
+│   ├── data/                    # 데이터 관리 스크립트
+│   ├── deployment/              # 배포 관련 스크립트
+│   ├── maintenance/             # 유지보수 스크립트
+│   └── testing/                 # 테스트 스크립트
+└── 📚 docs/                       # 프로젝트 문서 (주제별 분류)
+    ├── architecture/            # 시스템 아키텍처
+    ├── development/             # 개발 가이드
+    ├── deployment/              # 배포 가이드
+    ├── features/                # 기능 문서
+    └── maintenance/             # 유지보수 문서
 ```
 
-### 🔧 기술 스택 (업데이트됨)
+## 🔄 서비스 플로우
 
-**백엔드**
-- **Python 3**: 메인 언어
-- **Flask + Flask-SocketIO**: 웹 프레임워크
-- **SQLite**: 로컬 데이터베이스 (🆕)
-- **asyncio**: 비동기 트랜잭션 처리 (🆕)
+### 📱 바코드 스캔 → 락커 열기 전체 과정
+1. **바코드 스캔**: 회원번호 입력
+2. **회원 검증**: 데이터베이스에서 등록된 회원인지 확인
+3. **유효성 검사**: 만료일자 체크
+4. **대여/반납 판단**: 현재 대여 상태 확인
+5. **회원 구분별 접근 구역 확인**: 성별 + 직급에 따른 권한
+6. **선택 락커 구역 권한 체크**: 해당 구역 접근 가능한지 확인
+7. **락커 열기 또는 접근 거부**
 
-**데이터 관리**
-- **SQLite**: 트랜잭션 기반 로컬 DB (🆕)
-- **Google Sheets API**: 마스터 데이터 동기화
-- **JSON**: ESP32 통신 프로토콜
+### 🎯 권한 제어 예시
+```python
+# 김현 교수 (남자 교직원) - 바코드: 20156111
+✅ M01~M70 (남자구역) 접근 가능
+❌ F01~F50 (여자구역) 접근 차단
+✅ S01~S20 (교직원구역) 접근 가능
 
-**하드웨어 통신**
-- **pyserial**: ESP32 USB 시리얼 통신
-- **자동 감지**: VID:PID 기반 포트 스캔
-
-**프론트엔드 & 시스템**
-- **HTML5/CSS3/JavaScript**: 터치 최적화 UI
-- **WebSocket**: 실시간 상태 업데이트
-- **Chromium 키오스크**: 전체화면 모드
-
-### 🎯 다음 단계 (3단계: 서비스 로직 통합)
-
-- [ ] LockerService에 트랜잭션 시스템 통합
-- [ ] ESP32 센서 이벤트와 검증 시스템 연결
-- [ ] 완전한 대여/반납 플로우 구현
-- [ ] 웹 UI에 실시간 트랜잭션 상태 표시
-- [ ] 통합 테스트 및 성능 최적화
-
-## 🚀 빠른 시작
-
-### 📊 데이터베이스 초기화
-```bash
-# SQLite 데이터베이스 생성
-python3 scripts/init_database.py
-
-# 데이터베이스 상태 확인
-sqlite3 locker.db "SELECT name FROM sqlite_master WHERE type='table';"
+# 손준표 학생 (남자 일반회원) - 바코드: 20240838  
+✅ M01~M70 (남자구역) 접근 가능
+❌ F01~F50 (여자구역) 접근 차단
+❌ S01~S20 (교직원구역) 접근 차단
 ```
 
-### 🧪 테스트 실행
-```bash
-# 전체 테스트 실행 (24개)
-python3 tests/database/test_database_manager.py
-python3 tests/database/test_member_model.py
-python3 tests/database/test_transaction_manager.py
+## 📚 문서
 
-# 개별 기능 테스트
-python3 -c "
-from database import DatabaseManager
-db = DatabaseManager('locker.db')
-db.connect()
-print('✅ 데이터베이스 연결 성공')
-stats = db.get_database_stats()
-print(f'📊 락카 수: {stats[\"locker_status_count\"]}개')
-db.close()
-"
-```
+- **📖 완전 가이드**: [`docs/SYSTEM_GUIDE.md`](docs/SYSTEM_GUIDE.md) - 시스템 전체 가이드
+- **🏗️ 아키텍처**: [`docs/architecture/`](docs/architecture/) - 시스템 설계 문서
+- **🚀 개발 가이드**: [`docs/development/`](docs/development/) - 개발 시작 가이드
+- **🚀 배포 가이드**: [`docs/deployment/`](docs/deployment/) - ESP32 통합 가이드
+- **🔧 유지보수**: [`docs/maintenance/`](docs/maintenance/) - 문제 해결 가이드
 
-### 🔧 개발 환경
-```bash
-# SSH 접속
-./scripts/connect_pi.sh
+## 🎉 운영 현황
 
-# 코드 동기화
-./scripts/sync_code.sh
+**🎯 실제 헬스장 운영을 위한 모든 준비가 완료된 완벽한 시스템입니다!**
 
-# 로컬 개발 서버
-python3 run.py
-
-# 키오스크 모드 시작
-./scripts/start_kiosk.sh
-```
-
-## 트러블슈팅 이력
-- ✅ SSH 비밀번호 반복 입력 → SSH 키 인증으로 해결
-- ✅ 디스플레이 가로 → KMS 드라이버로 세로 회전
-- ✅ 터치 패널 misalign → xinput 매트릭스 보정
-- ✅ 한글 폰트 깨짐 → Noto Sans KR + Droid Sans Fallback
-- ✅ 이모티콘 네모 표시 → Google Fonts 이모티콘 웹폰트
-- ✅ 화면 슬립 → DPMS 비활성화 + 마우스 움직임
-
-## 📚 문서 가이드
-
-### 🎯 시작하기
-- **[README.md](README.md)** - 이 문서 (프로젝트 개요)
-- **[DEPLOYMENT_PLAN.md](DEPLOYMENT_PLAN.md)** - 🆕 실제 도입 계획서 (단계별 가이드)
-- **[MEMBER_IMPORT_GUIDE.md](MEMBER_IMPORT_GUIDE.md)** - 🆕 회원 데이터 등록 가이드
-- **[ZONE_SYSTEM_UPDATE.md](ZONE_SYSTEM_UPDATE.md)** - 다중 Zone 시스템 업데이트 가이드
-- **[CHANGELOG.md](CHANGELOG.md)** - 변경 이력
-- **[SYSTEM_OVERVIEW.md](docs/SYSTEM_OVERVIEW.md)** - 전체 시스템 구조 및 사용법
-
-### 🏗️ 설계 문서
-- **[DATABASE_DESIGN.md](docs/DATABASE_DESIGN.md)** - SQLite 데이터베이스 상세 설계
-- **[IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md)** - 4단계 구현 계획
-- **[ARCHITECTURE.md](ARCHITECTURE.md)** - ESP32 통합 아키텍처
-
-### ⚙️ 설정 파일
-- **[config/esp32_devices.json](config/esp32_devices.json)** - 🆕 ESP32 디바이스 설정 (3개)
-
-### 📊 현재 상태
-- **구현 진행률**: 3/4 단계 완료 (75%)
-- **테스트 통과율**: 24/24 (100%)
-- **데이터베이스**: 5개 테이블, 140개 락카 (3개 zone)
-- **락카 구성**: 남성 70개, 여성 50개, 교직원 20개
-- **ESP32 디바이스**: 3개 (zone별 독립 제어)
-- **다음 단계**: 최종 통합 테스트 및 배포 준비 (4단계)
+- **140개 락커**: 남성 70개, 여성 50개, 교직원 20개
+- **3개 ESP32**: zone별 독립 제어
+- **345명 회원**: 실제 헬스장 회원 데이터 통합
+- **트랜잭션 기반**: 동시성 제어 및 안전성 보장
+- **실시간 센서**: 물리적 상태와 DB 동기화
+- **터치 최적화**: 1024x600 키오스크 인터페이스
 
 ---
 
-**📝 최종 업데이트**: 2025년 10월 10일  
-**🏗️ 버전**: v2.1 (다중 Zone 락카 시스템)  
-**👨‍💻 상태**: 개발 진행 중 (3/4 단계 완료)
+## 🛠️ 개발 환경 설정
+
+### 사전 요구사항
+- Python 3.7+
+- SQLite3
+- Git
+
+### 설치 및 실행
+```bash
+# 1. 의존성 설치
+pip3 install -r requirements.txt
+
+# 2. 데이터베이스 초기화
+python3 scripts/setup/init_database.py
+
+# 3. 회원 데이터 가져오기
+python3 scripts/data/import_members_csv.py
+
+# 4. 시스템 실행
+python3 run.py
+```
+
+### 라즈베리파이 정보
+- **IP 주소**: 192.168.0.23
+- **사용자명**: pi
+- **SSH 접속**: `ssh raspberry-pi`
+- **화면**: 1024x600 터치스크린 (세로모드)

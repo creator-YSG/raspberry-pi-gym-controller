@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 class MemberService:
     """회원 관리 비즈니스 로직 (SQLite 연동)"""
     
-    def __init__(self, db_path: str = 'locker.db'):
+    def __init__(self, db_path: str = 'instance/gym_system.db'):
         """MemberService 초기화
         
         Args:
@@ -91,14 +91,25 @@ class MemberService:
                     'member': member
                 }
             
-            # 대여 가능 여부 검증
+            # 모든 검증 통과 - 대여중인 회원도 유효한 회원으로 처리
+            remaining_days = member.days_remaining
+            
+            # 대여중인 회원인 경우
             if member.is_renting:
                 return {
-                    'valid': False,
-                    'error': f'이미 {member.currently_renting}번 락카를 대여중입니다.',
-                    'member': member
+                    'valid': True,
+                    'member': member,
+                    'message': f'안녕하세요, {member.name}님! 현재 {member.currently_renting}번 락카를 사용중입니다.',
+                    'rental_info': {
+                        'daily_count': member.daily_rental_count,
+                        'can_rent': member.can_rent_more,
+                        'is_renting': True,
+                        'current_locker': member.currently_renting
+                    },
+                    'action_type': 'return_process'  # 반납 프로세스 표시
                 }
             
+            # 대여하지 않은 회원인 경우
             if not member.can_rent_more:
                 return {
                     'valid': False,
@@ -106,8 +117,7 @@ class MemberService:
                     'member': member
                 }
             
-            # 모든 검증 통과
-            remaining_days = member.days_remaining
+            # 새로운 대여 가능한 회원
             return {
                 'valid': True,
                 'member': member,
@@ -115,8 +125,9 @@ class MemberService:
                 'rental_info': {
                     'daily_count': member.daily_rental_count,
                     'can_rent': member.can_rent_more,
-                    'is_renting': member.is_renting
-                }
+                    'is_renting': False
+                },
+                'action_type': 'rental_process'  # 대여 프로세스 표시
             }
             
         except Exception as e:

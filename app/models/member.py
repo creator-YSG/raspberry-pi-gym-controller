@@ -20,7 +20,11 @@ class Member:
                  last_rental_time: Optional[datetime] = None,
                  sync_date: Optional[datetime] = None,
                  created_at: Optional[datetime] = None,
-                 updated_at: Optional[datetime] = None):
+                 updated_at: Optional[datetime] = None,
+                 # 🆕 락커 권한 관련 필드들
+                 gender: str = 'male',  # male, female
+                 member_category: str = 'general',  # general, staff
+                 customer_type: str = '학부'):
         self.id = id  # 바코드 ID (member_id)
         self.name = name  # member_name
         self.phone = phone
@@ -35,6 +39,11 @@ class Member:
         self.sync_date = sync_date  # 구글시트 동기화 시각
         self.created_at = created_at
         self.updated_at = updated_at
+        
+        # 락커 권한 관련 필드들
+        self.gender = gender  # 성별 (male, female)
+        self.member_category = member_category  # 회원 구분 (general, staff)
+        self.customer_type = customer_type  # 고객구분 (학부, 대학교수, 대학직원, 기타 등)
     
     def to_dict(self):
         """딕셔너리로 변환"""
@@ -51,9 +60,13 @@ class Member:
             'sync_date': self.sync_date.isoformat() if self.sync_date else None,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'gender': self.gender,
+            'member_category': self.member_category,
+            'customer_type': self.customer_type,
             'is_valid': self.is_valid,
             'days_remaining': self.days_remaining,
-            'is_renting': self.is_renting
+            'is_renting': self.is_renting,
+            'allowed_zones': self.allowed_zones
         }
     
     @property
@@ -87,6 +100,30 @@ class Member:
         max_daily_rentals = 3  # 기본값, 나중에 시스템 설정에서 가져올 수 있음
         return self.daily_rental_count < max_daily_rentals
     
+    @property
+    def allowed_zones(self):
+        """접근 가능한 락커 구역 목록"""
+        zones = []
+        
+        # 교직원은 성별 구역 + 교직원 구역 모두 접근 가능
+        if self.member_category == 'staff':
+            if self.gender == 'male':
+                zones.extend(['MALE', 'STAFF'])
+            else:  # female
+                zones.extend(['FEMALE', 'STAFF'])
+        else:
+            # 일반 회원은 성별 구역만 접근 가능
+            if self.gender == 'male':
+                zones.append('MALE')
+            else:  # female
+                zones.append('FEMALE')
+        
+        return zones
+    
+    def can_access_zone(self, zone: str) -> bool:
+        """특정 구역 접근 가능 여부"""
+        return zone in self.allowed_zones
+    
     @classmethod
     def from_db_row(cls, row: sqlite3.Row) -> 'Member':
         """데이터베이스 행에서 Member 객체 생성
@@ -118,7 +155,10 @@ class Member:
             last_rental_time=parse_datetime(row['last_rental_time'] if 'last_rental_time' in row.keys() else None),
             sync_date=parse_datetime(row['sync_date'] if 'sync_date' in row.keys() else None),
             created_at=parse_datetime(row['created_at'] if 'created_at' in row.keys() else None),
-            updated_at=parse_datetime(row['updated_at'] if 'updated_at' in row.keys() else None)
+            updated_at=parse_datetime(row['updated_at'] if 'updated_at' in row.keys() else None),
+            gender=row['gender'] if 'gender' in row.keys() and row['gender'] else 'male',
+            member_category=row['member_category'] if 'member_category' in row.keys() and row['member_category'] else 'general',
+            customer_type=row['customer_type'] if 'customer_type' in row.keys() and row['customer_type'] else '학부'
         )
     
     def to_db_dict(self) -> Dict[str, Any]:
@@ -143,7 +183,10 @@ class Member:
             'last_rental_time': format_datetime(self.last_rental_time),
             'sync_date': format_datetime(self.sync_date),
             'created_at': format_datetime(self.created_at),
-            'updated_at': format_datetime(self.updated_at)
+            'updated_at': format_datetime(self.updated_at),
+            'gender': self.gender,
+            'member_category': self.member_category,
+            'customer_type': self.customer_type
         }
     
     def start_rental(self, locker_number: str):

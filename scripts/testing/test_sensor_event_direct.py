@@ -21,8 +21,8 @@ async def test_sensor_event_direct():
     print("🔍 센서 이벤트 직접 테스트 시작...")
     
     # 서비스 초기화
-    locker_service = LockerService('locker.db')
-    sensor_handler = SensorEventHandler('locker.db')
+    locker_service = LockerService('instance/gym_system.db')
+    sensor_handler = SensorEventHandler('instance/gym_system.db')
     
     try:
         member_id = 'TEST001'  # 테스트회원1 (VIP)

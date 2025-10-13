@@ -33,7 +33,7 @@ def system_status():
 def validate_member(member_id):
     """회원 유효성 검증"""
     try:
-        member_service = MemberService('locker.db')
+        member_service = MemberService('instance/gym_system.db')
         
         try:
             result = member_service.validate_member(member_id)
@@ -51,7 +51,7 @@ def validate_member(member_id):
 def get_active_transactions():
     """활성 트랜잭션 목록 조회"""
     try:
-        db = DatabaseManager('locker.db')
+        db = DatabaseManager('instance/gym_system.db')
         db.connect()
         tx_manager = TransactionManager(db)
         
@@ -76,7 +76,7 @@ def get_active_transactions():
 def get_transaction_status(transaction_id):
     """트랜잭션 상태 조회"""
     try:
-        db = DatabaseManager('locker.db')
+        db = DatabaseManager('instance/gym_system.db')
         db.connect()
         tx_manager = TransactionManager(db)
         
@@ -115,7 +115,7 @@ def rent_locker(locker_id):
                 'error': '회원 ID가 필요합니다.'
             }), 400
         
-        locker_service = LockerService('locker.db')
+        locker_service = LockerService('instance/gym_system.db')
         
         try:
             result = asyncio.run(locker_service.rent_locker(locker_id, member_id))
@@ -168,7 +168,7 @@ def simulate_sensor_event():
                 'error': '센서 상태는 HIGH 또는 LOW여야 합니다.'
             }), 400
         
-        sensor_handler = SensorEventHandler('locker.db')
+        sensor_handler = SensorEventHandler('instance/gym_system.db')
         
         try:
             result = asyncio.run(sensor_handler.handle_sensor_event(sensor_num, state))

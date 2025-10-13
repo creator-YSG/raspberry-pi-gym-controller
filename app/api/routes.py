@@ -46,17 +46,77 @@ def get_member(member_id):
         }), 500
 
 
+@bp.route('/members/<member_id>/zones')
+def get_member_zones(member_id):
+    """회원의 접근 가능한 락커 구역 조회"""
+    try:
+        from app.services.member_service import MemberService
+        member_service = MemberService()
+        member = member_service.get_member(member_id)
+        
+        if not member:
+            return jsonify({
+                'success': False,
+                'error': '회원을 찾을 수 없습니다.'
+            }), 404
+        
+        zone_names = {
+            'MALE': '남자',
+            'FEMALE': '여자',
+            'STAFF': '교직원'
+        }
+        
+        allowed_zones_info = []
+        for zone in member.allowed_zones:
+            allowed_zones_info.append({
+                'zone': zone,
+                'name': zone_names.get(zone, zone),
+                'accessible': True
+            })
+        
+        return jsonify({
+            'success': True,
+            'member_id': member_id,
+            'member_name': member.name,
+            'member_category': member.member_category,
+            'customer_type': member.customer_type,
+            'gender': member.gender,
+            'allowed_zones': allowed_zones_info
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f'회원 구역 조회 오류: {e}')
+        return jsonify({
+            'success': False,
+            'error': '회원 구역 정보 조회 중 오류가 발생했습니다.'
+        }), 500
+
+
 @bp.route('/lockers')
 def get_lockers():
-    """락카 목록 조회"""
+    """락카 목록 조회 (회원별 접근 권한 적용)"""
     try:
         zone = request.args.get('zone', 'MALE')
         status = request.args.get('status', 'all')  # available, occupied, all
+        member_id = request.args.get('member_id')  # 회원 권한 체크용
         
         locker_service = LockerService()
         
+        # 회원 권한 체크가 필요한 경우
+        if member_id:
+            from app.services.member_service import MemberService
+            member_service = MemberService()
+            member = member_service.get_member(member_id)
+            
+            if member and not member.can_access_zone(zone):
+                return jsonify({
+                    'success': False,
+                    'error': f'해당 구역에 접근할 수 없습니다.',
+                    'allowed_zones': member.allowed_zones
+                }), 403
+        
         if status == 'available':
-            lockers = locker_service.get_available_lockers(zone)
+            lockers = locker_service.get_available_lockers(zone, member_id)
         elif status == 'occupied':
             lockers = locker_service.get_occupied_lockers(zone)
         else:
@@ -91,7 +151,7 @@ def rent_locker(locker_id):
             }), 400
         
         # 새로운 트랜잭션 기반 LockerService 사용
-        locker_service = LockerService('locker.db')
+        locker_service = LockerService('instance/gym_system.db')
         
         try:
             # 비동기 메서드를 동기적으로 실행
@@ -159,7 +219,7 @@ def get_transaction_status(transaction_id):
     try:
         from database import TransactionManager, DatabaseManager
         
-        db = DatabaseManager('locker.db')
+        db = DatabaseManager('instance/gym_system.db')
         db.connect()
         tx_manager = TransactionManager(db)
         
@@ -194,7 +254,7 @@ def get_active_transactions():
     try:
         from database import TransactionManager, DatabaseManager
         
-        db = DatabaseManager('locker.db')
+        db = DatabaseManager('instance/gym_system.db')
         db.connect()
         tx_manager = TransactionManager(db)
         
@@ -224,7 +284,7 @@ def validate_member(member_id):
     try:
         from app.services.member_service import MemberService
         
-        member_service = MemberService('locker.db')
+        member_service = MemberService('instance/gym_system.db')
         
         try:
             result = member_service.validate_member(member_id)
@@ -382,7 +442,7 @@ def get_sensor_handler():
     global _sensor_handler
     if _sensor_handler is None:
         from app.services.sensor_event_handler import SensorEventHandler
-        _sensor_handler = SensorEventHandler('locker.db')
+        _sensor_handler = SensorEventHandler('instance/gym_system.db')
     return _sensor_handler
 
 def add_sensor_event(sensor_num, state, timestamp=None):

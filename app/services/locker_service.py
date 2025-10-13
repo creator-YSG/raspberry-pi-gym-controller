@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 class LockerService:
     """락카 대여/반납 비즈니스 로직 (트랜잭션 기반)"""
     
-    def __init__(self, db_path: str = 'locker.db'):
+    def __init__(self, db_path: str = 'instance/gym_system.db'):
         """LockerService 초기화
         
         Args:
@@ -51,11 +51,12 @@ class LockerService:
         except Exception as e:
             print(f"의존성 초기화 오류: {e}")
     
-    def get_available_lockers(self, zone: str = 'MALE') -> List[Locker]:
+    def get_available_lockers(self, zone: str = 'MALE', member_id: str = None) -> List[Locker]:
         """SQLite에서 사용 가능한 락카 목록 조회
         
         Args:
             zone: 락카 구역 (MALE, FEMALE, STAFF 등)
+            member_id: 회원 ID (권한 체크용, 선택사항)
             
         Returns:
             사용 가능한 Locker 객체 리스트
@@ -87,6 +88,16 @@ class LockerService:
                         device_id=device_id
                     )
                     available_lockers.append(locker)
+                
+                # 회원 권한 체크가 필요한 경우
+                if member_id:
+                    try:
+                        member = self.member_service.get_member(member_id)
+                        if member and not member.can_access_zone(zone):
+                            logger.warning(f"회원 {member_id}는 {zone} 구역에 접근할 수 없음")
+                            return []
+                    except Exception as e:
+                        logger.error(f"회원 권한 체크 오류: {e}")
                 
                 logger.info(f"사용 가능한 락카 조회: {zone}구역 {len(available_lockers)}개")
                 return available_lockers
@@ -204,7 +215,20 @@ class LockerService:
                     'step': 'locker_validation'
                 }
             
-            # 3. 트랜잭션 시작
+            # 3. 락카 구역 접근 권한 확인
+            if not member.can_access_zone(locker.zone):
+                zone_names = {
+                    'MALE': '남자',
+                    'FEMALE': '여자', 
+                    'STAFF': '교직원'
+                }
+                return {
+                    'success': False,
+                    'error': f'{member.name}님은 {zone_names.get(locker.zone, locker.zone)} 구역 락카를 사용할 수 없습니다.',
+                    'step': 'zone_access_denied'
+                }
+            
+            # 4. 트랜잭션 시작
             tx_result = await self.tx_manager.start_transaction(member_id, TransactionType.RENTAL)
             if not tx_result['success']:
                 return {
@@ -217,13 +241,13 @@ class LockerService:
             logger.info(f"트랜잭션 시작: {tx_id}")
             
             try:
-                # 4. 회원 검증 완료 단계
+                # 5. 회원 검증 완료 단계
                 await self.tx_manager.update_transaction_step(tx_id, TransactionStep.MEMBER_VERIFIED)
                 
-                # 5. 락카 선택 완료 단계
+                # 6. 락카 선택 완료 단계
                 await self.tx_manager.update_transaction_step(tx_id, TransactionStep.LOCKER_SELECTED)
                 
-                # 6. ESP32에 락카 열기 명령 전송
+                # 7. ESP32에 락카 열기 명령 전송
                 hardware_success = await self._open_locker_hardware_async(locker_id)
                 if not hardware_success:
                     await self.tx_manager.end_transaction(tx_id, TransactionStatus.FAILED)
@@ -236,17 +260,17 @@ class LockerService:
                 
                 await self.tx_manager.update_transaction_step(tx_id, TransactionStep.HARDWARE_SENT)
                 
-                # 7. 센서 검증 대기 단계
+                # 8. 센서 검증 대기 단계
                 await self.tx_manager.update_transaction_step(tx_id, TransactionStep.SENSOR_WAIT)
                 
-                # 8. 트랜잭션에 락카 정보 업데이트
+                # 9. 트랜잭션에 락카 정보 업데이트
                 self.db.execute_query("""
                     UPDATE active_transactions 
                     SET locker_number = ?, updated_at = ?
                     WHERE transaction_id = ?
                 """, (locker_id, datetime.now().isoformat(), tx_id))
                 
-                # 9. 데이터베이스에 대여 기록 생성 (센서 검증 전에 미리 생성)
+                # 10. 데이터베이스에 대여 기록 생성 (센서 검증 전에 미리 생성)
                 rental_data = {
                     'transaction_id': tx_id,
                     'member_id': member_id,
@@ -269,14 +293,14 @@ class LockerService:
                     datetime.now().isoformat()
                 ))
                 
-                # 10. 회원 대여 상태 업데이트
+                # 11. 회원 대여 상태 업데이트
                 self.member_service.update_member(member_id, {
                     'currently_renting': locker_id,
                     'daily_rental_count': member.daily_rental_count + 1,
                     'last_rental_time': datetime.now().isoformat()
                 })
                 
-                # 11. 락카 상태를 대여 대기로 변경 (센서 검증 대기)
+                # 12. 락카 상태를 대여 대기로 변경 (센서 검증 대기)
                 self.db.execute_query("""
                     UPDATE locker_status 
                     SET current_member = ?, current_transaction = ?, updated_at = ?

@@ -16,7 +16,7 @@ import threading
 class DatabaseManager:
     """SQLite 데이터베이스 연결 및 기본 CRUD 관리"""
     
-    def __init__(self, db_path: str = 'locker.db'):
+    def __init__(self, db_path: str = 'instance/gym_system.db'):
         """
         Args:
             db_path: SQLite 데이터베이스 파일 경로
@@ -412,7 +412,7 @@ class DatabaseManager:
         return stats
 
 
-def create_database_manager(db_path: str = 'locker.db', initialize: bool = True) -> DatabaseManager:
+def create_database_manager(db_path: str = 'instance/gym_system.db', initialize: bool = True) -> DatabaseManager:
     """데이터베이스 매니저 생성 및 초기화
     
     Args:

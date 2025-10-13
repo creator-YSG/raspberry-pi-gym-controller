@@ -44,7 +44,7 @@ def main():
         logs_dir.mkdir(exist_ok=True)
         
         # 데이터베이스 파일 경로
-        db_path = project_root / 'locker.db'
+        db_path = project_root / 'instance/gym_system.db'
         
         # 기존 데이터베이스 백업 (존재하는 경우)
         if db_path.exists():

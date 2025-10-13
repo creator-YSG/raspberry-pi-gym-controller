@@ -20,7 +20,7 @@ async def test_locker_service():
     print("🚀 LockerService 테스트 시작...")
     
     # LockerService 초기화
-    locker_service = LockerService('locker.db')
+    locker_service = LockerService('instance/gym_system.db')
     
     try:
         # 1. 사용 가능한 락카 조회

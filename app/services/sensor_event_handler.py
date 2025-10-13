@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 class SensorEventHandler:
     """ESP32 센서 이벤트를 트랜잭션 시스템과 연동하는 핸들러"""
     
-    def __init__(self, db_path: str = 'locker.db'):
+    def __init__(self, db_path: str = 'instance/gym_system.db'):
         """SensorEventHandler 초기화
         
         Args:

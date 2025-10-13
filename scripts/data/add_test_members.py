@@ -19,7 +19,7 @@ def add_test_members():
     print("🚀 테스트용 회원 데이터 추가 시작...")
     
     # MemberService 초기화
-    member_service = MemberService('locker.db')
+    member_service = MemberService('instance/gym_system.db')
     
     # 테스트용 회원 데이터
     test_members = [

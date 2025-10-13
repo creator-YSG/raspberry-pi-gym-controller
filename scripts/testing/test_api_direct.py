@@ -23,11 +23,11 @@ async def test_api_functionality():
     print("🧪 API 기능 직접 테스트 시작...")
     
     # 서비스 초기화
-    member_service = MemberService('locker.db')
-    locker_service = LockerService('locker.db')
-    sensor_handler = SensorEventHandler('locker.db')
+    member_service = MemberService('instance/gym_system.db')
+    locker_service = LockerService('instance/gym_system.db')
+    sensor_handler = SensorEventHandler('instance/gym_system.db')
     
-    db = DatabaseManager('locker.db')
+    db = DatabaseManager('instance/gym_system.db')
     db.connect()
     tx_manager = TransactionManager(db)
     
