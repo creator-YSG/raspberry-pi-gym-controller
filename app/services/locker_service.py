@@ -260,8 +260,23 @@ class LockerService:
                 
                 await self.tx_manager.update_transaction_step(tx_id, TransactionStep.HARDWARE_SENT)
                 
-                # 8. 센서 검증 대기 단계
+                # 8. 센서 검증 대기 단계 - 실제 락카키 감지 로직
                 await self.tx_manager.update_transaction_step(tx_id, TransactionStep.SENSOR_WAIT)
+                
+                # 🆕 실제 락카키 감지 및 대여 완료 처리 (회원이 선택한 락카키 감지)
+                sensor_result = await self._wait_for_any_locker_key_removal(member_id, tx_id)
+                if not sensor_result['success']:
+                    await self.tx_manager.end_transaction(tx_id, TransactionStatus.FAILED)
+                    return {
+                        'success': False,
+                        'error': sensor_result['error'],
+                        'step': 'sensor_detection',
+                        'transaction_id': tx_id
+                    }
+                
+                # 실제로 빼간 락카키 정보로 업데이트
+                actual_locker_id = sensor_result['locker_id']
+                logger.info(f"회원이 실제 선택한 락카키: {actual_locker_id}")
                 
                 # 9. 트랜잭션에 락카 정보 업데이트
                 self.db.execute_query("""
@@ -465,6 +480,615 @@ class LockerService:
         except Exception as e:
             logger.error(f"동기 락카 하드웨어 제어 오류: {locker_id}, {e}")
             return False
+    
+    async def _wait_for_any_locker_key_removal(self, member_id: str, tx_id: str) -> dict:
+        """실제 헬스장 운영 로직: 회원이 선택한 락카키 감지 및 문 닫기"""
+        import serial
+        import json
+        import time
+        
+        # 센서 핀 → 락카키 번호 매핑 (테스트용)
+        def get_locker_id_from_sensor(chip_idx: int, pin: int) -> str:
+            # 테스트: 핀 9 → M10 락카키
+            if chip_idx == 0 and pin == 9:
+                return "M10"
+            # 추후 확장 가능
+            elif chip_idx == 0 and pin == 0:
+                return "M01"
+            elif chip_idx == 0 and pin == 1:
+                return "M02"
+            # 기본값
+            return f"M{pin+1:02d}"
+        
+        try:
+            logger.info(f"회원 {member_id} 락카키 선택 대기 시작")
+            
+            # ESP32 직접 연결
+            ser = serial.Serial('/dev/ttyUSB0', 115200, timeout=1)
+            await asyncio.sleep(1)
+            
+            # 1단계: 락카키 제거 대기 (최대 20초)
+            logger.info("락카키 제거 대기 중... (최대 20초)")
+            selected_locker_id = None
+            start_time = time.time()
+            
+            while time.time() - start_time < 20:  # 20초 대기
+                if ser.in_waiting > 0:
+                    try:
+                        response = ser.readline().decode().strip()
+                        if response and 'sensor_triggered' in response:
+                            data = json.loads(response)
+                            sensor_data = data.get('data', {})
+                            
+                            # 센서 활성화 (락카키 제거됨) - Python에서 반대로 해석
+                            if not sensor_data.get('active'):  # active가 false면 락카키 제거됨
+                                chip_idx = sensor_data.get('chip_idx', 0)
+                                pin = sensor_data.get('pin', 0)
+                                selected_locker_id = get_locker_id_from_sensor(chip_idx, pin)
+                                logger.info(f"락카키 제거 감지: 칩{chip_idx}, 핀{pin} → 락카키 {selected_locker_id}")
+                                break
+                                
+                    except Exception as e:
+                        logger.debug(f"센서 데이터 파싱 오류: {e}")
+                
+                await asyncio.sleep(0.1)
+            
+            if not selected_locker_id:
+                ser.close()
+                logger.warning(f"락카키 제거 타임아웃: 회원 {member_id}")
+                return {
+                    'success': False,
+                    'error': '락카키를 선택하지 않았거나 센서 오류입니다. 다시 시도해주세요.'
+                }
+            
+            # 2단계: 손 끼임 방지 대기 (3초)
+            logger.info("손 끼임 방지 대기 중... (3초)")
+            await asyncio.sleep(3)
+            
+            # 3단계: 락커 문 닫기
+            logger.info(f"락커 문 닫기")
+            close_cmd = {'command': 'motor_move', 'revs': -0.917, 'rpm': 30}
+            ser.write((json.dumps(close_cmd) + '\n').encode())
+            
+            # 문 닫기 완료 대기 (최대 5초)
+            close_completed = False
+            start_time = time.time()
+            
+            while time.time() - start_time < 5:
+                if ser.in_waiting > 0:
+                    try:
+                        response = ser.readline().decode().strip()
+                        if response and ('motor_moved' in response or '모터] 완료' in response):
+                            logger.info("락커 문 닫기 완료")
+                            close_completed = True
+                            break
+                    except:
+                        pass
+                await asyncio.sleep(0.1)
+            
+            ser.close()
+            
+            if close_completed:
+                logger.info(f"락카키 대여 완료: {selected_locker_id}")
+                
+                # 🆕 대여 완료 처리 - 실제 선택된 락카키로 기록
+                await self._complete_rental_process(selected_locker_id, tx_id, member_id)
+                
+                return {
+                    'success': True,
+                    'locker_id': selected_locker_id,
+                    'message': f'락카키 {selected_locker_id} 대여가 완료되었습니다.'
+                }
+            else:
+                logger.warning(f"문 닫기 미완료: {selected_locker_id}")
+                
+                # 락카키는 제거되었으므로 대여 완료 처리
+                await self._complete_rental_process(selected_locker_id, tx_id, member_id)
+                
+                return {
+                    'success': True,  # 락카키는 제거되었으므로 성공으로 처리
+                    'locker_id': selected_locker_id,
+                    'message': f'락카키 {selected_locker_id} 대여 완료 (문 닫기 상태 미확인)'
+                }
+                
+        except Exception as e:
+            logger.error(f"락카키 제거 감지 오류: 회원 {member_id}, {e}")
+            return {
+                'success': False,
+                'error': f'센서 시스템 오류: {str(e)}'
+            }
+    
+    async def _complete_rental_process(self, locker_id: str, tx_id: str, member_id: str):
+        """대여 완료 처리 - 실제 선택된 락카키로 기록 업데이트"""
+        try:
+            # 1. 대여 기록을 실제 선택된 락카키로 업데이트하고 'active' 상태로 변경
+            self.db.execute_query("""
+                UPDATE rentals 
+                SET locker_number = ?, status = 'active', updated_at = ?
+                WHERE transaction_id = ? AND member_id = ?
+            """, (locker_id, datetime.now().isoformat(), tx_id, member_id))
+            
+            # 2. 락커 상태 업데이트 (실제 선택된 락카키)
+            self.db.execute_query("""
+                UPDATE locker_status 
+                SET current_member = ?, updated_at = ?
+                WHERE locker_number = ?
+            """, (member_id, datetime.now().isoformat(), locker_id))
+            
+            # 3. 회원 현재 대여 정보 업데이트
+            self.db.execute_query("""
+                UPDATE members 
+                SET currently_renting = ?, 
+                    daily_rental_count = daily_rental_count + 1,
+                    last_rental_time = ?,
+                    updated_at = ?
+                WHERE member_id = ?
+            """, (locker_id, datetime.now().isoformat(), datetime.now().isoformat(), member_id))
+            
+            # 4. 트랜잭션 완료 처리
+            await self.tx_manager.end_transaction(tx_id, TransactionStatus.COMPLETED)
+            
+            logger.info(f"대여 완료 처리 성공: 회원 {member_id} → 락커 {locker_id}, 트랜잭션 {tx_id}")
+            
+        except Exception as e:
+            logger.error(f"대여 완료 처리 오류: 회원 {member_id}, 락커 {locker_id}, 트랜잭션 {tx_id}, {e}")
+            # 트랜잭션 실패 처리
+            await self.tx_manager.end_transaction(tx_id, TransactionStatus.FAILED)
+    
+    async def _validate_member_for_rental(self, member_id: str) -> dict:
+        """회원 대여 검증 (공통 로직)"""
+        try:
+            # 회원 검증
+            validation_result = self.member_service.validate_member(member_id)
+            if not validation_result['valid']:
+                return {
+                    'success': False,
+                    'error': validation_result['error'],
+                    'step': 'member_validation'
+                }
+            
+            member = validation_result['member']
+            
+            # 이미 대여 중인지 확인
+            if member.currently_renting:
+                return {
+                    'success': False,
+                    'error': f'{member.name}님은 이미 {member.currently_renting}번 락카를 대여 중입니다.',
+                    'step': 'already_renting'
+                }
+            
+            return {
+                'success': True,
+                'member': member
+            }
+            
+        except Exception as e:
+            logger.error(f"회원 검증 오류: {member_id}, {e}")
+            return {
+                'success': False,
+                'error': f'회원 검증 중 오류가 발생했습니다: {str(e)}',
+                'step': 'validation_error'
+            }
+    
+    async def rent_locker_by_sensor(self, member_id: str) -> dict:
+        """실제 헬스장 운영 로직: 회원 검증 → 문 열림 → 센서로 락카키 감지 → 대여 완료"""
+        logger.info(f"실제 헬스장 대여 프로세스 시작: 회원 {member_id}")
+        
+        try:
+            # 1. 회원 검증
+            validation_result = await self._validate_member_for_rental(member_id)
+            if not validation_result['success']:
+                return validation_result
+            
+            member = validation_result['member']
+            logger.info(f"회원 검증 완료: {member.name} ({member.member_category})")
+            
+            # 2. 트랜잭션 시작
+            tx_result = await self.tx_manager.start_transaction(member_id, TransactionType.RENTAL)
+            if not tx_result['success']:
+                return {
+                    'success': False,
+                    'error': tx_result['error'],
+                    'step': 'transaction_start'
+                }
+            
+            tx_id = tx_result['transaction_id']
+            logger.info(f"트랜잭션 시작: {tx_id}")
+            
+            try:
+                # 3. 회원 검증 완료 단계
+                await self.tx_manager.update_transaction_step(tx_id, TransactionStep.MEMBER_VERIFIED)
+                
+                # 4. 임시 대여 기록 생성 (락카키는 나중에 센서로 결정)
+                rental_time = datetime.now().isoformat()
+                self.db.execute_query("""
+                    INSERT INTO rentals (member_id, locker_number, status, rental_barcode_time, transaction_id, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                """, (member_id, 'PENDING', 'pending', rental_time, tx_id, rental_time))
+                
+                # 5. 하드웨어 제어 - 바로 문 열기
+                await self.tx_manager.update_transaction_step(tx_id, TransactionStep.HARDWARE_SENT)
+                
+                logger.info("🔓 락커 문 열기 (회원 검증 완료)")
+                hardware_result = await self._open_locker_door_direct()
+                if not hardware_result:
+                    await self.tx_manager.end_transaction(tx_id, TransactionStatus.FAILED)
+                    return {
+                        'success': False,
+                        'error': '락커 문 열기에 실패했습니다.',
+                        'step': 'hardware_control',
+                        'transaction_id': tx_id
+                    }
+                
+                # 6. 센서 검증 대기 단계
+                await self.tx_manager.update_transaction_step(tx_id, TransactionStep.SENSOR_WAIT)
+                
+                # 7. 실제 락카키 감지 및 대여 완료 처리
+                sensor_result = await self._wait_for_any_locker_key_removal(member_id, tx_id)
+                if not sensor_result['success']:
+                    await self.tx_manager.end_transaction(tx_id, TransactionStatus.FAILED)
+                    return {
+                        'success': False,
+                        'error': sensor_result['error'],
+                        'step': 'sensor_detection',
+                        'transaction_id': tx_id
+                    }
+                
+                # 8. 성공 응답
+                actual_locker_id = sensor_result['locker_id']
+                return {
+                    'success': True,
+                    'locker_id': actual_locker_id,
+                    'member_id': member_id,
+                    'transaction_id': tx_id,
+                    'message': sensor_result['message'],
+                    'step': 'completed'
+                }
+                
+            except Exception as e:
+                logger.error(f"대여 프로세스 오류: {member_id}, {e}")
+                await self.tx_manager.end_transaction(tx_id, TransactionStatus.FAILED)
+                return {
+                    'success': False,
+                    'error': f'대여 처리 중 오류가 발생했습니다: {str(e)}',
+                    'step': 'process_error',
+                    'transaction_id': tx_id
+                }
+                
+        except Exception as e:
+            logger.error(f"실제 헬스장 대여 프로세스 오류: {member_id}, {e}")
+            return {
+                'success': False,
+                'error': f'시스템 오류: {str(e)}',
+                'step': 'system_error'
+            }
+    
+    async def _open_locker_door_direct(self) -> bool:
+        """ESP32와 직접 통신으로 락커 문 열기"""
+        import serial
+        import json
+        import time
+        
+        try:
+            logger.info("ESP32 직접 연결로 문 열기")
+            ser = serial.Serial('/dev/ttyUSB0', 115200, timeout=2)
+            await asyncio.sleep(1)
+            
+            # 문 열기 명령 전송
+            open_cmd = {'command': 'motor_move', 'revs': 0.917, 'rpm': 30}
+            ser.write((json.dumps(open_cmd) + '\n').encode())
+            
+            # 완료 대기 (최대 10초)
+            start_time = time.time()
+            while time.time() - start_time < 10:
+                if ser.in_waiting > 0:
+                    try:
+                        response = ser.readline().decode().strip()
+                        if response and ('motor_moved' in response or '모터] 완료' in response):
+                            logger.info("락커 문 열기 완료")
+                            ser.close()
+                            return True
+                    except:
+                        pass
+                await asyncio.sleep(0.1)
+            
+            ser.close()
+            logger.warning("락커 문 열기 타임아웃")
+            return False
+            
+        except Exception as e:
+            logger.error(f"락커 문 열기 오류: {e}")
+            return False
+    
+    async def return_locker_by_sensor(self, member_id: str) -> dict:
+        """실제 헬스장 반납 로직: 회원 검증 → 빌린 락카키 확인 → 문 열림 → 센서로 삽입 감지 → 반납 완료"""
+        logger.info(f"실제 헬스장 반납 프로세스 시작: 회원 {member_id}")
+        
+        try:
+            # 1. 회원 검증 및 대여 상태 확인
+            validation_result = await self._validate_member_for_return(member_id)
+            if not validation_result['success']:
+                return validation_result
+            
+            member = validation_result['member']
+            rented_locker_id = validation_result['rented_locker_id']
+            logger.info(f"반납 대상: {member.name} → 락카키 {rented_locker_id}")
+            
+            # 2. 트랜잭션 시작
+            tx_result = await self.tx_manager.start_transaction(member_id, TransactionType.RETURN)
+            if not tx_result['success']:
+                return {
+                    'success': False,
+                    'error': tx_result['error'],
+                    'step': 'transaction_start'
+                }
+            
+            tx_id = tx_result['transaction_id']
+            logger.info(f"반납 트랜잭션 시작: {tx_id}")
+            
+            try:
+                # 3. 회원 검증 완료 단계
+                await self.tx_manager.update_transaction_step(tx_id, TransactionStep.MEMBER_VERIFIED)
+                
+                # 4. 임시 반납 기록 생성
+                return_time = datetime.now().isoformat()
+                self.db.execute_query("""
+                    INSERT INTO rentals (member_id, locker_number, status, return_barcode_time, transaction_id, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                """, (member_id, rented_locker_id, 'returning', return_time, tx_id, return_time))
+                
+                # 5. 하드웨어 제어 - 바로 문 열기
+                await self.tx_manager.update_transaction_step(tx_id, TransactionStep.HARDWARE_SENT)
+                
+                logger.info("🔓 락커 문 열기 (반납 프로세스)")
+                hardware_result = await self._open_locker_door_direct()
+                if not hardware_result:
+                    await self.tx_manager.end_transaction(tx_id, TransactionStatus.FAILED)
+                    return {
+                        'success': False,
+                        'error': '락커 문 열기에 실패했습니다.',
+                        'step': 'hardware_control',
+                        'transaction_id': tx_id
+                    }
+                
+                # 6. 센서 검증 대기 단계
+                await self.tx_manager.update_transaction_step(tx_id, TransactionStep.SENSOR_WAIT)
+                
+                # 7. 실제 락카키 삽입 감지 및 반납 완료 처리
+                sensor_result = await self._wait_for_locker_key_insertion(member_id, rented_locker_id, tx_id)
+                if not sensor_result['success']:
+                    await self.tx_manager.end_transaction(tx_id, TransactionStatus.FAILED)
+                    return {
+                        'success': False,
+                        'error': sensor_result['error'],
+                        'step': 'sensor_detection',
+                        'transaction_id': tx_id
+                    }
+                
+                # 8. 성공 응답
+                return {
+                    'success': True,
+                    'locker_id': rented_locker_id,
+                    'member_id': member_id,
+                    'transaction_id': tx_id,
+                    'message': sensor_result['message'],
+                    'step': 'completed'
+                }
+                
+            except Exception as e:
+                logger.error(f"반납 프로세스 오류: {member_id}, {e}")
+                await self.tx_manager.end_transaction(tx_id, TransactionStatus.FAILED)
+                return {
+                    'success': False,
+                    'error': f'반납 처리 중 오류가 발생했습니다: {str(e)}',
+                    'step': 'process_error',
+                    'transaction_id': tx_id
+                }
+                
+        except Exception as e:
+            logger.error(f"실제 헬스장 반납 프로세스 오류: {member_id}, {e}")
+            return {
+                'success': False,
+                'error': f'시스템 오류: {str(e)}',
+                'step': 'system_error'
+            }
+    
+    async def _validate_member_for_return(self, member_id: str) -> dict:
+        """회원 반납 검증 (현재 대여 중인지 확인)"""
+        try:
+            # 회원 검증
+            validation_result = self.member_service.validate_member(member_id)
+            if not validation_result['valid']:
+                return {
+                    'success': False,
+                    'error': validation_result['error'],
+                    'step': 'member_validation'
+                }
+            
+            member = validation_result['member']
+            
+            # 현재 대여 중인지 확인
+            if not member.currently_renting:
+                return {
+                    'success': False,
+                    'error': f'{member.name}님은 현재 대여 중인 락카가 없습니다.',
+                    'step': 'no_rental'
+                }
+            
+            return {
+                'success': True,
+                'member': member,
+                'rented_locker_id': member.currently_renting
+            }
+            
+        except Exception as e:
+            logger.error(f"회원 반납 검증 오류: {member_id}, {e}")
+            return {
+                'success': False,
+                'error': f'회원 검증 중 오류가 발생했습니다: {str(e)}',
+                'step': 'validation_error'
+            }
+    
+    async def _wait_for_locker_key_insertion(self, member_id: str, expected_locker_id: str, tx_id: str) -> dict:
+        """실제 헬스장 반납 로직: 정확한 락카키 삽입 감지 및 문 닫기"""
+        import serial
+        import json
+        import time
+        
+        # 센서 핀 → 락카키 번호 매핑 (테스트용)
+        def get_locker_id_from_sensor(chip_idx: int, pin: int) -> str:
+            # 테스트: 핀 9 → M10 락카키
+            if chip_idx == 0 and pin == 9:
+                return "M10"
+            # 추후 확장 가능
+            elif chip_idx == 0 and pin == 0:
+                return "M01"
+            elif chip_idx == 0 and pin == 1:
+                return "M02"
+            # 기본값
+            return f"M{pin+1:02d}"
+        
+        try:
+            logger.info(f"회원 {member_id} 락카키 {expected_locker_id} 삽입 대기 시작")
+            
+            # ESP32 직접 연결
+            ser = serial.Serial('/dev/ttyUSB0', 115200, timeout=1)
+            await asyncio.sleep(1)
+            
+            # 1단계: 락카키 삽입 대기 (최대 20초)
+            logger.info(f"락카키 {expected_locker_id} 삽입 대기 중... (최대 20초)")
+            key_inserted = False
+            start_time = time.time()
+            
+            while time.time() - start_time < 20:  # 20초 대기
+                if ser.in_waiting > 0:
+                    try:
+                        response = ser.readline().decode().strip()
+                        if response and 'sensor_triggered' in response:
+                            data = json.loads(response)
+                            sensor_data = data.get('data', {})
+                            
+                            # 센서 활성화 (락카키 삽입됨) - Python에서 반대로 해석
+                            if sensor_data.get('active'):  # active가 true면 락카키 삽입됨
+                                chip_idx = sensor_data.get('chip_idx', 0)
+                                pin = sensor_data.get('pin', 0)
+                                detected_locker_id = get_locker_id_from_sensor(chip_idx, pin)
+                                
+                                logger.info(f"락카키 삽입 감지: 칩{chip_idx}, 핀{pin} → 락카키 {detected_locker_id}")
+                                
+                                # 정확한 락카키인지 확인
+                                if detected_locker_id == expected_locker_id:
+                                    logger.info(f"✅ 정확한 락카키 {expected_locker_id} 삽입 확인!")
+                                    key_inserted = True
+                                    break
+                                else:
+                                    logger.warning(f"❌ 잘못된 락카키 삽입: {detected_locker_id} (예상: {expected_locker_id})")
+                                    
+                    except Exception as e:
+                        logger.debug(f"센서 데이터 파싱 오류: {e}")
+                
+                await asyncio.sleep(0.1)
+            
+            if not key_inserted:
+                ser.close()
+                logger.warning(f"락카키 삽입 타임아웃: 회원 {member_id}, 예상 락카키 {expected_locker_id}")
+                return {
+                    'success': False,
+                    'error': f'락카키 {expected_locker_id}를 제자리에 삽입하지 않았거나 센서 오류입니다.'
+                }
+            
+            # 2단계: 손 끼임 방지 대기 (3초)
+            logger.info("손 끼임 방지 대기 중... (3초)")
+            await asyncio.sleep(3)
+            
+            # 3단계: 락커 문 닫기
+            logger.info(f"락커 문 닫기")
+            close_cmd = {'command': 'motor_move', 'revs': -0.917, 'rpm': 30}
+            ser.write((json.dumps(close_cmd) + '\n').encode())
+            
+            # 문 닫기 완료 대기 (최대 5초)
+            close_completed = False
+            start_time = time.time()
+            
+            while time.time() - start_time < 5:
+                if ser.in_waiting > 0:
+                    try:
+                        response = ser.readline().decode().strip()
+                        if response and ('motor_moved' in response or '모터] 완료' in response):
+                            logger.info("락커 문 닫기 완료")
+                            close_completed = True
+                            break
+                    except:
+                        pass
+                await asyncio.sleep(0.1)
+            
+            ser.close()
+            
+            if close_completed:
+                logger.info(f"락카키 반납 완료: {expected_locker_id}")
+                
+                # 🆕 반납 완료 처리 - 실제 반납된 락카키로 기록
+                await self._complete_return_process(expected_locker_id, tx_id, member_id)
+                
+                return {
+                    'success': True,
+                    'locker_id': expected_locker_id,
+                    'message': f'락카키 {expected_locker_id} 반납이 완료되었습니다.'
+                }
+            else:
+                logger.warning(f"문 닫기 미완료: {expected_locker_id}")
+                
+                # 락카키는 삽입되었으므로 반납 완료 처리
+                await self._complete_return_process(expected_locker_id, tx_id, member_id)
+                
+                return {
+                    'success': True,  # 락카키는 삽입되었으므로 성공으로 처리
+                    'locker_id': expected_locker_id,
+                    'message': f'락카키 {expected_locker_id} 반납 완료 (문 닫기 상태 미확인)'
+                }
+                
+        except Exception as e:
+            logger.error(f"락카키 삽입 감지 오류: 회원 {member_id}, 예상 락카키 {expected_locker_id}, {e}")
+            return {
+                'success': False,
+                'error': f'센서 시스템 오류: {str(e)}'
+            }
+    
+    async def _complete_return_process(self, locker_id: str, tx_id: str, member_id: str):
+        """반납 완료 처리 - 대여 기록 종료 및 상태 업데이트"""
+        try:
+            # 1. 기존 대여 기록을 'returned' 상태로 업데이트
+            self.db.execute_query("""
+                UPDATE rentals 
+                SET status = 'returned', return_barcode_time = ?, updated_at = ?
+                WHERE member_id = ? AND locker_number = ? AND status = 'active'
+            """, (datetime.now().isoformat(), datetime.now().isoformat(), member_id, locker_id))
+            
+            # 2. 락커 상태 초기화
+            self.db.execute_query("""
+                UPDATE locker_status 
+                SET current_member = NULL, updated_at = ?
+                WHERE locker_number = ?
+            """, (datetime.now().isoformat(), locker_id))
+            
+            # 3. 회원 현재 대여 정보 초기화
+            self.db.execute_query("""
+                UPDATE members 
+                SET currently_renting = NULL, 
+                    last_rental_time = ?,
+                    updated_at = ?
+                WHERE member_id = ?
+            """, (datetime.now().isoformat(), datetime.now().isoformat(), member_id))
+            
+            # 4. 트랜잭션 완료 처리
+            await self.tx_manager.end_transaction(tx_id, TransactionStatus.COMPLETED)
+            
+            logger.info(f"반납 완료 처리 성공: 회원 {member_id} → 락커 {locker_id}, 트랜잭션 {tx_id}")
+            
+        except Exception as e:
+            logger.error(f"반납 완료 처리 오류: 회원 {member_id}, 락커 {locker_id}, 트랜잭션 {tx_id}, {e}")
+            # 트랜잭션 실패 처리
+            await self.tx_manager.end_transaction(tx_id, TransactionStatus.FAILED)
     
     def get_locker_by_id(self, locker_id: str) -> Optional[Locker]:
         """락카 ID로 락카 조회 (SQLite 기반)"""

@@ -114,11 +114,8 @@ class ProtocolHandler:
                         raw_message=raw_message,
                     )
 
-            # ESP32 JSON 이벤트들 (바코드, IR센서, 모터 등)
-            elif raw_message.startswith("{") and ("barcode_scanned" in raw_message or 
-                                                  "sensor_triggered" in raw_message or 
-                                                  "motor_completed" in raw_message or
-                                                  "BARCODE_SCAN" in raw_message):
+            # ESP32 JSON 이벤트들 (모든 JSON 메시지)
+            elif raw_message.startswith("{") and ("device_id" in raw_message and "esp32" in raw_message):
                 parsed_event = self._parse_esp32_json_event(raw_message)
                 if parsed_event:
                     return parsed_event
@@ -340,13 +337,58 @@ class ProtocolHandler:
             
             # 상태 응답
             elif message_type == "response":
-                print(f"[ProtocolHandler] ESP32 응답: {data.get('status', 'unknown')}")
+                # 특정 이벤트 타입이 있는 응답 처리
+                if event_type == "locker_opened":
+                    print(f"[ProtocolHandler] ESP32 락커 열기 완료: {data.get('locker_id')}")
+                    return ParsedMessage(
+                        type=MessageType.COMMAND_RESPONSE,
+                        data={
+                            "response_type": "locker_opened",
+                            "device_id": device_id,
+                            "locker_id": data.get("locker_id"),
+                            "status": data.get("status"),
+                            "steps": data.get("steps")
+                        },
+                        timestamp=timestamp,
+                        raw_message=raw_message
+                    )
+                elif event_type == "motor_moved":
+                    print(f"[ProtocolHandler] ESP32 모터 이동 완료: {data.get('revs')}회전")
+                    return ParsedMessage(
+                        type=MessageType.COMMAND_RESPONSE,
+                        data={
+                            "response_type": "motor_moved",
+                            "device_id": device_id,
+                            "revs": data.get("revs"),
+                            "rpm": data.get("rpm"),
+                            "steps": data.get("steps")
+                        },
+                        timestamp=timestamp,
+                        raw_message=raw_message
+                    )
+                else:
+                    # 일반 상태 응답
+                    print(f"[ProtocolHandler] ESP32 상태 응답: {data.get('status', 'unknown')}")
+                    return ParsedMessage(
+                        type=MessageType.STATUS_REPORT,
+                        data={
+                            "response_type": "status_response",
+                            "device_id": device_id,
+                            **data
+                        },
+                        timestamp=timestamp,
+                        raw_message=raw_message
+                    )
+            
+            # 에러 응답
+            elif message_type == "error":
+                print(f"[ProtocolHandler] ESP32 에러: {data.get('error_code')}")
                 return ParsedMessage(
-                    type=MessageType.STATUS_REPORT,
+                    type=MessageType.ERROR,
                     data={
-                        "response_type": "status_response",
                         "device_id": device_id,
-                        **data
+                        "error_code": data.get("error_code"),
+                        "error_message": data.get("error_message")
                     },
                     timestamp=timestamp,
                     raw_message=raw_message

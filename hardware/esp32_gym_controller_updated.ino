@@ -1,4 +1,6 @@
 // ESP32 완전 통합 시스템: GM65 바코드 + MCP23017 IR센서 + TB6600 스테퍼모터
+// ⚠️ 레거시 버전 (v7.1 WiFi/OTA) - 현재 사용 안함
+// 👉 새 버전 사용: esp32_gym_controller_v7.4_simple.ino
 // OTA 업데이트 지원 버전 - JSON 프로토콜 통합
 // 하드웨어 구성:
 // - GM65 Scanner: UART2 (RX2=GPIO16, TX2=GPIO17)
