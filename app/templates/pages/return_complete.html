@@ -1,0 +1,63 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}반납 완료{% endblock %}
+
+{% block body_class %}return-complete-page{% endblock %}
+
+{% block content %}
+<div class="complete-container">
+    <!-- 성공 아이콘 -->
+    <div class="success-animation">
+        <div class="success-icon">✅</div>
+        <div class="success-circle"></div>
+    </div>
+
+    <!-- 완료 메시지 -->
+    <div class="complete-message">
+        <h1 class="complete-title">반납이 완료되었습니다</h1>
+        {% if locker_id %}
+        <div class="locker-number">
+            <span class="locker-label">락커 번호:</span>
+            <span class="locker-id">{{ locker_id }}</span>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- 안내 메시지 -->
+    <div class="instruction-box">
+        <p class="instruction-line">💚 이용해 주셔서 감사합니다</p>
+        <p class="instruction-line">👋 다음에 또 만나요!</p>
+    </div>
+
+    <!-- 자동 복귀 안내 -->
+    <div class="auto-return">
+        <div class="countdown-circle">
+            <span class="countdown-number" id="countdown">3</span>
+        </div>
+        <p class="auto-return-text">초 후 자동으로 돌아갑니다</p>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let countdownValue = 3;
+
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('✅ 반납 완료 화면');
+    
+    // 카운트다운 시작
+    const countdownInterval = setInterval(function() {
+        countdownValue--;
+        document.getElementById('countdown').textContent = countdownValue;
+        
+        if (countdownValue <= 0) {
+            clearInterval(countdownInterval);
+            // 홈으로 이동
+            window.location.href = '/';
+        }
+    }, 1000);
+});
+</script>
+{% endblock %}
+

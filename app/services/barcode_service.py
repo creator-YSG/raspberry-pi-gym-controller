@@ -75,46 +75,56 @@ class BarcodeService:
         return 'member'
     
     def _process_member_barcode(self, barcode: str) -> Dict:
-        """회원 바코드 처리"""
+        """회원 바코드 처리 (센서 기반 자동 대여/반납)"""
         try:
             # 회원 정보 조회 및 검증
             validation = self.member_service.validate_member(barcode)
             
             if not validation['valid']:
+                # 에러 타입 결정
+                error_type = 'member_not_found'
+                if 'expired' in validation.get('error', '').lower() or '만료' in validation.get('error', ''):
+                    error_type = 'member_expired'
+                elif 'not found' in validation.get('error', '').lower() or '찾을 수 없' in validation.get('error', ''):
+                    error_type = 'member_not_found'
+                
                 return {
                     'success': False,
                     'error': validation['error'],
-                    'type': 'member_invalid'
+                    'error_type': error_type
                 }
             
             member = validation['member']
             
-            # 이미 대여중인 락카가 있는지 확인
-            existing_rental = self.locker_service.get_active_rental_by_member(barcode)
-            if existing_rental:
+            # 현재 대여 중인지 확인하여 대여/반납 모드 자동 판별
+            if member.currently_renting:
+                # 반납 모드: 센서 기반 자동 반납
                 return {
                     'success': True,
-                    'action': 'show_existing_rental',
-                    'type': 'member_has_rental',
-                    'member': member.to_dict(),
-                    'rental': existing_rental.to_dict(),
-                    'message': f'현재 {existing_rental.locker_id}번 락카를 사용중입니다.'
+                    'action': 'return',
+                    'member_id': member.member_id,
+                    'current_locker': member.currently_renting,
+                    'message': f'현재 {member.currently_renting}번 락카를 사용중입니다. 반납을 진행합니다.'
+                }
+            else:
+                # 대여 모드: 센서 기반 자동 대여
+                return {
+                    'success': True,
+                    'action': 'rental',
+                    'member_id': member.member_id,
+                    'message': f'{member.name}님, 대여를 진행합니다.'
                 }
             
-            # 새로운 대여 - 락카 선택 화면으로
-            return {
-                'success': True,
-                'action': 'show_locker_select',
-                'type': 'member_valid',
-                'member': member.to_dict(),
-                'message': validation['message']
-            }
-            
         except Exception as e:
-            print(f"회원 바코드 처리 오류: {e}")
+            import logging
+            import traceback
+            logger = logging.getLogger(__name__)
+            logger.error(f"❌ 회원 바코드 처리 오류: {e}")
+            logger.error(f"📍 Traceback: {traceback.format_exc()}")
             return {
                 'success': False,
-                'error': '회원 바코드 처리 중 오류가 발생했습니다.'
+                'error': f'회원 바코드 처리 중 오류가 발생했습니다: {str(e)}',
+                'error_type': 'system_error'
             }
     
     def _process_locker_key_barcode(self, barcode: str) -> Dict:

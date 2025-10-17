@@ -477,6 +477,35 @@ class ESP32Manager:
                     
                     if line:
                         await self._process_received_message(device, line)
+                
+                # 줄바꿈 없이 JSON이 여러 개 붙어있는 경우 처리
+                # JSON 형식: {...}로 시작하고 끝남
+                while device.read_buffer.startswith('{'):
+                    try:
+                        # 완전한 JSON을 찾기
+                        brace_count = 0
+                        json_end = -1
+                        for i, char in enumerate(device.read_buffer):
+                            if char == '{':
+                                brace_count += 1
+                            elif char == '}':
+                                brace_count -= 1
+                                if brace_count == 0:
+                                    json_end = i + 1
+                                    break
+                        
+                        if json_end > 0:
+                            json_str = device.read_buffer[:json_end]
+                            device.read_buffer = device.read_buffer[json_end:].lstrip()
+                            await self._process_received_message(device, json_str)
+                        else:
+                            # 완전한 JSON이 아직 없음, 다음에 더 읽기
+                            break
+                    except Exception as e:
+                        logger.error(f"ESP32 JSON 추출 오류: {device.device_id}, {e}")
+                        # 버퍼 초기화
+                        device.read_buffer = ""
+                        break
                         
         except Exception as e:
             logger.error(f"ESP32 메시지 읽기 오류: {device.device_id}, {e}")

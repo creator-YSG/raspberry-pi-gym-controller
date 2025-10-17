@@ -1,0 +1,71 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}회원 없음{% endblock %}
+
+{% block body_class %}error-page{% endblock %}
+
+{% block content %}
+<div class="error-container">
+    <!-- 에러 아이콘 -->
+    <div class="error-animation">
+        <div class="error-icon">❌</div>
+        <h1 class="error-title">등록되지 않은 회원입니다</h1>
+    </div>
+
+    <!-- 에러 메시지 -->
+    <div class="error-message">
+        {% if member_id %}
+        <p class="error-detail">회원번호: <strong>{{ member_id }}</strong></p>
+        {% endif %}
+        <p class="error-text">
+            등록된 회원 정보를 찾을 수 없습니다.<br>
+            회원 등록 후 이용해주세요.
+        </p>
+    </div>
+
+    <!-- 안내 메시지 -->
+    <div class="help-box">
+        <p class="help-text">📞 문의: 헬스장 프론트 데스크</p>
+    </div>
+
+    <!-- 자동 복귀 안내 -->
+    <div class="auto-return">
+        <div class="countdown-circle countdown-error">
+            <span class="countdown-number" id="countdown">5</span>
+        </div>
+        <p class="auto-return-text">초 후 자동으로 돌아갑니다</p>
+    </div>
+
+    <!-- 수동 복귀 버튼 -->
+    <button class="back-button" onclick="goHome()">
+        <span class="back-icon">🏠</span>
+        <span class="back-text">처음으로 돌아가기</span>
+    </button>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let countdownValue = 5;
+
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('❌ 회원 없음 에러');
+    
+    // 카운트다운 시작
+    const countdownInterval = setInterval(function() {
+        countdownValue--;
+        document.getElementById('countdown').textContent = countdownValue;
+        
+        if (countdownValue <= 0) {
+            clearInterval(countdownInterval);
+            goHome();
+        }
+    }, 1000);
+});
+
+function goHome() {
+    window.location.href = '/';
+}
+</script>
+{% endblock %}
+

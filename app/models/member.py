@@ -49,10 +49,13 @@ class Member:
         """딕셔너리로 변환"""
         return {
             'id': self.id,
+            'member_id': self.id,  # 호환성을 위한 별칭
             'name': self.name,
+            'member_name': self.name,  # 호환성을 위한 별칭
             'phone': self.phone,
             'membership_type': self.membership_type,
             'membership_expires': self.membership_expires.isoformat() if self.membership_expires else None,
+            'expiry_date': self.membership_expires.strftime('%Y-%m-%d') if self.membership_expires else None,  # 호환성
             'status': self.status,
             'currently_renting': self.currently_renting,
             'daily_rental_count': self.daily_rental_count,
@@ -68,6 +71,11 @@ class Member:
             'is_renting': self.is_renting,
             'allowed_zones': self.allowed_zones
         }
+    
+    @property
+    def member_id(self):
+        """회원 ID (호환성을 위한 별칭)"""
+        return self.id
     
     @property
     def is_valid(self):

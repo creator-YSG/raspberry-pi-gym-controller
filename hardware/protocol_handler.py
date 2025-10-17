@@ -300,7 +300,7 @@ class ProtocolHandler:
             
             # IR 센서 이벤트
             elif event_type == "sensor_triggered":
-                print(f"[ProtocolHandler] ESP32 센서: chip={data.get('chip_idx')}, pin={data.get('pin')}")
+                print(f"[ProtocolHandler] ESP32 센서: chip={data.get('chip_idx')}, pin={data.get('pin')}, state={data.get('state')}, active={data.get('active')}")
                 return ParsedMessage(
                     type=MessageType.STATUS_REPORT,
                     data={
@@ -309,6 +309,7 @@ class ProtocolHandler:
                         "chip_idx": data.get("chip_idx"),
                         "addr": data.get("addr"),
                         "pin": data.get("pin"),
+                        "state": data.get("state"),
                         "raw": data.get("raw"),
                         "active": data.get("active")
                     },

@@ -104,7 +104,7 @@ def setup_esp32_connection(app):
             app.logger.info("✅ ESP32 연결 완료")
             
             # 이벤트 핸들러 등록
-            setup_esp32_event_handlers(app, manager)
+            setup_esp32_event_handlers(app, manager, socketio)
             
             # 🔥 핵심: 이벤트 루프를 계속 실행하여 시리얼 데이터 읽기 유지
             app.logger.info("🔄 ESP32 백그라운드 통신 루프 시작")
@@ -121,34 +121,69 @@ def setup_esp32_connection(app):
         app.logger.info("🚀 ESP32 연결 스레드 시작")
 
 
-def setup_esp32_event_handlers(app, esp32_manager):
+def setup_esp32_event_handlers(app, esp32_manager, socketio):
     """ESP32 이벤트 핸들러 설정"""
     
+    import asyncio
+    from functools import partial
+    
+    def emit_to_clients(event_name, data):
+        """동기적으로 클라이언트에게 이벤트 전송 (thread-safe)"""
+        import threading
+        
+        def emit_in_main_thread():
+            with app.app_context():
+                try:
+                    socketio.emit(event_name, data)
+                    app.logger.info(f"🚀 emit 성공: {event_name}")
+                except Exception as e:
+                    app.logger.error(f"❌ emit 실패: {e}", exc_info=True)
+        
+        # 메인 스레드에서 실행되도록 Timer 사용 (즉시 실행)
+        timer = threading.Timer(0, emit_in_main_thread)
+        timer.daemon = True
+        timer.start()
+        app.logger.info(f"📡 emit 스케줄됨: {event_name}")
+    
+    # 바코드 큐 (글로벌)
+    import queue
+    barcode_queue = queue.Queue(maxsize=1)
+    sensor_queue = queue.Queue(maxsize=10)  # 센서 이벤트는 여러 개 저장 (놓치지 않기 위해)
+    
     async def handle_barcode_scanned(event_data):
-        """바코드 스캔 이벤트 처리"""
+        """바코드 스캔 이벤트 처리 - 큐에 저장"""
         barcode = event_data.get("barcode", "")
         device_id = event_data.get("device_id", "unknown")
         
-        app.logger.info(f"🔍 바코드 스캔: {barcode} (from {device_id})")
+        app.logger.info(f"=" * 80)
+        app.logger.info(f"🔍 바코드 스캔 감지: {barcode} (from {device_id})")
         
-        # WebSocket으로 프론트엔드에 알림
-        socketio.emit('esp32_event', {
-            'event_type': 'barcode_scanned',
-            'data': {
-                'barcode': barcode,
-                'device_id': device_id,
-                'timestamp': event_data.get('timestamp')
-            }
-        })
+        # 큐에 바코드 저장 (가장 최근 것만)
+        try:
+            barcode_queue.put_nowait({'barcode': barcode, 'device_id': device_id})
+        except queue.Full:
+            # 큐가 꽉 찼으면 기존 것을 버리고 새로운 것 넣기
+            try:
+                barcode_queue.get_nowait()
+                barcode_queue.put_nowait({'barcode': barcode, 'device_id': device_id})
+            except:
+                pass
+        
+        app.logger.info(f"📦 바코드 큐에 저장: {barcode}")
+        app.logger.info(f"=" * 80)
+    
+    # 큐를 앱 컨텍스트에 저장
+    app.barcode_queue = barcode_queue
+    app.sensor_queue = sensor_queue
     
     async def handle_sensor_triggered(event_data):
-        """센서 이벤트 처리"""
+        """센서 이벤트 처리 - 큐에 저장"""
         app.logger.info(f"🔥 [DEBUG] 센서 이벤트 핸들러 호출됨! event_data: {event_data}")
         
         chip_idx = event_data.get("chip_idx", "?")
         pin = event_data.get("pin", "?")
         active = event_data.get("active", False)
-        raw_state = event_data.get("raw", "HIGH")
+        raw_state = event_data.get("state", "HIGH")
         
         app.logger.info(f"📡 센서: Chip{chip_idx} Pin{pin} = {raw_state} ({'ACTIVE' if active else 'INACTIVE'})")
         
@@ -176,25 +211,34 @@ def setup_esp32_event_handlers(app, esp32_manager):
         app.logger.info(f"🔥 [DEBUG] 핀 {pin} -> 센서 {sensor_num} 매핑")
         
         if sensor_num:
-            # 센서 이벤트 저장 (API에서 사용)
+            # 센서 이벤트 저장 (API에서 사용) - Flask 컨텍스트에서 실행
             from app.api.routes import add_sensor_event
-            add_sensor_event(sensor_num, raw_state)
+            with app.app_context():
+                add_sensor_event(sensor_num, raw_state)
             app.logger.info(f"🔥 [DEBUG] 센서 이벤트 저장됨: 센서{sensor_num}, 상태{raw_state}")
-        else:
-            app.logger.warning(f"🔥 [DEBUG] 알 수 없는 핀 번호: {pin}")
-        
-        # WebSocket으로 센서 상태 전송 (호환성 유지)
-        socketio.emit('esp32_event', {
-            'event_type': 'sensor_triggered',
-            'data': {
+            
+            # 센서 큐에 저장 (폴링용)
+            sensor_data = {
+                'sensor_num': sensor_num,
                 'chip_idx': chip_idx,
                 'pin': pin,
+                'state': raw_state,
                 'active': active,
-                'raw': raw_state,
-                'sensor_num': sensor_num,
                 'timestamp': event_data.get('timestamp')
             }
-        })
+            try:
+                sensor_queue.put_nowait(sensor_data)
+                app.logger.info(f"📦 센서 큐에 저장: 센서{sensor_num}, 상태{raw_state}")
+            except queue.Full:
+                # 큐가 꽉 찼으면 가장 오래된 것 제거하고 새로운 것 추가
+                try:
+                    sensor_queue.get_nowait()
+                    sensor_queue.put_nowait(sensor_data)
+                    app.logger.warning(f"⚠️ 센서 큐가 가득 차서 오래된 데이터 제거")
+                except:
+                    pass
+        else:
+            app.logger.warning(f"🔥 [DEBUG] 알 수 없는 핀 번호: {pin}")
     
     async def handle_motor_completed(event_data):
         """모터 완료 이벤트 처리"""
@@ -204,7 +248,7 @@ def setup_esp32_event_handlers(app, esp32_manager):
         app.logger.info(f"⚙️ 모터: {action} - {status}")
         
         # WebSocket으로 모터 상태 전송
-        socketio.emit('esp32_event', {
+        emit_to_clients('esp32_event', {
             'event_type': 'motor_completed',
             'data': {
                 'action': action,

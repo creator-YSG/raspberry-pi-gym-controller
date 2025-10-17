@@ -1,0 +1,354 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}회원 확인{% endblock %}
+
+{% block body_class %}member-check-page{% endblock %}
+
+{% block content %}
+<div class="member-check-container">
+    <!-- 상단: 회원 정보 -->
+    <div class="member-info-section">
+        <div class="check-icon">✅</div>
+        <h1 class="status-title">회원 인증 완료</h1>
+        
+        <div class="member-card">
+            <div class="member-photo">
+                {% if member.photo_url %}
+                <img src="{{ member.photo_url }}" alt="{{ member.name }}">
+                {% else %}
+                <div class="member-avatar">👤</div>
+                {% endif %}
+            </div>
+            
+            <div class="member-details">
+                <div class="member-name">{{ member.name }}</div>
+                <div class="member-id">회원번호: {{ member.member_id }}</div>
+                
+                {% if member.get('member_category') == 'staff' %}
+                <div class="member-badge badge-staff">🎓 교직원</div>
+                {% elif member.get('gender', '').lower() in ['m', 'male'] %}
+                <div class="member-badge badge-male">👨 남성 회원</div>
+                {% else %}
+                <div class="member-badge badge-female">👩 여성 회원</div>
+                {% endif %}
+                
+                <div class="expiry-info">
+                    <span class="expiry-label">만료일:</span>
+                    <span class="expiry-date {% if member.is_expired %}expired{% endif %}">
+                        {{ member.expiry_date }}
+                        {% if member.days_remaining and member.days_remaining > 0 and member.days_remaining <= 7 %}
+                        ({{ member.days_remaining }}일 남음)
+                        {% endif %}
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 중간: 안내 메시지 -->
+    <div class="instruction-section">
+        {% if action == 'rental' %}
+        <div class="door-status">
+            <div class="door-icon">🚪</div>
+            <p class="door-message">락커 문이 열렸습니다</p>
+        </div>
+        <div class="instruction-message">
+            <div class="instruction-icon">🗝️</div>
+            <p class="instruction-text">원하는 락커키를 가져가세요</p>
+            <p class="instruction-sub">센서가 자동으로 감지합니다</p>
+        </div>
+        {% else %}
+        <div class="door-status">
+            <div class="door-icon">🚪</div>
+            <p class="door-message">락커 문이 열렸습니다</p>
+        </div>
+        <div class="instruction-message">
+            <div class="instruction-icon">🔑</div>
+            <p class="instruction-text">락커키를 제자리에 꽂아주세요</p>
+            <p class="instruction-sub">센서가 자동으로 감지합니다</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- 하단: 대기 중 표시 -->
+    <div class="waiting-section">
+        <div class="waiting-spinner">
+            <div class="spinner"></div>
+        </div>
+        <p class="waiting-text">락커 선택을 기다리는 중...</p>
+    </div>
+
+    <!-- 현재 감지된 락커 번호 (센서 이벤트로 표시) -->
+    <div class="locker-detected hidden" id="lockerDetected">
+        <div class="detected-icon">🎯</div>
+        <div class="detected-number" id="detectedNumber"></div>
+    </div>
+</div>
+
+<!-- 숨겨진 데이터 -->
+<div id="memberData" 
+     data-member-id="{{ member.member_id }}"
+     data-action="{{ action }}"
+     data-zone="{{ member.zone }}"
+     style="display: none;"></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let memberData = null;
+let pollingInterval = null;
+let processedSensors = new Set(); // 중복 처리 방지
+
+document.addEventListener('DOMContentLoaded', function() {
+    // 회원 데이터 가져오기
+    const dataElement = document.getElementById('memberData');
+    memberData = {
+        memberId: dataElement.dataset.memberId,
+        action: dataElement.dataset.action,
+        zone: dataElement.dataset.zone
+    };
+    
+    console.log('👤 회원 확인 화면:', memberData);
+    
+    // 락커 문 열기
+    openLockerDoor(memberData.zone);
+    
+    // 센서 폴링 시작
+    startSensorPolling();
+    
+    // 30초 타임아웃 (아무 동작 없으면 홈으로)
+    setTimeout(function() {
+        console.log('⏱️ 타임아웃: 홈으로 이동');
+        stopSensorPolling();
+        goHome();
+    }, 30000);
+});
+
+// 센서 폴링 시작 (500ms 간격으로 빠르게 체크)
+function startSensorPolling() {
+    console.log('🔄 센서 폴링 시작 전 큐 비우기...');
+    
+    // 센서 큐 비우기 (이전 이벤트 제거)
+    let clearCount = 0;
+    function clearQueue() {
+        fetch('/api/sensor/poll')
+            .then(response => response.json())
+            .then(data => {
+                if (data.has_events) {
+                    clearCount++;
+                    console.log(`🗑️ 센서 큐 비우기 ${clearCount}회 (${data.count}개 제거)`);
+                    if (clearCount < 10) {
+                        clearQueue(); // 계속 비우기
+                    } else {
+                        startActualPolling();
+                    }
+                } else {
+                    console.log('✅ 센서 큐 비우기 완료');
+                    startActualPolling();
+                }
+            })
+            .catch(error => {
+                console.error('센서 큐 비우기 오류:', error);
+                startActualPolling(); // 오류 발생해도 폴링 시작
+            });
+    }
+    
+    function startActualPolling() {
+        console.log('🔄 실제 센서 폴링 시작');
+        pollingInterval = setInterval(function() {
+            fetch('/api/sensor/poll')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.has_events && data.events) {
+                        console.log(`📥 센서 이벤트 ${data.count}개 수신:`, data.events);
+                        data.events.forEach(event => {
+                            handleSensorEvent(event);
+                        });
+                    }
+                })
+                .catch(error => {
+                    // 조용히 무시 (너무 많은 로그 방지)
+                });
+        }, 500); // 500ms 간격 (빠른 응답)
+    }
+    
+    // 큐 비우기 시작
+    clearQueue();
+}
+
+// 센서 폴링 중지
+function stopSensorPolling() {
+    if (pollingInterval) {
+        clearInterval(pollingInterval);
+        pollingInterval = null;
+        console.log('⏹️ 센서 폴링 중지');
+    }
+}
+
+// 센서 이벤트 처리
+function handleSensorEvent(data) {
+    const sensorNum = data.sensor_num;
+    const state = data.state;
+    
+    // 센서 번호로 락커 ID 조회
+    fetch(`/api/sensors/${sensorNum}/locker`)
+        .then(response => response.json())
+        .then(lockerData => {
+            if (!lockerData.success || !lockerData.locker_id) {
+                console.warn(`⚠️ 센서 ${sensorNum}에 매핑된 락커 없음`);
+                return;
+            }
+            
+            const lockerId = lockerData.locker_id;
+            console.log(`🔍 센서 ${sensorNum} -> 락커 ${lockerId}: ${state}`);
+            
+            // 중복 처리 방지 (같은 센서의 같은 상태는 한 번만)
+            const eventKey = `${sensorNum}-${state}`;
+            if (processedSensors.has(eventKey)) {
+                console.log(`⏭️ 이미 처리된 이벤트: ${eventKey}`);
+                return;
+            }
+            processedSensors.add(eventKey);
+            
+            // 락커 번호 화면에 표시
+            const detectedDiv = document.getElementById('lockerDetected');
+            const detectedNumber = document.getElementById('detectedNumber');
+            
+            if (state === 'HIGH') {
+                // 락커키 제거됨 (IR 센서: HIGH = 물체 감지 안 됨)
+                detectedNumber.textContent = lockerId;
+                detectedDiv.classList.remove('hidden');
+                detectedDiv.classList.add('show');
+                
+                // 대여 액션이면 대여 프로세스 진행
+                if (memberData.action === 'rental') {
+                    stopSensorPolling(); // 폴링 중지
+                    processRental(lockerId);
+                }
+            } else if (state === 'LOW') {
+                // 락커키 삽입됨 (IR 센서: LOW = 물체 감지됨)
+                detectedNumber.textContent = lockerId;
+                detectedDiv.classList.remove('hidden');
+                detectedDiv.classList.add('show');
+                
+                // 반납 액션이면 반납 프로세스 진행
+                if (memberData.action === 'return') {
+                    stopSensorPolling(); // 폴링 중지
+                    processReturn(lockerId);
+                }
+            }
+        })
+        .catch(error => {
+            console.error(`❌ 센서 ${sensorNum} 락커 조회 오류:`, error);
+        });
+}
+
+// 대여 프로세스
+function processRental(lockerId) {
+    console.log('🔑 대여 프로세스 시작:', lockerId);
+    
+    fetch('/api/rentals/process', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            member_id: memberData.memberId,
+            locker_id: lockerId,
+            action: 'rental'
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            console.log('✅ 대여 성공');
+            setTimeout(function() {
+                navigateToComplete('rental', lockerId);
+            }, 1000);
+        } else {
+            console.error('❌ 대여 실패:', data.error);
+            navigateToError('rental_failed', data.error);
+        }
+    })
+    .catch(error => {
+        console.error('❌ 대여 API 오류:', error);
+        navigateToError('system_error', '시스템 오류가 발생했습니다.');
+    });
+}
+
+// 반납 프로세스
+function processReturn(lockerId) {
+    console.log('🔓 반납 프로세스 시작:', lockerId);
+    
+    fetch('/api/rentals/process', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            member_id: memberData.memberId,
+            locker_id: lockerId,
+            action: 'return'
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            console.log('✅ 반납 성공');
+            setTimeout(function() {
+                navigateToComplete('return', lockerId);
+            }, 1000);
+        } else {
+            console.error('❌ 반납 실패:', data.error);
+            navigateToError('return_failed', data.error);
+        }
+    })
+    .catch(error => {
+        console.error('❌ 반납 API 오류:', error);
+        navigateToError('system_error', '시스템 오류가 발생했습니다.');
+    });
+}
+
+// 완료 화면으로 이동
+function navigateToComplete(action, lockerId) {
+    const url = `/${action}-complete?locker_id=${lockerId}`;
+    window.location.href = url;
+}
+
+// 에러 화면으로 이동
+function navigateToError(errorType, message) {
+    const url = `/error?type=${errorType}&message=${encodeURIComponent(message)}`;
+    window.location.href = url;
+}
+
+// 홈으로 돌아가기
+function goHome() {
+    window.location.href = '/';
+}
+
+// 락커 문 열기
+function openLockerDoor(zone) {
+    console.log(`🚪 ${zone} 구역 문 열기 요청`);
+    
+    fetch('/api/locker/open-door', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ zone: zone })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            console.log(`✅ ${zone} 구역 문 열기 성공:`, data.message);
+        } else {
+            console.error(`❌ ${zone} 구역 문 열기 실패:`, data.error);
+        }
+    })
+    .catch(error => {
+        console.error('❌ 문 열기 API 오류:', error);
+    });
+}
+</script>
+{% endblock %}
+

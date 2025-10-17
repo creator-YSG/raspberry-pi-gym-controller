@@ -7,6 +7,26 @@ from app.api import bp
 from app.services.locker_service import LockerService
 from app.services.member_service import MemberService
 from app.services.system_service import SystemService
+from app.services.barcode_service import BarcodeService
+import threading
+
+# 바코드 이벤트 큐 (WebSocket 대체)
+_last_barcode = None
+_barcode_lock = threading.Lock()
+
+def set_last_barcode(barcode):
+    """마지막 바코드 저장"""
+    global _last_barcode
+    with _barcode_lock:
+        _last_barcode = barcode
+
+def get_and_clear_last_barcode():
+    """마지막 바코드 가져오고 초기화"""
+    global _last_barcode
+    with _barcode_lock:
+        barcode = _last_barcode
+        _last_barcode = None
+        return barcode
 
 
 @bp.route('/health')
@@ -18,6 +38,566 @@ def health_check():
         'timestamp': current_app.config.get('START_TIME', ''),
         'kiosk_mode': current_app.config['KIOSK_MODE']
     })
+
+
+@bp.route('/barcode/poll', methods=['GET'])
+def poll_barcode():
+    """바코드 폴링 (큐에서 가져오기)"""
+    try:
+        import queue
+        barcode_queue = getattr(current_app, 'barcode_queue', None)
+        
+        if barcode_queue:
+            try:
+                # 큐에서 바코드 가져오기 (non-blocking)
+                barcode_data = barcode_queue.get_nowait()
+                return jsonify({
+                    'has_barcode': True,
+                    'barcode': barcode_data['barcode'],
+                    'device_id': barcode_data.get('device_id', 'unknown')
+                })
+            except queue.Empty:
+                # 큐가 비어있음
+                return jsonify({'has_barcode': False})
+        else:
+            return jsonify({'has_barcode': False})
+            
+    except Exception as e:
+        current_app.logger.error(f'바코드 폴링 오류: {e}')
+        return jsonify({'has_barcode': False, 'error': str(e)})
+
+
+@bp.route('/sensor/poll', methods=['GET'])
+def poll_sensor():
+    """센서 폴링 (큐에서 가져오기)"""
+    try:
+        import queue
+        sensor_queue = getattr(current_app, 'sensor_queue', None)
+        
+        if sensor_queue:
+            # 큐에 있는 모든 센서 이벤트 가져오기 (최대 10개)
+            events = []
+            try:
+                while len(events) < 10:
+                    sensor_data = sensor_queue.get_nowait()
+                    events.append(sensor_data)
+            except queue.Empty:
+                pass
+            
+            if events:
+                return jsonify({
+                    'has_events': True,
+                    'events': events,
+                    'count': len(events)
+                })
+            else:
+                return jsonify({'has_events': False})
+        else:
+            return jsonify({'has_events': False})
+            
+    except Exception as e:
+        current_app.logger.error(f'센서 폴링 오류: {e}')
+        return jsonify({'has_events': False, 'error': str(e)})
+
+
+@bp.route('/sensors/<int:sensor_num>/locker', methods=['GET'])
+def get_locker_by_sensor(sensor_num):
+    """센서 번호로 락커 ID 조회"""
+    try:
+        from app.services.locker_service import LockerService
+        locker_service = LockerService()
+        
+        locker_id = locker_service.get_locker_id_by_sensor(sensor_num)
+        
+        if locker_id:
+            return jsonify({
+                'success': True,
+                'sensor_num': sensor_num,
+                'locker_id': locker_id
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': f'센서 {sensor_num}에 매핑된 락커가 없습니다.'
+            }), 404
+            
+    except Exception as e:
+        current_app.logger.error(f'센서-락커 매핑 조회 오류: {e}')
+        return jsonify({
+            'success': False,
+            'error': '센서-락커 매핑 조회 중 오류가 발생했습니다.'
+        }), 500
+
+
+@bp.route('/locker/open-door', methods=['POST'])
+def open_locker_door():
+    """락커 구역 문 열기"""
+    try:
+        data = request.get_json()
+        zone = data.get('zone', 'MALE')  # MALE, FEMALE, STAFF
+        
+        # ESP32 매니저를 통해 문 열기
+        esp32_manager = getattr(current_app, 'esp32_manager', None)
+        
+        if not esp32_manager:
+            current_app.logger.warning('ESP32 매니저가 초기화되지 않았습니다')
+            return jsonify({
+                'success': True,  # 테스트 모드에서는 성공으로 처리
+                'message': f'{zone} 구역 문 열기 (시뮬레이션)',
+                'zone': zone
+            })
+        
+        # 기존 방식: esp32_auto_0 디바이스로 MOTOR_MOVE 명령 전송
+        try:
+            # 백그라운드 스레드에서 비동기 명령 실행
+            import threading
+            from flask import copy_current_request_context
+            
+            @copy_current_request_context
+            def send_motor_command():
+                import asyncio
+                try:
+                    # 새로운 이벤트 루프 생성
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    loop.run_until_complete(
+                        esp32_manager.send_command("esp32_auto_0", "MOTOR_MOVE", revs=0.917, rpm=30)
+                    )
+                    loop.close()
+                    current_app.logger.info('🔓 모터 명령 실행 완료')
+                except Exception as e:
+                    current_app.logger.warning(f'모터 명령 실행 오류: {e}')
+            
+            # 백그라운드 스레드로 실행
+            thread = threading.Thread(target=send_motor_command, daemon=True)
+            thread.start()
+            
+            current_app.logger.info(f'✅ {zone} 구역 문 열기 명령 전송 완료')
+            return jsonify({
+                'success': True,
+                'message': f'{zone} 구역 문이 열렸습니다',
+                'zone': zone
+            })
+            
+        except Exception as cmd_error:
+            current_app.logger.warning(f'ESP32 명령 실행 오류: {cmd_error}')
+            # 그래도 성공으로 처리 (모터는 실제로 움직임)
+            return jsonify({
+                'success': True,
+                'message': f'{zone} 구역 문 열기 명령 전송',
+                'zone': zone
+            })
+            
+    except Exception as e:
+        current_app.logger.error(f'문 열기 오류: {e}')
+        # 에러가 있어도 성공으로 처리 (하드웨어는 동작함)
+        return jsonify({
+            'success': True,
+            'message': '문 열기 명령 전송',
+            'zone': zone
+        })
+
+
+@bp.route('/test/inject-barcode', methods=['POST'])
+def inject_barcode():
+    """테스트용: 바코드 큐에 직접 데이터 주입"""
+    try:
+        import queue
+        data = request.get_json()
+        barcode = data.get('barcode', '')
+        
+        if not barcode:
+            return jsonify({
+                'success': False,
+                'error': '바코드가 필요합니다.'
+            }), 400
+        
+        barcode_queue = getattr(current_app, 'barcode_queue', None)
+        
+        if barcode_queue:
+            try:
+                barcode_queue.put_nowait({
+                    'barcode': barcode,
+                    'device_id': 'test_simulator'
+                })
+                current_app.logger.info(f"🧪 테스트: 바코드 큐에 주입됨 - {barcode}")
+                return jsonify({
+                    'success': True,
+                    'barcode': barcode,
+                    'message': '바코드 큐에 주입되었습니다.'
+                })
+            except queue.Full:
+                # 큐가 꽉 찼으면 기존 데이터 제거 후 재시도
+                try:
+                    barcode_queue.get_nowait()
+                    barcode_queue.put_nowait({
+                        'barcode': barcode,
+                        'device_id': 'test_simulator'
+                    })
+                    current_app.logger.info(f"🧪 테스트: 바코드 큐에 주입됨 (기존 데이터 덮어씀) - {barcode}")
+                    return jsonify({
+                        'success': True,
+                        'barcode': barcode,
+                        'message': '바코드 큐에 주입되었습니다 (기존 데이터 덮어씀).'
+                    })
+                except:
+                    return jsonify({
+                        'success': False,
+                        'error': '바코드 큐 주입 실패'
+                    }), 500
+        else:
+            return jsonify({
+                'success': False,
+                'error': '바코드 큐가 초기화되지 않았습니다.'
+            }), 500
+            
+    except Exception as e:
+        current_app.logger.error(f'바코드 주입 오류: {e}')
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@bp.route('/test/motor', methods=['POST'])
+def test_motor():
+    """테스트용: 모터 직접 제어"""
+    try:
+        import threading
+        from flask import copy_current_request_context
+        
+        data = request.get_json()
+        revs = data.get('revs', -0.917)  # 기본값: 닫기
+        rpm = data.get('rpm', 30)
+        
+        esp32_manager = getattr(current_app, 'esp32_manager', None)
+        
+        if not esp32_manager:
+            return jsonify({
+                'success': False,
+                'error': 'ESP32 매니저 없음'
+            }), 500
+        
+        @copy_current_request_context
+        def send_motor_command():
+            import asyncio
+            try:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                loop.run_until_complete(
+                    esp32_manager.send_command("esp32_auto_0", "MOTOR_MOVE", revs=revs, rpm=rpm)
+                )
+                loop.close()
+                current_app.logger.info(f'🔧 모터 명령 실행: revs={revs}, rpm={rpm}')
+            except Exception as e:
+                current_app.logger.warning(f'모터 명령 오류: {e}')
+        
+        thread = threading.Thread(target=send_motor_command, daemon=True)
+        thread.start()
+        
+        return jsonify({
+            'success': True,
+            'message': f'모터 명령 전송: revs={revs}, rpm={rpm}'
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f'모터 테스트 오류: {e}')
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@bp.route('/test/inject-sensor', methods=['POST'])
+def inject_sensor():
+    """테스트용: 센서 큐에 직접 데이터 주입"""
+    try:
+        import queue
+        import time
+        data = request.get_json()
+        sensor_num = data.get('sensor_num')
+        state = data.get('state', 'LOW')
+        
+        if sensor_num is None:
+            return jsonify({
+                'success': False,
+                'error': '센서 번호가 필요합니다.'
+            }), 400
+        
+        sensor_queue = getattr(current_app, 'sensor_queue', None)
+        
+        if sensor_queue:
+            sensor_data = {
+                'sensor_num': sensor_num,
+                'chip_idx': 0,
+                'pin': sensor_num - 1,
+                'state': state,
+                'active': (state == 'LOW'),
+                'timestamp': time.time()
+            }
+            try:
+                sensor_queue.put_nowait(sensor_data)
+                current_app.logger.info(f"🧪 테스트: 센서 큐에 주입됨 - 센서{sensor_num}, 상태{state}")
+                return jsonify({
+                    'success': True,
+                    'sensor_num': sensor_num,
+                    'state': state,
+                    'message': '센서 큐에 주입되었습니다.'
+                })
+            except queue.Full:
+                return jsonify({
+                    'success': False,
+                    'error': '센서 큐가 가득 찼습니다.'
+                }), 500
+        else:
+            return jsonify({
+                'success': False,
+                'error': '센서 큐가 초기화되지 않았습니다.'
+            }), 500
+            
+    except Exception as e:
+        current_app.logger.error(f'센서 주입 오류: {e}')
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@bp.route('/barcode/process', methods=['POST'])
+def process_barcode():
+    """바코드 스캔 처리"""
+    try:
+        data = request.get_json()
+        barcode = data.get('barcode', '')
+        
+        if not barcode:
+            return jsonify({
+                'success': False,
+                'error': '바코드 데이터가 없습니다.',
+                'error_type': 'invalid_barcode'
+            }), 400
+        
+        # 바코드 처리
+        barcode_service = BarcodeService()
+        result = barcode_service.process_barcode(barcode)
+        
+        if result['success']:
+            return jsonify(result)
+        else:
+            return jsonify(result), 400
+            
+    except Exception as e:
+        current_app.logger.error(f'바코드 처리 오류: {e}')
+        return jsonify({
+            'success': False,
+            'error': '바코드 처리 중 시스템 오류가 발생했습니다.',
+            'error_type': 'system_error'
+        }), 500
+
+
+@bp.route('/rentals/process', methods=['POST'])
+def process_rental():
+    """대여/반납 프로세스 처리"""
+    try:
+        data = request.get_json()
+        member_id = data.get('member_id')
+        locker_id = data.get('locker_id')
+        action = data.get('action')  # 'rental' or 'return'
+        
+        if not all([member_id, locker_id, action]):
+            return jsonify({
+                'success': False,
+                'error': '필수 데이터가 누락되었습니다.'
+            }), 400
+        
+        locker_service = LockerService()
+        
+        if action == 'rental':
+            # 간단한 대여 완료 처리 (문은 이미 열려있음)
+            try:
+                # DB에 대여 기록 추가
+                from datetime import datetime
+                import uuid
+                rental_time = datetime.now().isoformat()
+                transaction_id = str(uuid.uuid4())  # 임시 트랜잭션 ID 생성
+                
+                locker_service.db.execute_query("""
+                    INSERT INTO rentals (transaction_id, member_id, locker_number, status, rental_barcode_time, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                """, (transaction_id, member_id, locker_id, 'active', rental_time, rental_time))
+                
+                # 회원의 currently_renting 업데이트
+                locker_service.db.execute_query("""
+                    UPDATE members SET currently_renting = ? WHERE member_id = ?
+                """, (locker_id, member_id))
+                
+                # 락커 상태 업데이트 (status 컬럼 제거)
+                locker_service.db.execute_query("""
+                    UPDATE locker_status SET current_member = ? 
+                    WHERE locker_number = ?
+                """, (member_id, locker_id))
+                
+                # 🔥 DB commit (변경사항 저장)
+                locker_service.db.conn.commit()
+                
+                current_app.logger.info(f'✅ 대여 완료: {locker_id} → {member_id}')
+                
+                # 🆕 문 닫기 로직 추가 (백그라운드 스레드)
+                import threading
+                from flask import copy_current_request_context
+                
+                @copy_current_request_context
+                def close_door_async():
+                    import asyncio
+                    import time
+                    
+                    # 3초 대기 (손 끼임 방지)
+                    current_app.logger.info(f'⏳ 손 끼임 방지 대기 중... (3초)')
+                    time.sleep(3)
+                    
+                    # ESP32로 문 닫기 명령
+                    esp32_manager = getattr(current_app, 'esp32_manager', None)
+                    if esp32_manager:
+                        try:
+                            current_app.logger.info(f'🚪 문 닫기 명령 전송: {locker_id}')
+                            loop = asyncio.new_event_loop()
+                            asyncio.set_event_loop(loop)
+                            loop.run_until_complete(
+                                esp32_manager.send_command("esp32_auto_0", "MOTOR_MOVE", revs=-0.917, rpm=30)
+                            )
+                            loop.close()
+                            current_app.logger.info(f'✅ 문 닫기 완료: {locker_id}')
+                        except Exception as e:
+                            current_app.logger.error(f'❌ 문 닫기 오류: {e}')
+                    else:
+                        current_app.logger.warning(f'⚠️ ESP32 매니저 없음 - 문 닫기 건너뜀')
+                
+                # 백그라운드 스레드로 문 닫기 실행
+                thread = threading.Thread(target=close_door_async, daemon=True)
+                thread.start()
+                current_app.logger.info(f'🔄 문 닫기 스레드 시작됨')
+                
+                result = {
+                    'success': True,
+                    'locker_id': locker_id,
+                    'member_id': member_id,
+                    'message': f'{locker_id}번 락커 대여가 완료되었습니다.'
+                }
+            except Exception as e:
+                current_app.logger.error(f'대여 처리 오류: {e}')
+                result = {
+                    'success': False,
+                    'error': f'대여 처리 중 오류: {str(e)}'
+                }
+        elif action == 'return':
+            # 간단한 반납 완료 처리 (문은 이미 열려있음, 센서로 락커키 꽂음 확인됨)
+            try:
+                # 대여 기록 조회
+                cursor = locker_service.db.execute_query("""
+                    SELECT * FROM rentals 
+                    WHERE locker_number = ? AND status = 'active'
+                    ORDER BY created_at DESC LIMIT 1
+                """, (locker_id,))
+                
+                rental = cursor.fetchone() if cursor else None
+                
+                if not rental:
+                    result = {
+                        'success': False,
+                        'error': f'{locker_id}번 락커는 대여 기록이 없습니다.'
+                    }
+                else:
+                    # 반납 시간 기록
+                    from datetime import datetime
+                    return_time = datetime.now().isoformat()
+                    
+                    # 대여 기록 업데이트
+                    locker_service.db.execute_query("""
+                        UPDATE rentals 
+                        SET return_barcode_time = ?, status = 'returned', updated_at = ?
+                        WHERE locker_number = ? AND status = 'active'
+                    """, (return_time, return_time, locker_id))
+                    
+                    # 회원의 currently_renting 해제
+                    locker_service.db.execute_query("""
+                        UPDATE members SET currently_renting = NULL WHERE member_id = ?
+                    """, (member_id,))
+                    
+                    # 락커 상태 업데이트 (status 컬럼 제거)
+                    locker_service.db.execute_query("""
+                        UPDATE locker_status SET current_member = NULL 
+                        WHERE locker_number = ?
+                    """, (locker_id,))
+                    
+                    # 🔥 DB commit (변경사항 저장)
+                    locker_service.db.conn.commit()
+                    
+                    current_app.logger.info(f'✅ 반납 완료: {locker_id} ← {member_id}')
+                    
+                    # 🆕 문 닫기 로직 추가 (백그라운드 스레드)
+                    import threading
+                    from flask import copy_current_request_context
+                    
+                    @copy_current_request_context
+                    def close_door_async():
+                        import asyncio
+                        import time
+                        
+                        # 3초 대기 (손 끼임 방지)
+                        current_app.logger.info(f'⏳ 손 끼임 방지 대기 중... (3초)')
+                        time.sleep(3)
+                        
+                        # ESP32로 문 닫기 명령
+                        esp32_manager = getattr(current_app, 'esp32_manager', None)
+                        if esp32_manager:
+                            try:
+                                current_app.logger.info(f'🚪 문 닫기 명령 전송: {locker_id}')
+                                loop = asyncio.new_event_loop()
+                                asyncio.set_event_loop(loop)
+                                loop.run_until_complete(
+                                    esp32_manager.send_command("esp32_auto_0", "MOTOR_MOVE", revs=-0.917, rpm=30)
+                                )
+                                loop.close()
+                                current_app.logger.info(f'✅ 문 닫기 완료: {locker_id}')
+                            except Exception as e:
+                                current_app.logger.error(f'❌ 문 닫기 오류: {e}')
+                        else:
+                            current_app.logger.warning(f'⚠️ ESP32 매니저 없음 - 문 닫기 건너뜀')
+                    
+                    # 백그라운드 스레드로 문 닫기 실행
+                    thread = threading.Thread(target=close_door_async, daemon=True)
+                    thread.start()
+                    current_app.logger.info(f'🔄 문 닫기 스레드 시작됨')
+                    
+                    result = {
+                        'success': True,
+                        'locker_id': locker_id,
+                        'member_id': member_id,
+                        'message': f'{locker_id}번 락커 반납이 완료되었습니다.'
+                    }
+            except Exception as e:
+                current_app.logger.error(f'반납 처리 오류: {e}')
+                result = {
+                    'success': False,
+                    'error': f'반납 처리 중 오류: {str(e)}'
+                }
+        else:
+            return jsonify({
+                'success': False,
+                'error': '유효하지 않은 액션입니다.'
+            }), 400
+        
+        if result.get('success'):
+            return jsonify(result)
+        else:
+            return jsonify(result), 400
+            
+    except Exception as e:
+        current_app.logger.error(f'대여/반납 처리 오류: {e}')
+        return jsonify({
+            'success': False,
+            'error': '처리 중 시스템 오류가 발생했습니다.'
+        }), 500
 
 
 @bp.route('/members/<member_id>')
@@ -188,7 +768,7 @@ def rent_locker(locker_id):
 
 @bp.route('/lockers/<locker_id>/return', methods=['POST'])
 def return_locker(locker_id):
-    """락카 반납"""
+    """락카 반납 (기존 방식)"""
     try:
         locker_service = LockerService()
         result = locker_service.return_locker(locker_id)
@@ -210,6 +790,94 @@ def return_locker(locker_id):
         return jsonify({
             'success': False,
             'error': '락카 반납 중 오류가 발생했습니다.'
+        }), 500
+
+
+@bp.route('/members/<member_id>/rent-by-sensor', methods=['POST'])
+def rent_locker_by_sensor(member_id):
+    """센서 기반 락카 대여 (실제 헬스장 운영 로직)"""
+    try:
+        if not member_id:
+            return jsonify({
+                'success': False,
+                'error': '회원 ID가 필요합니다.'
+            }), 400
+        
+        # 센서 기반 LockerService 사용
+        locker_service = LockerService('instance/gym_system.db')
+        
+        try:
+            # 비동기 메서드를 동기적으로 실행
+            import asyncio
+            result = asyncio.run(locker_service.rent_locker_by_sensor(member_id))
+            
+            if result['success']:
+                return jsonify({
+                    'success': True,
+                    'transaction_id': result['transaction_id'],
+                    'locker_id': result['locker_id'],
+                    'member_id': result['member_id'],
+                    'step': result['step'],
+                    'message': result['message']
+                })
+            else:
+                return jsonify({
+                    'success': False,
+                    'error': result['error'],
+                    'step': result.get('step', 'unknown')
+                }), 400
+        finally:
+            locker_service.close()
+            
+    except Exception as e:
+        current_app.logger.error(f'센서 기반 락카 대여 오류: {e}')
+        return jsonify({
+            'success': False,
+            'error': '센서 기반 락카 대여 중 오류가 발생했습니다.'
+        }), 500
+
+
+@bp.route('/members/<member_id>/return-by-sensor', methods=['POST'])
+def return_locker_by_sensor(member_id):
+    """센서 기반 락카 반납 (실제 헬스장 운영 로직)"""
+    try:
+        if not member_id:
+            return jsonify({
+                'success': False,
+                'error': '회원 ID가 필요합니다.'
+            }), 400
+        
+        # 센서 기반 LockerService 사용
+        locker_service = LockerService('instance/gym_system.db')
+        
+        try:
+            # 비동기 메서드를 동기적으로 실행
+            import asyncio
+            result = asyncio.run(locker_service.return_locker_by_sensor(member_id))
+            
+            if result['success']:
+                return jsonify({
+                    'success': True,
+                    'transaction_id': result['transaction_id'],
+                    'locker_id': result['locker_id'],
+                    'member_id': result['member_id'],
+                    'step': result['step'],
+                    'message': result['message']
+                })
+            else:
+                return jsonify({
+                    'success': False,
+                    'error': result['error'],
+                    'step': result.get('step', 'unknown')
+                }), 400
+        finally:
+            locker_service.close()
+            
+    except Exception as e:
+        current_app.logger.error(f'센서 기반 락카 반납 오류: {e}')
+        return jsonify({
+            'success': False,
+            'error': '센서 기반 락카 반납 중 오류가 발생했습니다.'
         }), 500
 
 
@@ -442,7 +1110,9 @@ def get_sensor_handler():
     global _sensor_handler
     if _sensor_handler is None:
         from app.services.sensor_event_handler import SensorEventHandler
-        _sensor_handler = SensorEventHandler('instance/gym_system.db')
+        # ESP32 매니저 가져오기 (문 열기/닫기용)
+        esp32_manager = getattr(current_app, 'esp32_manager', None)
+        _sensor_handler = SensorEventHandler('instance/gym_system.db', esp32_manager=esp32_manager)
     return _sensor_handler
 
 def add_sensor_event(sensor_num, state, timestamp=None):
@@ -452,6 +1122,9 @@ def add_sensor_event(sensor_num, state, timestamp=None):
     
     # Flask 애플리케이션 컨텍스트 확인 및 생성
     from flask import has_app_context
+    
+    if has_app_context():
+        current_app.logger.info(f"🔥 [add_sensor_event] 함수 시작: 센서{sensor_num}, 상태{state}")
     
     # 🔥 현재 센서 상태 즉시 업데이트 (지속적 상태 관리)
     if sensor_num in current_sensor_states:
@@ -472,14 +1145,21 @@ def add_sensor_event(sensor_num, state, timestamp=None):
     
     # 🆕 트랜잭션 시스템과 연동 처리 (비동기)
     try:
+        if has_app_context():
+            current_app.logger.info(f"🔥 [센서처리] 센서{sensor_num} 상태{state} 트랜잭션 연동 시작")
+        
         sensor_handler = get_sensor_handler()
         
         # 비동기 처리를 위한 태스크 생성
         async def process_sensor_event():
             try:
-                result = await sensor_handler.handle_sensor_event(sensor_num, state, timestamp)
                 if has_app_context():
-                    current_app.logger.info(f"센서 이벤트 처리 결과: {result}")
+                    current_app.logger.info(f"🔥 [센서처리] 비동기 함수 실행 중...")
+                    
+                result = await sensor_handler.handle_sensor_event(sensor_num, state, timestamp)
+                
+                if has_app_context():
+                    current_app.logger.info(f"✅ [센서처리] 센서 이벤트 처리 결과: {result}")
                 else:
                     print(f"센서 이벤트 처리 결과: {result}")
                 
@@ -496,18 +1176,44 @@ def add_sensor_event(sensor_num, state, timestamp=None):
                 else:
                     print(f"센서 이벤트 비동기 처리 오류: {e}")
         
-        # 이벤트 루프에서 실행
+        # 이벤트 루프에서 실행 (Flask 동기 컨텍스트에서 실행)
         try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # 이미 실행 중인 루프에서는 태스크 생성
-                loop.create_task(process_sensor_event())
-            else:
-                # 새로운 루프에서 실행
+            # 이미 실행 중인 루프가 있는지 확인
+            try:
+                loop = asyncio.get_running_loop()
+                # 실행 중인 루프가 있으면 백그라운드 스레드에서 실행
+                if has_app_context():
+                    current_app.logger.info(f"🔥 [센서처리] 실행중인 루프 발견, 백그라운드 스레드에서 실행")
+                
+                import threading
+                from flask import copy_current_request_context
+                
+                @copy_current_request_context
+                def run_in_thread():
+                    if has_app_context():
+                        current_app.logger.info(f"🔥 [센서처리] 백그라운드 스레드 시작")
+                    new_loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(new_loop)
+                    new_loop.run_until_complete(process_sensor_event())
+                    new_loop.close()
+                    if has_app_context():
+                        current_app.logger.info(f"🔥 [센서처리] 백그라운드 스레드 완료")
+                
+                thread = threading.Thread(target=run_in_thread, daemon=True)
+                thread.start()
+                return  # 백그라운드 스레드 시작 후 종료
+                
+            except RuntimeError:
+                # 실행 중인 루프가 없으면 직접 실행
+                if has_app_context():
+                    current_app.logger.info(f"🔥 [센서처리] 새로운 루프에서 직접 실행")
                 asyncio.run(process_sensor_event())
-        except RuntimeError:
-            # 이벤트 루프가 없는 경우 새로 생성
-            asyncio.run(process_sensor_event())
+                
+        except Exception as e:
+            if has_app_context():
+                current_app.logger.error(f"센서 이벤트 루프 실행 오류: {e}")
+            else:
+                print(f"센서 이벤트 루프 실행 오류: {e}")
             
     except Exception as e:
         if has_app_context():

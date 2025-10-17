@@ -21,15 +21,48 @@ def index():
 def member_check():
     """회원 확인 화면"""
     member_id = request.args.get('member_id', '')
+    action = request.args.get('action', 'rental')  # 'rental' or 'return'
     
     if member_id:
         member_service = MemberService()
         member = member_service.get_member(member_id)
         
         if member:
+            # 트랜잭션 시작 (센서 이벤트 핸들러가 감지할 수 있도록)
+            from app.services.locker_service import LockerService
+            from database.transaction_manager import TransactionType
+            import asyncio
+            
+            locker_service = LockerService()
+            tx_type = TransactionType.RENTAL if action == 'rental' else TransactionType.RETURN
+            
+            try:
+                # 트랜잭션 시작
+                tx_result = asyncio.run(locker_service.tx_manager.start_transaction(member_id, tx_type))
+                if tx_result['success']:
+                    current_app.logger.info(f"✅ 트랜잭션 시작: {tx_result['transaction_id']} ({action})")
+                else:
+                    current_app.logger.warning(f"⚠️ 트랜잭션 시작 실패: {tx_result.get('error')}")
+            except Exception as e:
+                current_app.logger.error(f"❌ 트랜잭션 시작 오류: {e}")
+            
+            # 회원 데이터를 딕셔너리로 변환 (to_dict()에 모든 정보 포함됨)
+            member_dict = member.to_dict()
+            
+            # 만료일 정보 추가 (이미 to_dict()에 포함되지만 is_expired는 추가 필요)
+            from datetime import datetime
+            if member.membership_expires:
+                days_remaining = (member.membership_expires - datetime.now()).days
+                member_dict['is_expired'] = days_remaining < 0
+            
+            # 접근 가능한 구역 확인 (allowed_zones는 이미 포함됨, zone은 기본값만)
+            zone = member.allowed_zones[0] if member.allowed_zones else 'MALE'
+            member_dict['zone'] = zone
+            
             return render_template('pages/member_check.html',
                                  title='회원 확인',
-                                 member=member,
+                                 member=member_dict,
+                                 action=action,
                                  page_class='member-check-page')
     
     # 회원 정보 없음
@@ -60,13 +93,11 @@ def locker_select():
 def rental_complete():
     """대여 완료 화면"""
     locker_id = request.args.get('locker_id', '')
-    member_id = request.args.get('member_id', '')
     
     return render_template('pages/rental_complete.html',
                          title='대여 완료',
                          locker_id=locker_id,
-                         member_id=member_id,
-                         page_class='success-page')
+                         page_class='complete-page')
 
 
 @bp.route('/return-complete')
@@ -77,7 +108,7 @@ def return_complete():
     return render_template('pages/return_complete.html',
                          title='반납 완료',
                          locker_id=locker_id,
-                         page_class='success-page')
+                         page_class='complete-page')
 
 
 @bp.route('/admin')
@@ -98,7 +129,7 @@ def admin():
 def error():
     """에러 화면"""
     error_type = request.args.get('type', 'unknown')
-    error_message = request.args.get('message', '알 수 없는 오류가 발생했습니다.')
+    error_message = request.args.get('message', '')
     
     return render_template('pages/error.html',
                          title='오류',
@@ -107,17 +138,3 @@ def error():
                          page_class='error-page')
 
 
-@bp.route('/hardware-test')
-def hardware_test():
-    """ESP32 하드웨어 테스트 화면"""
-    return render_template('pages/hardware_test.html',
-                         title='ESP32 하드웨어 테스트',
-                         page_class='hardware-test-page')
-
-
-@bp.route('/simple-test')
-def simple_test():
-    """간단한 모터 테스트 화면"""
-    return render_template('pages/simple_test.html',
-                         title='간단한 모터 테스트',
-                         page_class='simple-test-page')

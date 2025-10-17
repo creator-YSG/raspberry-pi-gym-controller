@@ -1,0 +1,131 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}오류{% endblock %}
+
+{% block body_class %}error-page{% endblock %}
+
+{% block content %}
+<div class="error-container">
+    <!-- 에러 아이콘 -->
+    <div class="error-animation">
+        {% if error_type == 'member_not_found' %}
+        <div class="error-icon">❌</div>
+        <h1 class="error-title">등록되지 않은 회원입니다</h1>
+        
+        {% elif error_type == 'member_expired' %}
+        <div class="error-icon">⏰</div>
+        <h1 class="error-title">회원권이 만료되었습니다</h1>
+        
+        {% elif error_type == 'access_denied' %}
+        <div class="error-icon">🚫</div>
+        <h1 class="error-title">이 구역을 사용할 수 없습니다</h1>
+        
+        {% elif error_type == 'locker_occupied' %}
+        <div class="error-icon">🔒</div>
+        <h1 class="error-title">이미 대여 중인 락커입니다</h1>
+        
+        {% elif error_type == 'no_available_lockers' %}
+        <div class="error-icon">📭</div>
+        <h1 class="error-title">사용 가능한 락커가 없습니다</h1>
+        
+        {% elif error_type == 'already_rented' %}
+        <div class="error-icon">⚠️</div>
+        <h1 class="error-title">이미 락커를 대여 중입니다</h1>
+        
+        {% elif error_type == 'not_rented' %}
+        <div class="error-icon">⚠️</div>
+        <h1 class="error-title">대여 중인 락커가 없습니다</h1>
+        
+        {% elif error_type == 'wrong_locker' %}
+        <div class="error-icon">❌</div>
+        <h1 class="error-title">잘못된 락커입니다</h1>
+        
+        {% elif error_type == 'system_error' %}
+        <div class="error-icon">⚙️</div>
+        <h1 class="error-title">시스템 오류</h1>
+        
+        {% else %}
+        <div class="error-icon">❗</div>
+        <h1 class="error-title">오류가 발생했습니다</h1>
+        {% endif %}
+    </div>
+
+    <!-- 에러 메시지 -->
+    <div class="error-message">
+        {% if error_message %}
+        <p class="error-text">{{ error_message }}</p>
+        {% else %}
+        <p class="error-text">
+            {% if error_type == 'member_not_found' %}
+            회원 등록 후 이용해주세요.
+            {% elif error_type == 'member_expired' %}
+            회원권을 갱신해주세요.
+            {% elif error_type == 'access_denied' %}
+            사용 권한이 없는 구역입니다.
+            {% elif error_type == 'locker_occupied' %}
+            다른 락커를 선택해주세요.
+            {% elif error_type == 'no_available_lockers' %}
+            잠시 후 다시 시도해주세요.
+            {% elif error_type == 'already_rented' %}
+            먼저 반납하신 후 이용해주세요.
+            {% elif error_type == 'not_rented' %}
+            대여하신 락커가 없습니다.
+            {% elif error_type == 'wrong_locker' %}
+            본인이 대여한 락커를 사용해주세요.
+            {% elif error_type == 'system_error' %}
+            관리자에게 문의해주세요.
+            {% else %}
+            다시 시도해주세요.
+            {% endif %}
+        </p>
+        {% endif %}
+    </div>
+
+    <!-- 안내 메시지 -->
+    {% if error_type in ['member_not_found', 'member_expired'] %}
+    <div class="help-box">
+        <p class="help-text">📞 문의: 헬스장 프론트 데스크</p>
+    </div>
+    {% endif %}
+
+    <!-- 자동 복귀 안내 -->
+    <div class="auto-return">
+        <div class="countdown-circle countdown-error">
+            <span class="countdown-number" id="countdown">5</span>
+        </div>
+        <p class="auto-return-text">초 후 자동으로 돌아갑니다</p>
+    </div>
+
+    <!-- 수동 복귀 버튼 -->
+    <button class="back-button" onclick="goHome()">
+        <span class="back-icon">🏠</span>
+        <span class="back-text">처음으로 돌아가기</span>
+    </button>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let countdownValue = 5;
+
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('❌ 에러 화면:', '{{ error_type }}');
+    
+    // 카운트다운 시작
+    const countdownInterval = setInterval(function() {
+        countdownValue--;
+        document.getElementById('countdown').textContent = countdownValue;
+        
+        if (countdownValue <= 0) {
+            clearInterval(countdownInterval);
+            goHome();
+        }
+    }, 1000);
+});
+
+function goHome() {
+    window.location.href = '/';
+}
+</script>
+{% endblock %}
+
