@@ -162,6 +162,7 @@ class MemberService:
                 name=member_data['member_name'],
                 phone=member_data.get('phone', ''),
                 membership_type=member_data.get('membership_type', 'basic'),
+                program_name=member_data.get('program_name', ''),
                 membership_expires=member_data.get('membership_expires'),
                 status=member_data.get('status', 'active'),
                 created_at=datetime.now(),
@@ -172,13 +173,13 @@ class MemberService:
             db_data = member.to_db_dict()
             self.db.execute_query("""
                 INSERT INTO members (
-                    member_id, member_name, phone, membership_type, 
+                    member_id, member_name, phone, membership_type, program_name,
                     expiry_date, status, currently_renting, daily_rental_count,
                     last_rental_time, sync_date, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 db_data['member_id'], db_data['member_name'], db_data['phone'],
-                db_data['membership_type'], db_data['expiry_date'], db_data['status'],
+                db_data['membership_type'], db_data['program_name'], db_data['expiry_date'], db_data['status'],
                 db_data['currently_renting'], db_data['daily_rental_count'],
                 db_data['last_rental_time'], db_data['sync_date'],
                 db_data['created_at'], db_data['updated_at']

@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS members (
     member_name TEXT NOT NULL,           -- 회원명
     phone TEXT DEFAULT '',               -- 전화번호
     membership_type TEXT DEFAULT 'basic', -- 회원권 종류 (basic, premium, vip)
+    program_name TEXT DEFAULT '',        -- 가입 프로그램명 (예: 1.헬스1개월, 1.헬스3+1)
     status TEXT DEFAULT 'active',        -- 상태 (active, suspended, expired)
     expiry_date DATE,                    -- 회원권 만료일
     currently_renting TEXT,              -- 현재 대여중인 락카 번호
@@ -118,6 +119,22 @@ CREATE TABLE IF NOT EXISTS system_settings (
 );
 
 -- =====================================================
+-- 센서 이벤트 로그 테이블 (모든 센서 변화 기록)
+-- =====================================================
+CREATE TABLE IF NOT EXISTS sensor_events (
+    event_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    locker_number TEXT NOT NULL,         -- 락커 번호 (예: M09)
+    sensor_state TEXT NOT NULL,          -- 센서 상태 (HIGH/LOW)
+    member_id TEXT,                      -- 연관된 회원 ID (있는 경우)
+    rental_id INTEGER,                   -- 연관된 대여 ID (있는 경우)
+    session_context TEXT,                -- 세션 컨텍스트 (rental/return/unauthorized)
+    event_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    description TEXT,                    -- 이벤트 설명
+    FOREIGN KEY (member_id) REFERENCES members(member_id),
+    FOREIGN KEY (rental_id) REFERENCES rentals(rental_id)
+);
+
+-- =====================================================
 -- 인덱스 생성
 -- =====================================================
 
@@ -144,6 +161,13 @@ CREATE INDEX IF NOT EXISTS idx_transaction_member ON active_transactions(member_
 CREATE INDEX IF NOT EXISTS idx_transaction_status ON active_transactions(status);
 CREATE INDEX IF NOT EXISTS idx_transaction_timeout ON active_transactions(timeout_at);
 CREATE INDEX IF NOT EXISTS idx_transaction_type ON active_transactions(transaction_type);
+
+-- 센서 이벤트 테이블 인덱스
+CREATE INDEX IF NOT EXISTS idx_sensor_locker ON sensor_events(locker_number);
+CREATE INDEX IF NOT EXISTS idx_sensor_member ON sensor_events(member_id);
+CREATE INDEX IF NOT EXISTS idx_sensor_rental ON sensor_events(rental_id);
+CREATE INDEX IF NOT EXISTS idx_sensor_timestamp ON sensor_events(event_timestamp);
+CREATE INDEX IF NOT EXISTS idx_sensor_context ON sensor_events(session_context);
 
 -- =====================================================
 -- 기본 데이터 삽입

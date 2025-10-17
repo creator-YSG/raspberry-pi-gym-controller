@@ -30,13 +30,13 @@ body {
 .home-container {
     display: flex;
     flex-direction: column;
-    width: 600px;
-    height: 1024px;
+    width: 100vw;
+    height: 100vh;
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     justify-content: center;
     align-items: center;
     position: relative;
-    margin: 0 auto;
+    overflow: hidden;
 }
 
 .scan-prompt {
@@ -46,30 +46,31 @@ body {
     justify-content: center;
     align-items: center;
     text-align: center;
-    padding: 40px;
+    padding: 20px;
+    max-width: 600px;
 }
 
 .gym-logo {
-    font-size: 100px;
-    margin-bottom: 20px;
+    font-size: 80px;
+    margin-bottom: 15px;
     animation: float 3s ease-in-out infinite;
 }
 
 @keyframes float {
     0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-20px); }
+    50% { transform: translateY(-15px); }
 }
 
 .main-title {
-    font-size: 42px;
+    font-size: 38px;
     font-weight: bold;
     color: white;
-    margin-bottom: 60px;
+    margin-bottom: 40px;
     text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 .scan-instruction {
-    margin: 40px 0;
+    margin: 30px 0;
 }
 
 .arrow-animation {
@@ -81,7 +82,7 @@ body {
 }
 
 .arrow {
-    font-size: 60px;
+    font-size: 50px;
     color: rgba(255, 255, 255, 0.9);
     animation: arrowBounce 1.5s ease-in-out infinite;
 }
@@ -96,26 +97,26 @@ body {
 
 @keyframes arrowBounce {
     0%, 100% { transform: translateY(0); opacity: 0.4; }
-    50% { transform: translateY(15px); opacity: 1; }
+    50% { transform: translateY(12px); opacity: 1; }
 }
 
 .scan-text {
-    font-size: 32px;
+    font-size: 28px;
     font-weight: bold;
     color: white;
     text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 .barcode-icon {
-    font-size: 80px;
-    margin-top: 40px;
+    font-size: 60px;
+    margin-top: 25px;
     opacity: 0.9;
 }
 
 .status-footer {
     display: flex;
     justify-content: space-around;
-    padding: 25px;
+    padding: 15px;
     background: rgba(0, 0, 0, 0.3);
     backdrop-filter: blur(10px);
 }
@@ -486,19 +487,19 @@ body {
     flex-direction: column;
     height: 100vh;
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    padding: 30px;
+    padding: 15px;
     overflow-y: auto;
 }
 
 .member-info-section {
     flex: 0 0 auto;
-    margin-bottom: 30px;
+    margin-bottom: 15px;
 }
 
 .check-icon {
-    font-size: 80px;
+    font-size: 60px;
     text-align: center;
-    margin-bottom: 20px;
+    margin-bottom: 10px;
     animation: checkPop 0.5s ease-out;
 }
 
@@ -509,11 +510,11 @@ body {
 }
 
 .status-title {
-    font-size: 32px;
+    font-size: 26px;
     font-weight: bold;
     color: white;
     text-align: center;
-    margin-bottom: 30px;
+    margin-bottom: 15px;
     text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
 }
 
@@ -521,10 +522,10 @@ body {
     background: rgba(255, 255, 255, 0.15);
     backdrop-filter: blur(10px);
     border-radius: 20px;
-    padding: 30px;
+    padding: 20px;
     border: 2px solid rgba(255, 255, 255, 0.3);
     display: flex;
-    gap: 25px;
+    gap: 20px;
     align-items: center;
 }
 
@@ -533,23 +534,23 @@ body {
 }
 
 .member-photo img {
-    width: 120px;
-    height: 120px;
+    width: 80px;
+    height: 80px;
     border-radius: 50%;
     object-fit: cover;
-    border: 4px solid rgba(255, 255, 255, 0.5);
+    border: 3px solid rgba(255, 255, 255, 0.5);
 }
 
 .member-avatar {
-    width: 120px;
-    height: 120px;
+    width: 80px;
+    height: 80px;
     border-radius: 50%;
     background: rgba(255, 255, 255, 0.2);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 60px;
-    border: 4px solid rgba(255, 255, 255, 0.5);
+    font-size: 40px;
+    border: 3px solid rgba(255, 255, 255, 0.5);
 }
 
 .member-details {
@@ -558,25 +559,36 @@ body {
 }
 
 .member-name {
-    font-size: 36px;
+    font-size: 28px;
     font-weight: bold;
-    margin-bottom: 10px;
+    margin-bottom: 8px;
     text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
 }
 
 .member-id {
-    font-size: 18px;
+    font-size: 16px;
     opacity: 0.9;
-    margin-bottom: 15px;
+    margin-bottom: 10px;
+}
+
+.member-program {
+    font-size: 18px;
+    font-weight: 600;
+    color: #fbbf24;
+    margin-bottom: 10px;
+    padding: 5px 10px;
+    background: rgba(251, 191, 36, 0.1);
+    border-radius: 8px;
+    display: inline-block;
 }
 
 .member-badge {
     display: inline-block;
-    padding: 8px 16px;
-    border-radius: 20px;
-    font-size: 16px;
+    padding: 6px 12px;
+    border-radius: 15px;
+    font-size: 14px;
     font-weight: bold;
-    margin-bottom: 15px;
+    margin-bottom: 0;
 }
 
 .badge-staff {
@@ -610,31 +622,94 @@ body {
     text-decoration: line-through;
 }
 
+/* 만료일 카드 (크게 표시) */
+.expiry-card {
+    background: rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(10px);
+    border-radius: 20px;
+    padding: 25px;
+    margin-top: 20px;
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    text-align: center;
+}
+
+.days-remaining-big {
+    margin-bottom: 15px;
+}
+
+.days-number {
+    font-size: 72px;
+    font-weight: bold;
+    color: #4ade80;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+    line-height: 1;
+}
+
+.days-label {
+    font-size: 28px;
+    color: white;
+    font-weight: bold;
+    margin-top: 5px;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.expiry-date-info {
+    font-size: 22px;
+    color: white;
+    padding: 10px 0;
+}
+
+.expiry-date-info .expiry-label {
+    opacity: 0.9;
+    font-weight: normal;
+}
+
+.expiry-date-info .expiry-date {
+    font-weight: bold;
+    margin-left: 10px;
+    font-size: 26px;
+}
+
+.expiry-none {
+    padding: 20px;
+}
+
+.expiry-none-icon {
+    font-size: 48px;
+    margin-bottom: 10px;
+}
+
+.expiry-none-text {
+    font-size: 20px;
+    color: white;
+    font-weight: bold;
+}
+
 .instruction-section {
-    flex: 1;
+    flex: 0 0 auto;
     display: flex;
     flex-direction: column;
     justify-content: center;
-    gap: 30px;
-    margin-bottom: 30px;
+    gap: 15px;
+    margin-bottom: 15px;
 }
 
 .door-status {
     background: rgba(76, 175, 80, 0.3);
     backdrop-filter: blur(10px);
     border-radius: 15px;
-    padding: 25px;
+    padding: 15px;
     text-align: center;
     border: 2px solid rgba(76, 175, 80, 0.5);
 }
 
 .door-icon {
-    font-size: 60px;
-    margin-bottom: 15px;
+    font-size: 40px;
+    margin-bottom: 10px;
 }
 
 .door-message {
-    font-size: 24px;
+    font-size: 20px;
     font-weight: bold;
     color: white;
     text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
@@ -644,26 +719,26 @@ body {
     background: rgba(255, 255, 255, 0.15);
     backdrop-filter: blur(10px);
     border-radius: 15px;
-    padding: 30px;
+    padding: 20px;
     text-align: center;
     border: 2px solid rgba(255, 255, 255, 0.3);
 }
 
 .instruction-icon {
-    font-size: 70px;
-    margin-bottom: 15px;
+    font-size: 50px;
+    margin-bottom: 10px;
 }
 
 .instruction-text {
-    font-size: 28px;
+    font-size: 22px;
     font-weight: bold;
     color: white;
-    margin-bottom: 10px;
+    margin-bottom: 8px;
     text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
 }
 
 .instruction-sub {
-    font-size: 18px;
+    font-size: 16px;
     color: rgba(255, 255, 255, 0.9);
 }
 

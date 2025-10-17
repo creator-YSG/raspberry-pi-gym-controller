@@ -24,6 +24,10 @@
                 <div class="member-name">{{ member.name }}</div>
                 <div class="member-id">회원번호: {{ member.member_id }}</div>
                 
+                {% if member.program_name %}
+                <div class="member-program">🏋️ {{ member.program_name }}</div>
+                {% endif %}
+                
                 {% if member.get('member_category') == 'staff' %}
                 <div class="member-badge badge-staff">🎓 교직원</div>
                 {% elif member.get('gender', '').lower() in ['m', 'male'] %}
@@ -31,17 +35,37 @@
                 {% else %}
                 <div class="member-badge badge-female">👩 여성 회원</div>
                 {% endif %}
-                
-                <div class="expiry-info">
-                    <span class="expiry-label">만료일:</span>
-                    <span class="expiry-date {% if member.is_expired %}expired{% endif %}">
-                        {{ member.expiry_date }}
-                        {% if member.days_remaining and member.days_remaining > 0 and member.days_remaining <= 7 %}
-                        ({{ member.days_remaining }}일 남음)
-                        {% endif %}
-                    </span>
-                </div>
             </div>
+        </div>
+        
+        <!-- 만료일 정보 카드 (더 크게) -->
+        <div class="expiry-card">
+            {% if member.expiry_date and member.expiry_date != 'None' %}
+                {% if member.days_remaining is not none %}
+                    <div class="days-remaining-big">
+                        <div class="days-number">{{ member.days_remaining }}</div>
+                        <div class="days-label">일 남음</div>
+                    </div>
+                    <div class="expiry-date-info">
+                        <span class="expiry-label">만료일:</span>
+                        <span class="expiry-date {% if member.is_expired %}expired{% endif %}">
+                            {{ member.expiry_date }}
+                        </span>
+                    </div>
+                {% else %}
+                    <div class="expiry-date-info">
+                        <span class="expiry-label">만료일:</span>
+                        <span class="expiry-date {% if member.is_expired %}expired{% endif %}">
+                            {{ member.expiry_date }}
+                        </span>
+                    </div>
+                {% endif %}
+            {% else %}
+                <div class="expiry-none">
+                    <div class="expiry-none-icon">⚠️</div>
+                    <div class="expiry-none-text">만료일 정보 없음</div>
+                </div>
+            {% endif %}
         </div>
     </div>
 
@@ -116,12 +140,12 @@ document.addEventListener('DOMContentLoaded', function() {
     // 센서 폴링 시작
     startSensorPolling();
     
-    // 30초 타임아웃 (아무 동작 없으면 홈으로)
+    // 20초 타임아웃 (센서 변화 없으면 문 닫고 홈으로)
     setTimeout(function() {
-        console.log('⏱️ 타임아웃: 홈으로 이동');
+        console.log('⏱️ 타임아웃: 센서 변화 없음, 문 닫고 홈으로 이동');
         stopSensorPolling();
-        goHome();
-    }, 30000);
+        closeDoorAndGoHome();
+    }, 20000);
 });
 
 // 센서 폴링 시작 (500ms 간격으로 빠르게 체크)
@@ -202,8 +226,19 @@ function handleSensorEvent(data) {
             const lockerId = lockerData.locker_id;
             console.log(`🔍 센서 ${sensorNum} -> 락커 ${lockerId}: ${state}`);
             
-            // 중복 처리 방지 (같은 센서의 같은 상태는 한 번만)
+            // 🆕 1단계: 모든 센서 이벤트를 무조건 DB에 기록 (감사 추적)
+            logSensorEvent(lockerId, state);
+            
+            // 2단계: HIGH일 때 processedSensors에서 제거 (재시도 가능)
             const eventKey = `${sensorNum}-${state}`;
+            if (state === 'HIGH') {
+                // 키를 뺐으므로 이전 LOW 이벤트 제거
+                const lowKey = `${sensorNum}-LOW`;
+                processedSensors.delete(lowKey);
+                console.log(`🔓 센서 리셋: ${lowKey} (재시도 가능)`);
+            }
+            
+            // 3단계: 중복 처리 방지 (같은 상태는 한 번만 처리)
             if (processedSensors.has(eventKey)) {
                 console.log(`⏭️ 이미 처리된 이벤트: ${eventKey}`);
                 return;
@@ -241,6 +276,36 @@ function handleSensorEvent(data) {
         .catch(error => {
             console.error(`❌ 센서 ${sensorNum} 락커 조회 오류:`, error);
         });
+}
+
+// 센서 이벤트 DB 기록 (모든 이벤트)
+function logSensorEvent(lockerId, state) {
+    const context = memberData ? memberData.action : 'unauthorized';
+    const memberId = memberData ? memberData.memberId : null;
+    
+    fetch('/api/sensors/log', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            locker_id: lockerId,
+            state: state,
+            member_id: memberId,
+            context: context
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            console.log(`📊 센서 이벤트 기록: ${lockerId} ${state} (event_id: ${data.event_id})`);
+        } else {
+            console.warn(`⚠️ 센서 이벤트 기록 실패: ${data.error}`);
+        }
+    })
+    .catch(error => {
+        console.error(`❌ 센서 이벤트 기록 오류:`, error);
+    });
 }
 
 // 대여 프로세스
@@ -299,14 +364,51 @@ function processReturn(lockerId) {
                 navigateToComplete('return', lockerId);
             }, 1000);
         } else {
-            console.error('❌ 반납 실패:', data.error);
-            navigateToError('return_failed', data.error);
+            // 잘못된 락커 에러인지 확인
+            if (data.error_code === 'WRONG_LOCKER') {
+                console.warn('⚠️ 잘못된 락커:', data.error);
+                // 화면에 경고 표시
+                showWrongLockerWarning(data.target_locker, data.actual_locker);
+                // 센서 폴링 재시작 (올바른 락커에 넣을 때까지)
+                processedSensors.clear(); // 이벤트 재처리 가능하도록 클리어
+                startSensorPolling();
+            } else {
+                // 다른 에러는 에러 화면으로
+                console.error('❌ 반납 실패:', data.error);
+                navigateToError('return_failed', data.error);
+            }
         }
     })
     .catch(error => {
         console.error('❌ 반납 API 오류:', error);
         navigateToError('system_error', '시스템 오류가 발생했습니다.');
     });
+}
+
+// 잘못된 락커 경고 표시
+function showWrongLockerWarning(targetLocker, actualLocker) {
+    console.log(`⚠️ 잘못된 락커 경고: ${targetLocker} ← ${actualLocker}`);
+    
+    // 대기 중 섹션을 경고 메시지로 변경
+    const waitingSection = document.querySelector('.waiting-section');
+    if (waitingSection) {
+        waitingSection.innerHTML = `
+            <div class="error-icon" style="font-size: 60px; margin-bottom: 20px;">⚠️</div>
+            <p class="error-title" style="font-size: 28px; font-weight: bold; color: #f59e0b; margin-bottom: 15px;">
+                잘못된 락커입니다
+            </p>
+            <p class="error-message" style="font-size: 22px; margin-bottom: 10px;">
+                <strong style="color: #10b981;">${targetLocker}번</strong> 락커를 대여하셨습니다
+            </p>
+            <p class="error-message" style="font-size: 22px; margin-bottom: 20px;">
+                <strong style="color: #ef4444;">${actualLocker}번</strong>이 아닌 <strong style="color: #10b981;">${targetLocker}번</strong>에 넣어주세요
+            </p>
+            <div class="waiting-spinner">
+                <div class="spinner"></div>
+            </div>
+            <p class="waiting-text" style="color: #f59e0b;">올바른 락커에 넣을 때까지 기다리는 중...</p>
+        `;
+    }
 }
 
 // 완료 화면으로 이동
@@ -324,6 +426,52 @@ function navigateToError(errorType, message) {
 // 홈으로 돌아가기
 function goHome() {
     window.location.href = '/';
+}
+
+// 문 닫고 홈으로 돌아가기 (타임아웃용)
+function closeDoorAndGoHome() {
+    console.log('🚪 타임아웃: 문 닫는 중...');
+    
+    // 1. 타임아웃 기록 API 호출
+    fetch('/api/rentals/timeout', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            member_id: memberData.memberId
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        console.log('⏱️ 타임아웃 기록 완료:', data);
+    })
+    .catch(error => {
+        console.error('❌ 타임아웃 기록 오류:', error);
+    });
+    
+    // 2. 문 닫기 API 호출
+    fetch('/api/hardware/motor_move', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            revs: -0.917,
+            rpm: 30
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        console.log('✅ 문 닫기 완료:', data);
+        // 1초 후 홈으로 이동
+        setTimeout(goHome, 1000);
+    })
+    .catch(error => {
+        console.error('❌ 문 닫기 오류:', error);
+        // 오류가 나도 홈으로 이동
+        setTimeout(goHome, 1000);
+    });
 }
 
 // 락커 문 열기

@@ -67,15 +67,15 @@ def validate_member_data(row: dict) -> tuple[bool, str]:
     Returns:
         (유효성 여부, 오류 메시지)
     """
-    # 필수 필드 확인
-    if not row.get('회원번호'):
-        return False, "회원번호가 없습니다"
+    # 필수 필드 확인 (CSV 헤더는 "고객번호", "고객명")
+    if not row.get('고객번호'):
+        return False, "고객번호가 없습니다"
     
-    if not row.get('회원명'):
-        return False, "회원명이 없습니다"
+    if not row.get('고객명'):
+        return False, "고객명이 없습니다"
     
     # 만료일 확인
-    expiry_date_str = row.get('이용종료일')
+    expiry_date_str = row.get('종료일')
     if expiry_date_str:
         expiry_date = parse_date(expiry_date_str)
         if expiry_date and expiry_date < datetime.now():
@@ -140,13 +140,14 @@ def import_members_from_csv(csv_file_path: str, dry_run: bool = False) -> dict:
                     results['errors'].append(f"{i}번 줄: {error_msg}")
                     continue
                 
-                # 회원 데이터 생성
+                # 회원 데이터 생성 (CSV 헤더에 맞춰 수정)
                 member_data = {
-                    'member_id': row['회원번호'].strip(),
-                    'member_name': row['회원명'].strip(),
-                    'phone': row.get('전화번호', '').strip(),
-                    'membership_type': parse_membership_type(row.get('가입프로그램', '')),
-                    'membership_expires': parse_date(row.get('이용종료일', '')),  # membership_expires로 변경
+                    'member_id': row['고객번호'].strip(),
+                    'member_name': row['고객명'].strip(),
+                    'phone': row.get('핸드폰', '').strip(),
+                    'membership_type': parse_membership_type(row.get('프로그램명', '')),
+                    'program_name': row.get('프로그램명', '').strip(),  # 프로그램명 추가
+                    'membership_expires': parse_date(row.get('종료일', '')),  # membership_expires로 변경
                     'status': 'active'
                 }
                 

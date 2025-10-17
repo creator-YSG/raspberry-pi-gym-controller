@@ -49,15 +49,44 @@ def member_check():
             # 회원 데이터를 딕셔너리로 변환 (to_dict()에 모든 정보 포함됨)
             member_dict = member.to_dict()
             
-            # 만료일 정보 추가 (이미 to_dict()에 포함되지만 is_expired는 추가 필요)
+            # 만료일 정보 추가 및 강제 계산
             from datetime import datetime
             if member.membership_expires:
                 days_remaining = (member.membership_expires - datetime.now()).days
                 member_dict['is_expired'] = days_remaining < 0
+                member_dict['days_remaining'] = max(0, days_remaining)  # 강제 설정
+                member_dict['expiry_date'] = member.membership_expires.strftime('%Y-%m-%d')  # 강제 설정
+                current_app.logger.info(f"📅 만료일: {member_dict['expiry_date']}, 남은 기간: {member_dict['days_remaining']}일")
+            else:
+                member_dict['days_remaining'] = None
+                member_dict['expiry_date'] = None
+                current_app.logger.warning(f"⚠️ 회원 {member.id}의 만료일 정보 없음")
             
             # 접근 가능한 구역 확인 (allowed_zones는 이미 포함됨, zone은 기본값만)
             zone = member.allowed_zones[0] if member.allowed_zones else 'MALE'
             member_dict['zone'] = zone
+            
+            # 🆕 대여 프로세스인 경우: 바코드 인증 시점에 pending 레코드 생성
+            if action == 'rental':
+                try:
+                    import uuid
+                    transaction_id = str(uuid.uuid4())
+                    rental_time = datetime.now().isoformat()
+                    
+                    # pending 상태로 대여 레코드 INSERT (락커 번호는 아직 모름)
+                    locker_service.db.execute_query("""
+                        INSERT INTO rentals (
+                            transaction_id, member_id, locker_number, status,
+                            rental_barcode_time, created_at, updated_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """, (transaction_id, member_id, 'PENDING', 'pending', 
+                          rental_time, rental_time, rental_time))
+                    
+                    locker_service.db.conn.commit()
+                    
+                    current_app.logger.info(f'📝 Pending 대여 레코드 생성: member={member_id}, transaction={transaction_id}')
+                except Exception as e:
+                    current_app.logger.error(f'❌ Pending 레코드 생성 오류: {e}', exc_info=True)
             
             return render_template('pages/member_check.html',
                                  title='회원 확인',

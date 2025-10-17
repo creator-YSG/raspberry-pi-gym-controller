@@ -11,7 +11,8 @@ class Member:
     """회원 정보 (SQLite 연동)"""
     
     def __init__(self, id: str, name: str, phone: str = '',
-                 membership_type: str = 'basic', 
+                 membership_type: str = 'basic',
+                 program_name: str = '',  # 가입 프로그램명
                  membership_expires: Optional[datetime] = None,
                  status: str = 'active',
                  # 🆕 새로 추가되는 필드들
@@ -29,6 +30,7 @@ class Member:
         self.name = name  # member_name
         self.phone = phone
         self.membership_type = membership_type  # basic, premium, vip
+        self.program_name = program_name  # 가입 프로그램명 (예: 1.헬스1개월)
         self.membership_expires = membership_expires  # expiry_date
         self.status = status  # active, suspended, expired
         
@@ -54,6 +56,7 @@ class Member:
             'member_name': self.name,  # 호환성을 위한 별칭
             'phone': self.phone,
             'membership_type': self.membership_type,
+            'program_name': self.program_name,
             'membership_expires': self.membership_expires.isoformat() if self.membership_expires else None,
             'expiry_date': self.membership_expires.strftime('%Y-%m-%d') if self.membership_expires else None,  # 호환성
             'status': self.status,
@@ -156,6 +159,7 @@ class Member:
             name=row['member_name'],
             phone=row['phone'] if 'phone' in row.keys() and row['phone'] else '',
             membership_type=row['membership_type'] if 'membership_type' in row.keys() and row['membership_type'] else 'basic',
+            program_name=row['program_name'] if 'program_name' in row.keys() and row['program_name'] else '',
             membership_expires=parse_datetime(row['expiry_date'] if 'expiry_date' in row.keys() else None),
             status=row['status'] if 'status' in row.keys() and row['status'] else 'active',
             currently_renting=row['currently_renting'] if 'currently_renting' in row.keys() else None,
@@ -184,6 +188,7 @@ class Member:
             'member_name': self.name,
             'phone': self.phone,
             'membership_type': self.membership_type,
+            'program_name': self.program_name,
             'expiry_date': format_datetime(self.membership_expires),
             'status': self.status,
             'currently_renting': self.currently_renting,

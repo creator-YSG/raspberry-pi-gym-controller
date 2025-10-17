@@ -19,11 +19,6 @@
             <p class="scan-text">바코드를 스캔해주세요</p>
         </div>
         <div class="barcode-icon">📱</div>
-        
-        <!-- 디버그 테스트 버튼 -->
-        <button id="testButton" style="padding: 20px 40px; font-size: 24px; background: #ff5722; color: white; border: none; border-radius: 12px; cursor: pointer; margin-top: 30px; box-shadow: 0 4px 8px rgba(0,0,0,0.3);">
-            🧪 테스트 (등록안된회원)
-        </button>
     </div>
 
     <!-- 하단 상태 정보 -->
@@ -37,9 +32,6 @@
             <span class="status-value" id="currentTime"></span>
         </div>
     </div>
-    
-    <!-- 디버그 로그 표시 -->
-    <div id="debugLog" style="position: absolute; bottom: 80px; left: 10px; right: 10px; background: rgba(0,0,0,0.9); color: #0f0; padding: 15px; border-radius: 8px; font-family: monospace; font-size: 18px; max-height: 300px; overflow-y: auto; border: 2px solid #0f0;"></div>
 
     <!-- 숨겨진 관리자 버튼 (좌측 하단 모서리 길게 누르면 표시) -->
     <div class="admin-trigger" id="adminTrigger"></div>
@@ -55,28 +47,9 @@ let socket = null;
 let barcodeBuffer = '';
 let barcodeTimeout = null;
 
-// 화면에 로그 표시 함수
-function showLog(message) {
-    const logDiv = document.getElementById('debugLog');
-    const time = new Date().toLocaleTimeString();
-    logDiv.innerHTML = `[${time}] ${message}<br>` + logDiv.innerHTML;
-    console.log(message);
-}
-
-// 모든 JavaScript 오류를 화면에 표시
-window.onerror = function(msg, url, lineNo, columnNo, error) {
-    showLog('❌ JS 오류: ' + msg);
-    return false;
-};
-
-// Promise 오류도 캐치
-window.addEventListener('unhandledrejection', function(event) {
-    showLog('❌ Promise 오류: ' + event.reason);
-});
-
 // 페이지 로드 시 초기화
 document.addEventListener('DOMContentLoaded', function() {
-    showLog('🚀 락카키 대여기 시작');
+    console.log('락카키 대여기 시작');
     
     // 시간 업데이트
     updateTime();
@@ -91,27 +64,20 @@ document.addEventListener('DOMContentLoaded', function() {
     // 숨겨진 관리자 모드 (좌측 하단 5초 누르기)
     setupAdminTrigger();
     
-    // 테스트 버튼 이벤트
-    document.getElementById('testButton').addEventListener('click', function() {
-        showLog('🧪 테스트 버튼 클릭');
-        handleBarcodeScanned('20240757');
-    });
-    
     // 바코드 폴링 (1초마다 체크)
     setInterval(function() {
         fetch('/api/barcode/poll')
             .then(response => response.json())
             .then(data => {
                 if (data.has_barcode) {
-                    showLog('📥 폴링 바코드: ' + data.barcode);
+                    console.log('폴링 바코드:', data.barcode);
                     handleBarcodeScanned(data.barcode);
                 }
             })
             .catch(error => {
-                // 조용히 무시 (너무 많은 로그 방지)
+                // 조용히 무시
             });
     }, 1000);
-    showLog('⏰ 바코드 폴링 시작 (1초 간격)');
     
     // 키오스크 최적화
     if (!document.fullscreenElement) {
@@ -138,46 +104,37 @@ function connectWebSocket() {
         socket = io();
         
         socket.on('connect', function() {
-            showLog('✅ WebSocket 연결됨');
+            console.log('WebSocket 연결됨');
             document.getElementById('systemStatus').textContent = '● 정상';
             document.getElementById('systemStatus').className = 'status-value status-ok';
             socket.emit('join', { room: 'kiosk' });
         });
         
         socket.on('disconnect', function() {
-            showLog('❌ WebSocket 연결 끊김');
+            console.log('WebSocket 연결 끊김');
             document.getElementById('systemStatus').textContent = '● 연결 끊김';
             document.getElementById('systemStatus').className = 'status-value status-error';
         });
         
         // 바코드 감지 이벤트 (ESP32에서)
         socket.on('barcode_detected', function(data) {
-            showLog('📱 바코드 감지: ' + data.barcode);
+            console.log('바코드 감지:', data.barcode);
             handleBarcodeScanned(data.barcode);
         });
         
         // ESP32 이벤트 수신 (호환성)
         socket.on('esp32_event', function(data) {
-            showLog('📡 ESP32 이벤트: ' + data.event_type);
-            
             if (data.event_type === 'barcode_scanned') {
-                showLog('📱 바코드: ' + data.data.barcode);
+                console.log('ESP32 바코드:', data.data.barcode);
                 handleBarcodeScanned(data.data.barcode);
             }
         });
         
         // 화면 전환 명령 수신
         socket.on('navigate_to', function(data) {
-            showLog('🔄 화면 전환: ' + data.page);
+            console.log('화면 전환:', data.page);
             navigateTo(data.page, data.params);
         });
-        
-        // 모든 이벤트 감지 (디버깅용)
-        socket.onAny(function(eventName, ...args) {
-            showLog('📬 이벤트: ' + eventName + ' | 데이터: ' + JSON.stringify(args).substring(0, 50));
-        });
-        
-        showLog('🔌 Socket.IO 리스너 등록 완료');
         
     } catch (error) {
         console.error('WebSocket 연결 오류:', error);
@@ -186,47 +143,35 @@ function connectWebSocket() {
 
 // 하드웨어 바코드 스캐너 리스닝
 function setupBarcodeScanner() {
-    showLog('🔧 바코드 스캐너 설정 시작');
-    
     // 숨김 입력 필드에 항상 포커스 유지
     const barcodeInput = document.getElementById('barcodeInput');
     barcodeInput.focus();
-    showLog('📍 barcodeInput에 포커스 설정');
     
     // 클릭 시 다시 포커스
     document.addEventListener('click', function() {
         barcodeInput.focus();
-        showLog('👆 클릭 감지');
     });
     
     // input 필드에서 직접 입력 감지
     barcodeInput.addEventListener('input', function(e) {
         const value = e.target.value;
-        showLog('📥 INPUT 이벤트: ' + value);
-        
         if (value.length > 0) {
             barcodeBuffer = value;
-            showLog('📝 버퍼 업데이트: ' + barcodeBuffer);
         }
     });
     
     // 키 다운 감지 (모든 키)
     document.addEventListener('keydown', function(e) {
-        showLog('⌨️ KEYDOWN: ' + e.key + ' code:' + e.keyCode);
-        
         // Enter키면 바코드 완성
         if (e.key === 'Enter' || e.keyCode === 13) {
-            // input 필드 값 먼저 확인
             const inputValue = barcodeInput.value;
             const finalBarcode = inputValue || barcodeBuffer;
             
             if (finalBarcode.length > 0) {
-                showLog('✅ 바코드 완료: ' + finalBarcode);
+                console.log('바코드 완료:', finalBarcode);
                 handleBarcodeScanned(finalBarcode);
                 barcodeBuffer = '';
                 barcodeInput.value = '';
-            } else {
-                showLog('⚠️ Enter, 버퍼 비어있음');
             }
             e.preventDefault();
             return false;
@@ -235,20 +180,16 @@ function setupBarcodeScanner() {
         // 숫자나 문자 입력 시 버퍼에 추가
         if (e.key && e.key.length === 1) {
             barcodeBuffer += e.key;
-            showLog('📝 버퍼: ' + barcodeBuffer);
             
             // 타임아웃 리셋
             clearTimeout(barcodeTimeout);
             barcodeTimeout = setTimeout(function() {
                 if (barcodeBuffer.length > 0) {
-                    showLog('⏱️ 타임아웃');
                     barcodeBuffer = '';
                 }
             }, 300);
         }
     });
-    
-    showLog('✅ 바코드 스캐너 설정 완료');
 }
 
 // 바코드 스캔 처리
