@@ -37,3 +37,10 @@ config/*.json
 
 # 테스트 서버 관련
 test_server_*.log
+
+# Database backups
+data/backups/
+instance/*.backup.*
+instance/gym_system.db
+instance/gym_system.db-wal
+instance/gym_system.db-shm
