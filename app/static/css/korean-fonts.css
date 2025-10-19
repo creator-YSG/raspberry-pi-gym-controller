@@ -1,11 +1,16 @@
 /* 
  * 한글 폰트 지원 CSS
  * 라즈베리파이 한글 표시 문제 해결
+ * 로컬 폰트 사용으로 빠른 로딩 (인터넷 연결 불필요)
  */
 
-/* Google Fonts 웹폰트 로드 (인터넷 연결 필요) */
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Noto+Color+Emoji&display=swap');
+/* Noto Sans KR 로컬 폰트 로드 */
+@font-face {
+    font-family: 'Noto Sans KR';
+    src: url('../fonts/NotoSansKR.ttf') format('truetype');
+    font-weight: 100 900;
+    font-display: swap;
+}
 
 /* 한글 폰트 우선순위 설정 */
 body, 

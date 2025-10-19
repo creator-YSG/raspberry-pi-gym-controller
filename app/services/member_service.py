@@ -34,17 +34,30 @@ class MemberService:
             Member 객체 또는 None
         """
         try:
+            import time
+            t_db_start = time.time()
+            
             # SQLite에서 회원 정보 조회
             cursor = self.db.execute_query("""
                 SELECT * FROM members 
                 WHERE member_id = ?
             """, (member_id,))
             
+            t_db_query = time.time()
+            
             if cursor:
                 row = cursor.fetchone()
+                t_db_fetch = time.time()
+                
                 if row:
                     member = Member.from_db_row(row)
-                    logger.info(f"회원 조회 성공: {member_id} ({member.name})")
+                    t_db_parse = time.time()
+                    
+                    logger.info(f"⏱️ [PERF-DB] 회원 조회: {member_id} | "
+                               f"쿼리: {(t_db_query - t_db_start)*1000:.2f}ms | "
+                               f"Fetch: {(t_db_fetch - t_db_query)*1000:.2f}ms | "
+                               f"파싱: {(t_db_parse - t_db_fetch)*1000:.2f}ms | "
+                               f"전체: {(t_db_parse - t_db_start)*1000:.2f}ms")
                     return member
                 else:
                     logger.warning(f"회원 없음: {member_id}")

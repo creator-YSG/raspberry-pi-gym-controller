@@ -64,20 +64,22 @@ document.addEventListener('DOMContentLoaded', function() {
     // 숨겨진 관리자 모드 (좌측 하단 5초 누르기)
     setupAdminTrigger();
     
-    // 바코드 폴링 (1초마다 체크)
+    // 바코드 폴링 (200ms마다 체크 - 빠른 응답)
     setInterval(function() {
+        const t_poll_start = performance.now();
         fetch('/api/barcode/poll')
             .then(response => response.json())
             .then(data => {
                 if (data.has_barcode) {
-                    console.log('폴링 바코드:', data.barcode);
+                    const t_poll_end = performance.now();
+                    console.log(`⏱️ [PERF-POLL] 바코드 폴링 성공: ${(t_poll_end - t_poll_start).toFixed(2)}ms | 바코드: ${data.barcode}`);
                     handleBarcodeScanned(data.barcode);
                 }
             })
             .catch(error => {
                 // 조용히 무시
             });
-    }, 1000);
+    }, 200);
     
     // 키오스크 최적화
     if (!document.fullscreenElement) {
@@ -200,9 +202,11 @@ function handleBarcodeScanned(barcode) {
     }
     
     barcode = barcode.trim();
-    console.log('🔍 바코드 처리 시작:', barcode);
+    const t_start = performance.now();
+    console.log('⏱️ [PERF-UI] 바코드 처리 시작:', barcode);
     
     // 서버로 바코드 전송
+    const t_api_start = performance.now();
     fetch('/api/barcode/process', {
         method: 'POST',
         headers: {
@@ -210,17 +214,26 @@ function handleBarcodeScanned(barcode) {
         },
         body: JSON.stringify({ barcode: barcode })
     })
-    .then(response => response.json())
+    .then(response => {
+        const t_api_response = performance.now();
+        console.log(`⏱️ [PERF-UI] API 응답 수신: ${(t_api_response - t_api_start).toFixed(2)}ms`);
+        return response.json();
+    })
     .then(data => {
+        const t_api_parsed = performance.now();
+        console.log(`⏱️ [PERF-UI] 응답 파싱: ${(t_api_parsed - t_api_start).toFixed(2)}ms | 전체: ${(t_api_parsed - t_start).toFixed(2)}ms`);
         console.log('✅ 바코드 처리 결과:', data);
         
         if (data.success) {
+            const t_navigate_start = performance.now();
             // 성공 시 화면 전환
             if (data.action === 'rental') {
                 navigateTo('member-check', { member_id: data.member_id, action: 'rental' });
             } else if (data.action === 'return') {
                 navigateTo('member-check', { member_id: data.member_id, action: 'return' });
             }
+            console.log(`⏱️ [PERF-UI] 화면 전환 시작: ${(performance.now() - t_navigate_start).toFixed(2)}ms`);
+            console.log(`⏱️ [PERF-UI] === 전체 프로세스: ${(performance.now() - t_start).toFixed(2)}ms ===`);
         } else {
             // 에러 시 에러 화면
             navigateTo('error', { 

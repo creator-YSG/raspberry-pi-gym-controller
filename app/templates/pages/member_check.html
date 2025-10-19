@@ -134,8 +134,19 @@ document.addEventListener('DOMContentLoaded', function() {
     
     console.log('👤 회원 확인 화면:', memberData);
     
+    // ⏱️ 성능 측정: 페이지 로드 시점
+    const t_page_load = performance.now();
+    console.log(`⏱️ [PERF-DOOR] 회원 확인 페이지 로드 완료`);
+    
+    // 서버에도 로그 전송 (성능 측정용)
+    fetch('/api/test/log', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({log: `[PERF-UI] 회원 확인 페이지 로드 완료 (DOMContentLoaded)`})
+    }).catch(() => {});
+    
     // 락커 문 열기
-    openLockerDoor(memberData.zone);
+    openLockerDoor(memberData.zone, t_page_load);
     
     // 센서 폴링 시작
     startSensorPolling();
@@ -475,8 +486,17 @@ function closeDoorAndGoHome() {
 }
 
 // 락커 문 열기
-function openLockerDoor(zone) {
-    console.log(`🚪 ${zone} 구역 문 열기 요청`);
+function openLockerDoor(zone, pageLoadTime) {
+    const t_door_start = performance.now();
+    const delay = (t_door_start - pageLoadTime).toFixed(2);
+    console.log(`⏱️ [PERF-DOOR] 문 열기 API 호출 시작 (페이지 로드 후 ${delay}ms)`);
+    
+    // 서버에도 로그 전송
+    fetch('/api/test/log', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({log: `[PERF-UI] 문 열기 API 호출 시작 (페이지 로드 후 ${delay}ms)`})
+    }).catch(() => {});
     
     fetch('/api/locker/open-door', {
         method: 'POST',
@@ -485,10 +505,16 @@ function openLockerDoor(zone) {
         },
         body: JSON.stringify({ zone: zone })
     })
-    .then(response => response.json())
+    .then(response => {
+        const t_door_response = performance.now();
+        console.log(`⏱️ [PERF-DOOR] 문 열기 API 응답: ${(t_door_response - t_door_start).toFixed(2)}ms`);
+        return response.json();
+    })
     .then(data => {
+        const t_door_complete = performance.now();
         if (data.success) {
-            console.log(`✅ ${zone} 구역 문 열기 성공:`, data.message);
+            console.log(`⏱️ [PERF-DOOR] ✅ 문 열기 완료: ${(t_door_complete - t_door_start).toFixed(2)}ms | 전체(페이지 로드부터): ${(t_door_complete - pageLoadTime).toFixed(2)}ms`);
+            console.log(`🚪 ${zone} 구역 문 열기 성공:`, data.message);
         } else {
             console.error(`❌ ${zone} 구역 문 열기 실패:`, data.error);
         }

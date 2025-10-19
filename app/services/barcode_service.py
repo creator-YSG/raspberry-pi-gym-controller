@@ -77,8 +77,16 @@ class BarcodeService:
     def _process_member_barcode(self, barcode: str) -> Dict:
         """회원 바코드 처리 (센서 기반 자동 대여/반납)"""
         try:
+            import time
+            import logging
+            logger = logging.getLogger(__name__)
+            
+            t_validation_start = time.time()
             # 회원 정보 조회 및 검증
             validation = self.member_service.validate_member(barcode)
+            t_validation_end = time.time()
+            
+            logger.info(f'⏱️ [PERF] 회원 검증: {(t_validation_end - t_validation_start)*1000:.2f}ms')
             
             if not validation['valid']:
                 # 에러 타입 결정

@@ -132,9 +132,14 @@ def get_locker_by_sensor(sensor_num):
 @bp.route('/locker/open-door', methods=['POST'])
 def open_locker_door():
     """락커 구역 문 열기"""
+    import time
+    t_start = time.time()
+    
     try:
         data = request.get_json()
         zone = data.get('zone', 'MALE')  # MALE, FEMALE, STAFF
+        
+        current_app.logger.info(f'⏱️ [PERF-DOOR] 문 열기 API 진입: {zone} 구역')
         
         # ESP32 매니저를 통해 문 열기
         esp32_manager = getattr(current_app, 'esp32_manager', None)
@@ -172,11 +177,14 @@ def open_locker_door():
             thread = threading.Thread(target=send_motor_command, daemon=True)
             thread.start()
             
-            current_app.logger.info(f'✅ {zone} 구역 문 열기 명령 전송 완료')
+            t_end = time.time()
+            current_app.logger.info(f'⏱️ [PERF-DOOR] ✅ 문 열기 명령 전송 완료: {(t_end - t_start)*1000:.2f}ms | 구역: {zone}')
+            
             return jsonify({
                 'success': True,
                 'message': f'{zone} 구역 문이 열렸습니다',
-                'zone': zone
+                'zone': zone,
+                'elapsed_ms': round((t_end - t_start) * 1000, 2)
             })
             
         except Exception as cmd_error:
@@ -196,6 +204,21 @@ def open_locker_door():
             'message': '문 열기 명령 전송',
             'zone': zone
         })
+
+
+@bp.route('/test/log', methods=['POST'])
+def test_log():
+    """테스트용: 프론트엔드 로그를 서버로 전송"""
+    try:
+        data = request.get_json()
+        log_message = data.get('log', '')
+        
+        if log_message:
+            current_app.logger.info(f'🌐 {log_message}')
+        
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
 
 
 @bp.route('/test/inject-barcode', methods=['POST'])
@@ -366,9 +389,13 @@ def inject_sensor():
 @bp.route('/barcode/process', methods=['POST'])
 def process_barcode():
     """바코드 스캔 처리"""
+    import time
+    t_start = time.time()
+    
     try:
         data = request.get_json()
         barcode = data.get('barcode', '')
+        t_request_parsed = time.time()
         
         if not barcode:
             return jsonify({
@@ -377,9 +404,18 @@ def process_barcode():
                 'error_type': 'invalid_barcode'
             }), 400
         
+        current_app.logger.info(f'⏱️ [PERF] 바코드 API 진입: {barcode} (요청 파싱: {(t_request_parsed - t_start)*1000:.2f}ms)')
+        
         # 바코드 처리
+        t_service_start = time.time()
         barcode_service = BarcodeService()
         result = barcode_service.process_barcode(barcode)
+        t_service_end = time.time()
+        
+        t_total = (t_service_end - t_start) * 1000
+        t_service = (t_service_end - t_service_start) * 1000
+        
+        current_app.logger.info(f'⏱️ [PERF] 바코드 처리 완료: {t_service:.2f}ms | 전체: {t_total:.2f}ms')
         
         if result['success']:
             return jsonify(result)
