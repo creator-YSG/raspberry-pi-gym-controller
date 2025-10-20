@@ -616,14 +616,15 @@ def process_rental():
                         }
                     else:
                         # 정상 반납 처리 (이전 오류 정보는 유지 - 시도 이력 보존)
+                        # return_barcode_time은 이미 member_check 페이지 진입 시 기록되었으므로 업데이트하지 않음
                         locker_service.db.execute_query("""
                             UPDATE rentals 
-                            SET return_barcode_time = ?, return_target_locker = ?, 
+                            SET return_target_locker = ?, 
                                 return_sensor_time = ?, return_actual_locker = ?, 
                                 return_verified = ?, status = 'returned', 
                                 updated_at = ?
                             WHERE member_id = ? AND status = 'active'
-                        """, (return_time, target_locker, return_time, actual_locker, 
+                        """, (target_locker, return_time, actual_locker, 
                               1, return_time, member_id))
                         
                         # 회원의 currently_renting 해제

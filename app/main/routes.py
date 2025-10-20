@@ -88,6 +88,24 @@ def member_check():
                 except Exception as e:
                     current_app.logger.error(f'❌ Pending 레코드 생성 오류: {e}', exc_info=True)
             
+            # 🆕 반납 프로세스인 경우: 바코드 인증 시점에 return_barcode_time 기록
+            elif action == 'return':
+                try:
+                    return_barcode_time = datetime.now().isoformat()
+                    
+                    # 활성 대여 레코드에 return_barcode_time 업데이트
+                    locker_service.db.execute_query("""
+                        UPDATE rentals 
+                        SET return_barcode_time = ?, updated_at = ?
+                        WHERE member_id = ? AND status = 'active'
+                    """, (return_barcode_time, return_barcode_time, member_id))
+                    
+                    locker_service.db.conn.commit()
+                    
+                    current_app.logger.info(f'📝 반납 바코드 시간 기록: member={member_id}, time={return_barcode_time}')
+                except Exception as e:
+                    current_app.logger.error(f'❌ 반납 바코드 시간 기록 오류: {e}', exc_info=True)
+            
             return render_template('pages/member_check.html',
                                  title='회원 확인',
                                  member=member_dict,
