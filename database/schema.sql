@@ -6,7 +6,9 @@
 -- 회원 마스터 테이블
 -- =====================================================
 CREATE TABLE IF NOT EXISTS members (
-    member_id TEXT PRIMARY KEY,          -- 바코드 번호 (회원 ID)
+    member_id TEXT PRIMARY KEY,          -- 고유 회원 ID (변경되지 않는 고유 식별자)
+    barcode TEXT UNIQUE,                 -- 바코드 번호 (인증 수단 1)
+    qr_code TEXT UNIQUE,                 -- QR 코드 (인증 수단 2, 선택적)
     member_name TEXT NOT NULL,           -- 회원명
     phone TEXT DEFAULT '',               -- 전화번호
     membership_type TEXT DEFAULT 'basic', -- 회원권 종류 (basic, premium, vip)
@@ -139,7 +141,8 @@ CREATE TABLE IF NOT EXISTS sensor_events (
 -- =====================================================
 
 -- 회원 테이블 인덱스
-CREATE INDEX IF NOT EXISTS idx_member_barcode ON members(member_id);
+CREATE INDEX IF NOT EXISTS idx_member_barcode ON members(barcode);
+CREATE INDEX IF NOT EXISTS idx_member_qr_code ON members(qr_code);
 CREATE INDEX IF NOT EXISTS idx_member_status ON members(status);
 CREATE INDEX IF NOT EXISTS idx_member_currently_renting ON members(currently_renting);
 

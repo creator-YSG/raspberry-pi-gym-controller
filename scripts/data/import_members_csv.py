@@ -141,8 +141,11 @@ def import_members_from_csv(csv_file_path: str, dry_run: bool = False) -> dict:
                     continue
                 
                 # 회원 데이터 생성 (CSV 헤더에 맞춰 수정)
+                customer_number = row['고객번호'].strip()
                 member_data = {
-                    'member_id': row['고객번호'].strip(),
+                    'member_id': customer_number,
+                    'barcode': customer_number,  # 바코드는 고객번호와 동일
+                    'qr_code': None,  # QR 코드는 없음 (추후 추가 가능)
                     'member_name': row['고객명'].strip(),
                     'phone': row.get('핸드폰', '').strip(),
                     'membership_type': parse_membership_type(row.get('프로그램명', '')),

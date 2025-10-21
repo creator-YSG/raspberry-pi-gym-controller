@@ -68,7 +68,9 @@
 
 ```sql
 CREATE TABLE members (
-    member_id           TEXT PRIMARY KEY,      -- 회원번호 (바코드)
+    member_id           TEXT PRIMARY KEY,      -- 고유 회원 ID (변경되지 않는 식별자)
+    barcode             TEXT UNIQUE,           -- 바코드 번호 (인증 수단 1)
+    qr_code             TEXT UNIQUE,           -- QR 코드 (인증 수단 2, 선택적)
     member_name         TEXT NOT NULL,         -- 회원명
     phone               TEXT DEFAULT '',       -- 전화번호
     membership_type     TEXT DEFAULT 'basic',  -- 회원권 유형
@@ -90,7 +92,8 @@ CREATE TABLE members (
 ### 인덱스
 
 ```sql
-CREATE INDEX idx_member_barcode ON members(member_id);
+CREATE INDEX idx_member_barcode ON members(barcode);
+CREATE INDEX idx_member_qr_code ON members(qr_code);
 CREATE INDEX idx_member_status ON members(status);
 CREATE INDEX idx_member_currently_renting ON members(currently_renting);
 ```
@@ -121,11 +124,23 @@ CREATE INDEX idx_member_currently_renting ON members(currently_renting);
 
 | 필드 | 설명 | 비고 |
 |------|------|------|
-| `member_id` | 바코드 스캐너로 읽는 회원번호 | PK, 8자리 숫자 |
+| `member_id` | 고유 회원 ID | PK, 변경되지 않는 식별자 |
+| `barcode` | 바코드 번호 (인증 수단) | UNIQUE, 바코드 스캐너로 읽는 번호 (예: 20240757) |
+| `qr_code` | QR 코드 (인증 수단) | UNIQUE, NULL 가능, 향후 확장용 |
 | `program_name` | CSV에서 가져온 프로그램명 | 예: "1.헬스1개월", "PT 20회" |
 | `expiry_date` | 회원권 만료일 | ISO 8601 형식 (YYYY-MM-DD) |
 | `currently_renting` | 현재 대여중인 락커 번호 | 예: "M09", NULL이면 미대여 |
 | `status` | 회원 상태 | `active`, `expired`, `suspended` |
+
+### 인증 방식 설계
+
+**2025-10-21 업데이트**: 회원 고유 ID와 인증 수단(바코드/QR)을 분리하여 관리합니다.
+
+- **`member_id`**: 회원의 영구적인 고유 식별자로, 시스템 내부에서 사용됩니다.
+- **`barcode`**: 바코드 스캐너로 읽히는 인증 번호입니다. 변경될 수 있습니다.
+- **`qr_code`**: QR 코드 인증을 위한 필드로, 향후 확장을 위해 준비되었습니다.
+
+현재는 `member_id`와 `barcode`가 동일한 값을 사용하지만, 향후 회원 바코드 재발급이나 복수 인증 수단 지원이 가능합니다.
 
 ### 데이터 특징
 

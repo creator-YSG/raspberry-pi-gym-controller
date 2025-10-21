@@ -81,9 +81,25 @@ class BarcodeService:
             import logging
             logger = logging.getLogger(__name__)
             
+            t_auth_start = time.time()
+            # 바코드로 회원 인증
+            member = self.member_service.authenticate_by_barcode(barcode)
+            t_auth_end = time.time()
+            
+            if not member:
+                logger.warning(f'❌ 바코드 인증 실패: {barcode}')
+                return {
+                    'success': False,
+                    'error': '등록되지 않은 바코드입니다.',
+                    'error_type': 'member_not_found',
+                    'member': None
+                }
+            
+            logger.info(f'⏱️ [PERF] 바코드 인증: {(t_auth_end - t_auth_start)*1000:.2f}ms')
+            
+            # 회원 검증 (대여 가능 여부 확인)
             t_validation_start = time.time()
-            # 회원 정보 조회 및 검증
-            validation = self.member_service.validate_member(barcode)
+            validation = self.member_service.validate_member(member.id)
             t_validation_end = time.time()
             
             logger.info(f'⏱️ [PERF] 회원 검증: {(t_validation_end - t_validation_start)*1000:.2f}ms')

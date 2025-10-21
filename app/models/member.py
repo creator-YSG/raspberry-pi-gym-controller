@@ -15,6 +15,9 @@ class Member:
                  program_name: str = '',  # 가입 프로그램명
                  membership_expires: Optional[datetime] = None,
                  status: str = 'active',
+                 # 🆕 인증 정보 (분리됨)
+                 barcode: Optional[str] = None,  # 바코드 번호
+                 qr_code: Optional[str] = None,  # QR 코드
                  # 🆕 새로 추가되는 필드들
                  currently_renting: Optional[str] = None,
                  daily_rental_count: int = 0,
@@ -26,7 +29,9 @@ class Member:
                  gender: str = 'male',  # male, female
                  member_category: str = 'general',  # general, staff
                  customer_type: str = '학부'):
-        self.id = id  # 바코드 ID (member_id)
+        self.id = id  # 고유 회원 ID (member_id)
+        self.barcode = barcode  # 바코드 번호 (인증 수단)
+        self.qr_code = qr_code  # QR 코드 (인증 수단)
         self.name = name  # member_name
         self.phone = phone
         self.membership_type = membership_type  # basic, premium, vip
@@ -52,6 +57,8 @@ class Member:
         return {
             'id': self.id,
             'member_id': self.id,  # 호환성을 위한 별칭
+            'barcode': self.barcode,
+            'qr_code': self.qr_code,
             'name': self.name,
             'member_name': self.name,  # 호환성을 위한 별칭
             'phone': self.phone,
@@ -156,6 +163,8 @@ class Member:
         
         return cls(
             id=row['member_id'],
+            barcode=row['barcode'] if 'barcode' in row.keys() else None,
+            qr_code=row['qr_code'] if 'qr_code' in row.keys() else None,
             name=row['member_name'],
             phone=row['phone'] if 'phone' in row.keys() and row['phone'] else '',
             membership_type=row['membership_type'] if 'membership_type' in row.keys() and row['membership_type'] else 'basic',
@@ -185,6 +194,8 @@ class Member:
         
         return {
             'member_id': self.id,
+            'barcode': self.barcode,
+            'qr_code': self.qr_code,
             'member_name': self.name,
             'phone': self.phone,
             'membership_type': self.membership_type,

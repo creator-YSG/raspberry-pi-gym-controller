@@ -70,6 +70,70 @@ class MemberService:
             logger.error(f"회원 조회 오류: {member_id}, {e}")
             return None
     
+    def authenticate_by_barcode(self, barcode: str) -> Optional[Member]:
+        """바코드로 회원 조회 (인증)
+        
+        Args:
+            barcode: 바코드 번호
+            
+        Returns:
+            Member 객체 또는 None
+        """
+        try:
+            cursor = self.db.execute_query("""
+                SELECT * FROM members 
+                WHERE barcode = ?
+            """, (barcode,))
+            
+            if cursor:
+                row = cursor.fetchone()
+                if row:
+                    member = Member.from_db_row(row)
+                    logger.info(f"바코드 인증 성공: {barcode} → {member.id}")
+                    return member
+                else:
+                    logger.warning(f"바코드 없음: {barcode}")
+                    return None
+            else:
+                logger.error(f"바코드 조회 쿼리 실행 실패: {barcode}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"바코드 인증 오류: {barcode}, {e}")
+            return None
+    
+    def authenticate_by_qr(self, qr_code: str) -> Optional[Member]:
+        """QR 코드로 회원 조회 (인증)
+        
+        Args:
+            qr_code: QR 코드
+            
+        Returns:
+            Member 객체 또는 None
+        """
+        try:
+            cursor = self.db.execute_query("""
+                SELECT * FROM members 
+                WHERE qr_code = ?
+            """, (qr_code,))
+            
+            if cursor:
+                row = cursor.fetchone()
+                if row:
+                    member = Member.from_db_row(row)
+                    logger.info(f"QR 코드 인증 성공: {qr_code} → {member.id}")
+                    return member
+                else:
+                    logger.warning(f"QR 코드 없음: {qr_code}")
+                    return None
+            else:
+                logger.error(f"QR 코드 조회 쿼리 실행 실패: {qr_code}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"QR 코드 인증 오류: {qr_code}, {e}")
+            return None
+    
     def validate_member(self, member_id: str) -> dict:
         """회원 유효성 검증 (대여 가능 여부 포함)
         
@@ -172,6 +236,8 @@ class MemberService:
             # Member 객체 생성
             member = Member(
                 id=member_data['member_id'],
+                barcode=member_data.get('barcode'),
+                qr_code=member_data.get('qr_code'),
                 name=member_data['member_name'],
                 phone=member_data.get('phone', ''),
                 membership_type=member_data.get('membership_type', 'basic'),
@@ -186,12 +252,13 @@ class MemberService:
             db_data = member.to_db_dict()
             self.db.execute_query("""
                 INSERT INTO members (
-                    member_id, member_name, phone, membership_type, program_name,
+                    member_id, barcode, qr_code, member_name, phone, membership_type, program_name,
                     expiry_date, status, currently_renting, daily_rental_count,
                     last_rental_time, sync_date, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
-                db_data['member_id'], db_data['member_name'], db_data['phone'],
+                db_data['member_id'], db_data['barcode'], db_data['qr_code'],
+                db_data['member_name'], db_data['phone'],
                 db_data['membership_type'], db_data['program_name'], db_data['expiry_date'], db_data['status'],
                 db_data['currently_renting'], db_data['daily_rental_count'],
                 db_data['last_rental_time'], db_data['sync_date'],
