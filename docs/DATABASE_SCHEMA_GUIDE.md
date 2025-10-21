@@ -557,10 +557,12 @@ CREATE TABLE system_settings (
 | `transaction_timeout_seconds` | 30 | integer | 트랜잭션 타임아웃 (초) |
 | `max_daily_rentals` | 3 | integer | 일일 최대 대여 횟수 |
 | `sensor_verification_timeout` | 30 | integer | 센서 검증 타임아웃 (초) |
-| `door_auto_close_delay` | 3 | integer | 문 자동 닫힘 지연 (초) |
-| `barcode_polling_interval` | 200 | integer | 바코드 폴링 간격 (ms) |
-| `ui_timeout_seconds` | 20 | integer | UI 타임아웃 (초) |
-| `enable_audit_logging` | true | boolean | 감사 로그 활성화 |
+| `last_sync_time` | (empty) | string | 마지막 구글시트 동기화 시간 |
+| `maintenance_mode` | false | boolean | 유지보수 모드 여부 |
+| `sync_interval_minutes` | 30 | integer | 구글시트 동기화 간격 (분) |
+| `system_version` | 1.0.0 | string | 시스템 버전 |
+
+**참고**: 일부 설정값(문 자동 닫힘 지연, 바코드 폴링 간격, UI 타임아웃)은 코드에 하드코딩되어 있으며 DB에 저장되지 않습니다.
 
 ---
 
