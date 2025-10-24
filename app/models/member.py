@@ -18,6 +18,8 @@ class Member:
                  # 🆕 인증 정보 (분리됨)
                  barcode: Optional[str] = None,  # 바코드 번호
                  qr_code: Optional[str] = None,  # QR 코드
+                 # 🆕 연락처 정보
+                 email: str = '',  # 이메일 주소
                  # 🆕 새로 추가되는 필드들
                  currently_renting: Optional[str] = None,
                  daily_rental_count: int = 0,
@@ -33,6 +35,7 @@ class Member:
         self.barcode = barcode  # 바코드 번호 (인증 수단)
         self.qr_code = qr_code  # QR 코드 (인증 수단)
         self.name = name  # member_name
+        self.email = email  # 이메일 주소
         self.phone = phone
         self.membership_type = membership_type  # basic, premium, vip
         self.program_name = program_name  # 가입 프로그램명 (예: 1.헬스1개월)
@@ -61,6 +64,7 @@ class Member:
             'qr_code': self.qr_code,
             'name': self.name,
             'member_name': self.name,  # 호환성을 위한 별칭
+            'email': self.email,
             'phone': self.phone,
             'membership_type': self.membership_type,
             'program_name': self.program_name,
@@ -166,6 +170,7 @@ class Member:
             barcode=row['barcode'] if 'barcode' in row.keys() else None,
             qr_code=row['qr_code'] if 'qr_code' in row.keys() else None,
             name=row['member_name'],
+            email=row['email'] if 'email' in row.keys() and row['email'] else '',
             phone=row['phone'] if 'phone' in row.keys() and row['phone'] else '',
             membership_type=row['membership_type'] if 'membership_type' in row.keys() and row['membership_type'] else 'basic',
             program_name=row['program_name'] if 'program_name' in row.keys() and row['program_name'] else '',
@@ -197,6 +202,7 @@ class Member:
             'barcode': self.barcode,
             'qr_code': self.qr_code,
             'member_name': self.name,
+            'email': self.email,
             'phone': self.phone,
             'membership_type': self.membership_type,
             'program_name': self.program_name,

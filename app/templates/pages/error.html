@@ -6,48 +6,46 @@
 
 {% block content %}
 <div class="error-container">
-    <!-- 에러 아이콘 -->
+    <!-- 상단: 날짜/시간/상태 -->
+    <div class="datetime-header">
+        <div class="datetime-info">
+            <div class="header-date" id="headerDate"></div>
+            <div class="header-time" id="headerTime"></div>
+        </div>
+        <div class="header-status">
+            <span class="status-dot status-error">●</span>
+        </div>
+    </div>
+
+    <!-- 에러 타이틀 -->
     <div class="error-animation">
-        {% if error_type == 'member_not_found' %}
-        <div class="error-icon">❌</div>
-        <h1 class="error-title">등록되지 않은 회원입니다</h1>
+        <div class="error-icon-circle">
+            <span class="error-x">✕</span>
+        </div>
         
-        {% elif error_type == 'member_expired' %}
-        <div class="error-icon">⏰</div>
-        <h1 class="error-title">회원권이 만료되었습니다</h1>
-        
-        {% elif error_type == 'access_denied' %}
-        <div class="error-icon">🚫</div>
-        <h1 class="error-title">이 구역을 사용할 수 없습니다</h1>
-        
-        {% elif error_type == 'locker_occupied' %}
-        <div class="error-icon">🔒</div>
-        <h1 class="error-title">이미 대여 중인 락커입니다</h1>
-        
-        {% elif error_type == 'no_available_lockers' %}
-        <div class="error-icon">📭</div>
-        <h1 class="error-title">사용 가능한 락커가 없습니다</h1>
-        
-        {% elif error_type == 'already_rented' %}
-        <div class="error-icon">⚠️</div>
-        <h1 class="error-title">이미 락커를 대여 중입니다</h1>
-        
-        {% elif error_type == 'not_rented' %}
-        <div class="error-icon">⚠️</div>
-        <h1 class="error-title">대여 중인 락커가 없습니다</h1>
-        
-        {% elif error_type == 'wrong_locker' %}
-        <div class="error-icon">❌</div>
-        <h1 class="error-title">잘못된 락커입니다</h1>
-        
-        {% elif error_type == 'system_error' %}
-        <div class="error-icon">⚙️</div>
-        <h1 class="error-title">시스템 오류</h1>
-        
-        {% else %}
-        <div class="error-icon">❗</div>
-        <h1 class="error-title">오류가 발생했습니다</h1>
-        {% endif %}
+        <h1 class="error-title">
+            {% if error_type == 'member_not_found' %}
+            등록되지 않은 회원입니다
+            {% elif error_type == 'member_expired' %}
+            회원권이 만료되었습니다
+            {% elif error_type == 'access_denied' %}
+            이 구역을 사용할 수 없습니다
+            {% elif error_type == 'locker_occupied' %}
+            이미 대여 중인 락커입니다
+            {% elif error_type == 'no_available_lockers' %}
+            사용 가능한 락커가 없습니다
+            {% elif error_type == 'already_rented' %}
+            이미 락커를 대여 중입니다
+            {% elif error_type == 'not_rented' %}
+            대여 중인 락커가 없습니다
+            {% elif error_type == 'wrong_locker' %}
+            잘못된 락커입니다
+            {% elif error_type == 'system_error' %}
+            시스템 오류
+            {% else %}
+            오류가 발생했습니다
+            {% endif %}
+        </h1>
     </div>
 
     <!-- 에러 메시지 -->
@@ -84,7 +82,7 @@
     <!-- 안내 메시지 -->
     {% if error_type in ['member_not_found', 'member_expired'] %}
     <div class="help-box">
-        <p class="help-text">📞 문의: 헬스장 프론트 데스크</p>
+        <p class="help-text">문의: 헬스장 프론트 데스크</p>
     </div>
     {% endif %}
 
@@ -98,7 +96,6 @@
 
     <!-- 수동 복귀 버튼 -->
     <button class="back-button" onclick="goHome()">
-        <span class="back-icon">🏠</span>
         <span class="back-text">처음으로 돌아가기</span>
     </button>
 </div>
@@ -108,8 +105,33 @@
 <script>
 let countdownValue = 5;
 
+// 날짜/시간 업데이트
+function updateDateTime() {
+    const now = new Date();
+    
+    const dateString = now.toLocaleDateString('ko-KR', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        weekday: 'long'
+    });
+    document.getElementById('headerDate').textContent = dateString;
+    
+    const timeString = now.toLocaleTimeString('ko-KR', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+    });
+    document.getElementById('headerTime').textContent = timeString;
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     console.log('❌ 에러 화면:', '{{ error_type }}');
+    
+    // 날짜/시간 업데이트
+    updateDateTime();
+    setInterval(updateDateTime, 1000);
     
     // 카운트다운 시작
     const countdownInterval = setInterval(function() {
@@ -128,4 +150,3 @@ function goHome() {
 }
 </script>
 {% endblock %}
-

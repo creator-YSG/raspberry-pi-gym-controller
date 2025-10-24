@@ -30,123 +30,176 @@ body {
 .home-container {
     display: flex;
     flex-direction: column;
+    justify-content: space-between;
     width: 100vw;
     height: 100vh;
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    justify-content: center;
-    align-items: center;
-    position: relative;
-    overflow: hidden;
-}
-
-.scan-prompt {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    text-align: center;
     padding: 20px;
-    max-width: 600px;
+    overflow: hidden;
+    box-sizing: border-box;
 }
 
-.gym-logo {
-    font-size: 80px;
-    margin-bottom: 15px;
-    animation: float 3s ease-in-out infinite;
+/* 날짜/시간 섹션 */
+.datetime-section {
+    text-align: center;
+    margin-bottom: 20px;
+    flex-shrink: 0;
 }
 
-@keyframes float {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-15px); }
-}
-
-.main-title {
-    font-size: 38px;
-    font-weight: bold;
-    color: white;
-    margin-bottom: 40px;
-    text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.3);
-}
-
-.scan-instruction {
-    margin: 30px 0;
-}
-
-.arrow-animation {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    align-items: center;
-    margin-bottom: 30px;
-}
-
-.arrow {
-    font-size: 50px;
-    color: rgba(255, 255, 255, 0.9);
-    animation: arrowBounce 1.5s ease-in-out infinite;
-}
-
-.arrow:nth-child(2) {
-    animation-delay: 0.2s;
-}
-
-.arrow:nth-child(3) {
-    animation-delay: 0.4s;
-}
-
-@keyframes arrowBounce {
-    0%, 100% { transform: translateY(0); opacity: 0.4; }
-    50% { transform: translateY(12px); opacity: 1; }
-}
-
-.scan-text {
-    font-size: 28px;
-    font-weight: bold;
+.current-date {
+    font-size: 24px;
+    font-weight: 600;
     color: white;
     text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+    margin-bottom: 8px;
 }
 
-.barcode-icon {
-    font-size: 60px;
-    margin-top: 25px;
-    opacity: 0.9;
+.current-time {
+    font-size: 48px;
+    font-weight: 900;
+    color: white;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+    letter-spacing: 2px;
 }
 
-.status-footer {
+/* 스캔 비주얼 섹션 */
+.scan-visual {
+    flex: 1;
     display: flex;
-    justify-content: space-around;
-    padding: 15px;
-    background: rgba(0, 0, 0, 0.3);
-    backdrop-filter: blur(10px);
+    justify-content: center;
+    align-items: center;
+    gap: 40px;
 }
 
-.status-item {
+/* 바코드 일러스트 (CSS) */
+.barcode-illustration {
+    width: 180px;
+    height: 200px;
+    background: white;
+    border-radius: 15px;
+    padding: 20px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    position: relative;
     display: flex;
     flex-direction: column;
-    align-items: center;
+    justify-content: space-around;
+    animation: pulse 2s ease-in-out infinite;
 }
 
-.status-label {
+.barcode-illustration::before {
+    content: '';
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    right: 20px;
+    height: 120px;
+    background: repeating-linear-gradient(
+        90deg,
+        #333 0px,
+        #333 4px,
+        transparent 4px,
+        transparent 8px,
+        #333 8px,
+        #333 10px,
+        transparent 10px,
+        transparent 16px,
+        #333 16px,
+        #333 18px,
+        transparent 18px,
+        transparent 22px
+    );
+    border-radius: 5px;
+}
+
+.barcode-illustration::after {
+    content: 'BARCODE';
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
     font-size: 14px;
-    color: rgba(255, 255, 255, 0.7);
-    margin-bottom: 5px;
-}
-
-.status-value {
-    font-size: 18px;
     font-weight: bold;
-    color: white;
+    color: #333;
+    letter-spacing: 2px;
 }
 
-.status-ok {
-    color: #4ade80;
+/* QR 일러스트 (CSS) */
+.qr-illustration {
+    width: 180px;
+    height: 200px;
+    background: white;
+    border-radius: 15px;
+    padding: 20px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    position: relative;
+    animation: pulse 2s ease-in-out infinite 0.5s;
 }
 
-.status-error {
-    color: #ef4444;
+.qr-illustration::before {
+    content: '';
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    width: 140px;
+    height: 140px;
+    background: 
+        linear-gradient(#333 0 0) 0 0/30px 10px,
+        linear-gradient(#333 0 0) 0 0/10px 30px,
+        linear-gradient(#333 0 0) 100% 0/30px 10px,
+        linear-gradient(#333 0 0) 100% 0/10px 30px,
+        linear-gradient(#333 0 0) 0 100%/30px 10px,
+        linear-gradient(#333 0 0) 0 100%/10px 30px,
+        linear-gradient(#333 0 0) 100% 100%/30px 10px,
+        linear-gradient(#333 0 0) 100% 100%/10px 30px;
+    background-repeat: no-repeat;
 }
 
+.qr-illustration::after {
+    content: 'QR CODE';
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 14px;
+    font-weight: bold;
+    color: #333;
+    letter-spacing: 2px;
+}
+
+@keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+}
+
+/* 스캔 안내 메시지 */
+.scan-message {
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 20px;
+    padding: 30px 20px;
+    text-align: center;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    border: 3px solid rgba(255, 255, 255, 0.5);
+    font-size: 32px;
+    font-weight: bold;
+    color: #667eea;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.1);
+    flex-shrink: 0;
+}
+
+/* 시스템 상태 */
+.system-status {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+}
+
+.status-indicator {
+    font-size: 20px;
+    color: #4caf50;
+    filter: drop-shadow(0 0 5px currentColor);
+}
+
+/* 관리자 트리거 */
 .admin-trigger {
     position: fixed;
     bottom: 0;
@@ -157,6 +210,7 @@ body {
     cursor: pointer;
 }
 
+/* 바코드 입력 숨김 */
 .barcode-hidden-input {
     position: absolute;
     left: -9999px;
@@ -485,10 +539,12 @@ body {
 .member-check-container {
     display: flex;
     flex-direction: column;
+    justify-content: space-between;
     height: 100vh;
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    padding: 15px;
-    overflow-y: auto;
+    padding: 20px;
+    overflow: hidden; /* 스크롤 방지 */
+    box-sizing: border-box;
 }
 
 .member-info-section {
@@ -770,6 +826,224 @@ body {
     color: rgba(255, 255, 255, 0.9);
 }
 
+/* ===== 공통 날짜/시간/상태 헤더 ===== */
+.datetime-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    flex-shrink: 0;
+}
+
+.datetime-info {
+    text-align: left;
+}
+
+.header-date {
+    font-size: 16px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.9);
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
+    margin-bottom: 4px;
+}
+
+.header-time {
+    font-size: 32px;
+    font-weight: 900;
+    color: white;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+    letter-spacing: 1px;
+}
+
+.header-status {
+    text-align: right;
+}
+
+.status-dot {
+    font-size: 24px;
+    color: #4caf50;
+    filter: drop-shadow(0 0 5px currentColor);
+}
+
+.status-dot.status-error {
+    color: #ff6b6b;
+}
+
+/* ===== 단순화된 회원 확인 화면 ===== */
+/* 인사말 */
+.greeting-section {
+    text-align: center;
+    margin-bottom: 15px;
+    flex-shrink: 0;
+}
+
+.greeting-text {
+    font-size: 32px;
+    font-weight: bold;
+    color: white;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+    margin: 0;
+}
+
+/* 회원 정보 (세로로) */
+.member-info-vertical {
+    background: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(10px);
+    border-radius: 20px;
+    padding: 20px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    flex-shrink: 0;
+}
+
+.info-row {
+    padding: 8px 0;
+}
+
+.info-value-large {
+    font-size: 32px;
+    font-weight: bold;
+    color: white;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.info-suffix {
+    font-size: 28px;
+    font-weight: 500;
+}
+
+.info-value-huge {
+    font-size: 40px;
+    font-weight: bold;
+    color: #fbbf24;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.days-number-huge {
+    font-size: 80px;
+    font-weight: 900;
+    color: #fbbf24;
+    text-shadow: 3px 3px 6px rgba(0, 0, 0, 0.4);
+}
+
+.days-unit {
+    font-size: 32px;
+    font-weight: 600;
+    color: white;
+    margin-left: 10px;
+}
+
+.info-value-medium {
+    font-size: 24px;
+    font-weight: 600;
+    color: white;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.days-row {
+    border-top: 2px solid rgba(255, 255, 255, 0.2);
+    border-bottom: 2px solid rgba(255, 255, 255, 0.2);
+    padding: 15px 0;
+}
+
+/* 프로세스 안내 메시지 + 타이머 */
+.process-message-with-timer {
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 20px;
+    padding: 25px 20px;
+    text-align: center;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    border: 3px solid rgba(255, 255, 255, 0.5);
+    flex-shrink: 0;
+}
+
+/* CSS 키 아이콘 */
+.key-icon {
+    width: 50px;
+    height: 50px;
+    margin: 0 auto 15px;
+    position: relative;
+}
+
+.rental-key::before {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 20px;
+    height: 20px;
+    border: 4px solid #667eea;
+    border-radius: 50%;
+}
+
+.rental-key::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(0, -50%);
+    width: 20px;
+    height: 8px;
+    background: #667eea;
+}
+
+.return-key::before {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 20px;
+    height: 20px;
+    border: 4px solid #4caf50;
+    border-radius: 50%;
+}
+
+.return-key::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(0, -50%);
+    width: 20px;
+    height: 8px;
+    background: #4caf50;
+}
+
+.process-text {
+    font-size: 28px;
+    font-weight: bold;
+    color: #667eea;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.1);
+    margin-bottom: 15px;
+}
+
+/* 타이머 */
+.timer-display {
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 2px solid rgba(102, 126, 234, 0.3);
+}
+
+.timer-number {
+    font-size: 48px;
+    font-weight: 900;
+    color: #667eea;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+    transition: color 0.3s ease;
+}
+
+.timer-unit {
+    font-size: 28px;
+    font-weight: 600;
+    color: #667eea;
+    margin-left: 8px;
+}
+
 .locker-detected {
     position: fixed;
     top: 50%;
@@ -809,30 +1083,110 @@ body {
 .complete-container {
     display: flex;
     flex-direction: column;
-    justify-content: center;
-    align-items: center;
+    justify-content: space-between;
     height: 100vh;
     background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-    padding: 40px;
-    text-align: center;
+    padding: 20px;
+    box-sizing: border-box;
+    overflow: hidden;
 }
 
 .success-animation {
     position: relative;
-    margin-bottom: 50px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex: 1;
 }
 
-.success-icon {
-    font-size: 120px;
+/* CSS 체크마크 아이콘 */
+.success-checkmark {
+    width: 120px;
+    height: 120px;
+    margin: 0 auto;
     position: relative;
-    z-index: 2;
-    animation: successPop 0.6s ease-out;
 }
 
-@keyframes successPop {
+.check-icon {
+    width: 120px;
+    height: 120px;
+    position: relative;
+    border-radius: 50%;
+    box-sizing: content-box;
+    border: 5px solid #4ade80;
+    background: rgba(255, 255, 255, 0.1);
+    animation: scaleAnimation 0.5s ease-in-out;
+}
+
+.check-icon .icon-line {
+    height: 6px;
+    background-color: #4ade80;
+    display: block;
+    border-radius: 3px;
+    position: absolute;
+    z-index: 10;
+}
+
+.check-icon .line-tip {
+    top: 60px;
+    left: 25px;
+    width: 30px;
+    transform: rotate(45deg);
+    animation: tipAnimation 0.75s 0.2s ease-in-out;
+    animation-fill-mode: both;
+}
+
+.check-icon .line-long {
+    top: 53px;
+    right: 15px;
+    width: 60px;
+    transform: rotate(-45deg);
+    animation: longAnimation 0.75s 0.4s ease-in-out;
+    animation-fill-mode: both;
+}
+
+.check-icon .icon-circle {
+    top: -5px;
+    left: -5px;
+    z-index: 10;
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    position: absolute;
+    box-sizing: content-box;
+    border: 5px solid rgba(74, 222, 128, 0.5);
+    animation: circleAnimation 0.5s ease-in-out;
+}
+
+.check-icon .icon-fix {
+    top: 10px;
+    width: 10px;
+    left: 32px;
+    z-index: 1;
+    height: 100px;
+    position: absolute;
+    transform: rotate(-45deg);
+    background-color: #10b981;
+}
+
+@keyframes scaleAnimation {
+    0% { transform: scale(0); }
+    100% { transform: scale(1); }
+}
+
+@keyframes circleAnimation {
     0% { transform: scale(0) rotate(0deg); }
-    50% { transform: scale(1.2) rotate(180deg); }
     100% { transform: scale(1) rotate(360deg); }
+}
+
+@keyframes tipAnimation {
+    0% { width: 0; left: 5px; top: 25px; }
+    100% { width: 30px; left: 25px; top: 60px; }
+}
+
+@keyframes longAnimation {
+    0% { width: 0; right: 52px; top: 70px; }
+    100% { width: 60px; right: 15px; top: 53px; }
 }
 
 .success-circle {
@@ -936,21 +1290,42 @@ body {
 .error-container {
     display: flex;
     flex-direction: column;
-    justify-content: center;
-    align-items: center;
+    justify-content: space-between;
     height: 100vh;
     background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-    padding: 40px;
+    padding: 20px;
+    box-sizing: border-box;
+    overflow: hidden;
     text-align: center;
 }
 
 .error-animation {
-    margin-bottom: 40px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    flex: 1;
 }
 
-.error-icon {
-    font-size: 120px;
+/* CSS X 아이콘 */
+.error-icon-circle {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    border: 5px solid #ff6b6b;
+    background: rgba(255, 255, 255, 0.1);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: 0 auto 30px;
     animation: shake 0.5s ease-out;
+}
+
+.error-x {
+    font-size: 80px;
+    font-weight: bold;
+    color: #ff6b6b;
+    line-height: 1;
 }
 
 @keyframes shake {

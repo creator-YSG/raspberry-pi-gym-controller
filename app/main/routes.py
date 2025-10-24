@@ -93,6 +93,22 @@ def member_check():
                 try:
                     return_barcode_time = datetime.now().isoformat()
                     
+                    # 현재 대여 중인 락커 번호 조회
+                    current_rental = locker_service.db.fetch_one("""
+                        SELECT locker_number 
+                        FROM rentals 
+                        WHERE member_id = ? AND status = 'active'
+                        ORDER BY rental_time DESC 
+                        LIMIT 1
+                    """, (member_id,))
+                    
+                    if current_rental:
+                        member_dict['current_locker'] = current_rental[0]
+                        current_app.logger.info(f'🔍 현재 대여 중인 락커: {current_rental[0]}')
+                    else:
+                        member_dict['current_locker'] = None
+                        current_app.logger.warning(f'⚠️ 회원 {member_id}의 대여 기록 없음')
+                    
                     # 활성 대여 레코드에 return_barcode_time 업데이트
                     locker_service.db.execute_query("""
                         UPDATE rentals 

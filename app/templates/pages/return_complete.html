@@ -6,10 +6,27 @@
 
 {% block content %}
 <div class="complete-container">
+    <!-- 상단: 날짜/시간/상태 -->
+    <div class="datetime-header">
+        <div class="datetime-info">
+            <div class="header-date" id="headerDate"></div>
+            <div class="header-time" id="headerTime"></div>
+        </div>
+        <div class="header-status">
+            <span class="status-dot">●</span>
+        </div>
+    </div>
+
     <!-- 성공 아이콘 -->
     <div class="success-animation">
-        <div class="success-icon">✅</div>
-        <div class="success-circle"></div>
+        <div class="success-checkmark">
+            <div class="check-icon">
+                <span class="icon-line line-tip"></span>
+                <span class="icon-line line-long"></span>
+                <div class="icon-circle"></div>
+                <div class="icon-fix"></div>
+            </div>
+        </div>
     </div>
 
     <!-- 완료 메시지 -->
@@ -25,8 +42,8 @@
 
     <!-- 안내 메시지 -->
     <div class="instruction-box">
-        <p class="instruction-line">💚 이용해 주셔서 감사합니다</p>
-        <p class="instruction-line">👋 다음에 또 만나요!</p>
+        <p class="instruction-line">이용해 주셔서 감사합니다</p>
+        <p class="instruction-line">다음에 또 만나요!</p>
     </div>
 
     <!-- 자동 복귀 안내 -->
@@ -43,8 +60,33 @@
 <script>
 let countdownValue = 3;
 
+// 날짜/시간 업데이트
+function updateDateTime() {
+    const now = new Date();
+    
+    const dateString = now.toLocaleDateString('ko-KR', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        weekday: 'long'
+    });
+    document.getElementById('headerDate').textContent = dateString;
+    
+    const timeString = now.toLocaleTimeString('ko-KR', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+    });
+    document.getElementById('headerTime').textContent = timeString;
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     console.log('✅ 반납 완료 화면');
+    
+    // 날짜/시간 업데이트
+    updateDateTime();
+    setInterval(updateDateTime, 1000);
     
     // 카운트다운 시작
     const countdownInterval = setInterval(function() {
@@ -53,11 +95,9 @@ document.addEventListener('DOMContentLoaded', function() {
         
         if (countdownValue <= 0) {
             clearInterval(countdownInterval);
-            // 홈으로 이동
             window.location.href = '/';
         }
     }, 1000);
 });
 </script>
 {% endblock %}
-

@@ -6,34 +6,29 @@
 
 {% block content %}
 <div class="home-container">
-    <!-- 메인 안내 -->
-    <div class="scan-prompt">
-        <div class="gym-logo">🏋️</div>
-        <h1 class="main-title">헬스장 락카키 대여기</h1>
-        <div class="scan-instruction">
-            <div class="arrow-animation">
-                <div class="arrow">↓</div>
-                <div class="arrow">↓</div>
-                <div class="arrow">↓</div>
-            </div>
-            <p class="scan-text">바코드를 스캔해주세요</p>
-        </div>
-        <div class="barcode-icon">📱</div>
+    <!-- 상단: 날짜/시간 -->
+    <div class="datetime-section">
+        <div class="current-date" id="currentDate"></div>
+        <div class="current-time" id="currentTime"></div>
     </div>
 
-    <!-- 하단 상태 정보 -->
-    <div class="status-footer">
-        <div class="status-item">
-            <span class="status-label">시스템 상태</span>
-            <span class="status-value status-ok" id="systemStatus">● 정상</span>
-        </div>
-        <div class="status-item">
-            <span class="status-label">현재 시각</span>
-            <span class="status-value" id="currentTime"></span>
-        </div>
+    <!-- 중앙: 바코드/QR 일러스트 -->
+    <div class="scan-visual">
+        <div class="barcode-illustration"></div>
+        <div class="qr-illustration"></div>
     </div>
 
-    <!-- 숨겨진 관리자 버튼 (좌측 하단 모서리 길게 누르면 표시) -->
+    <!-- 하단: 안내 멘트 -->
+    <div class="scan-message">
+        바코드 또는 QR코드를 스캔해주세요
+    </div>
+
+    <!-- 시스템 상태 (작게) -->
+    <div class="system-status">
+        <span class="status-indicator" id="systemStatus">●</span>
+    </div>
+
+    <!-- 숨겨진 관리자 버튼 -->
     <div class="admin-trigger" id="adminTrigger"></div>
 </div>
 
@@ -51,9 +46,9 @@ let barcodeTimeout = null;
 document.addEventListener('DOMContentLoaded', function() {
     console.log('락카키 대여기 시작');
     
-    // 시간 업데이트
-    updateTime();
-    setInterval(updateTime, 1000);
+    // 날짜/시간 업데이트
+    updateDateTime();
+    setInterval(updateDateTime, 1000);
     
     // WebSocket 연결
     connectWebSocket();
@@ -61,10 +56,10 @@ document.addEventListener('DOMContentLoaded', function() {
     // 하드웨어 바코드 스캐너 리스닝
     setupBarcodeScanner();
     
-    // 숨겨진 관리자 모드 (좌측 하단 5초 누르기)
+    // 숨겨진 관리자 모드 (좌측 하단 3초 누르기)
     setupAdminTrigger();
     
-    // 바코드 폴링 (200ms마다 체크 - 빠른 응답)
+    // 바코드 폴링 (200ms마다 체크)
     setInterval(function() {
         const t_poll_start = performance.now();
         fetch('/api/barcode/poll')
@@ -87,14 +82,24 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
-// 현재 시각 업데이트
-function updateTime() {
+// 날짜/시간 업데이트
+function updateDateTime() {
     const now = new Date();
-    const timeString = now.toLocaleString('ko-KR', {
-        month: '2-digit',
-        day: '2-digit',
+    
+    // 날짜
+    const dateString = now.toLocaleDateString('ko-KR', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        weekday: 'long'
+    });
+    document.getElementById('currentDate').textContent = dateString;
+    
+    // 시간
+    const timeString = now.toLocaleTimeString('ko-KR', {
         hour: '2-digit',
         minute: '2-digit',
+        second: '2-digit',
         hour12: false
     });
     document.getElementById('currentTime').textContent = timeString;
@@ -107,15 +112,17 @@ function connectWebSocket() {
         
         socket.on('connect', function() {
             console.log('WebSocket 연결됨');
-            document.getElementById('systemStatus').textContent = '● 정상';
-            document.getElementById('systemStatus').className = 'status-value status-ok';
+            const statusEl = document.getElementById('systemStatus');
+            statusEl.textContent = '●';
+            statusEl.style.color = '#4caf50';
             socket.emit('join', { room: 'kiosk' });
         });
         
         socket.on('disconnect', function() {
             console.log('WebSocket 연결 끊김');
-            document.getElementById('systemStatus').textContent = '● 연결 끊김';
-            document.getElementById('systemStatus').className = 'status-value status-error';
+            const statusEl = document.getElementById('systemStatus');
+            statusEl.textContent = '●';
+            statusEl.style.color = '#ff6b6b';
         });
         
         // 바코드 감지 이벤트 (ESP32에서)
@@ -145,16 +152,13 @@ function connectWebSocket() {
 
 // 하드웨어 바코드 스캐너 리스닝
 function setupBarcodeScanner() {
-    // 숨김 입력 필드에 항상 포커스 유지
     const barcodeInput = document.getElementById('barcodeInput');
     barcodeInput.focus();
     
-    // 클릭 시 다시 포커스
     document.addEventListener('click', function() {
         barcodeInput.focus();
     });
     
-    // input 필드에서 직접 입력 감지
     barcodeInput.addEventListener('input', function(e) {
         const value = e.target.value;
         if (value.length > 0) {
@@ -162,9 +166,7 @@ function setupBarcodeScanner() {
         }
     });
     
-    // 키 다운 감지 (모든 키)
     document.addEventListener('keydown', function(e) {
-        // Enter키면 바코드 완성
         if (e.key === 'Enter' || e.keyCode === 13) {
             const inputValue = barcodeInput.value;
             const finalBarcode = inputValue || barcodeBuffer;
@@ -179,11 +181,9 @@ function setupBarcodeScanner() {
             return false;
         }
         
-        // 숫자나 문자 입력 시 버퍼에 추가
         if (e.key && e.key.length === 1) {
             barcodeBuffer += e.key;
             
-            // 타임아웃 리셋
             clearTimeout(barcodeTimeout);
             barcodeTimeout = setTimeout(function() {
                 if (barcodeBuffer.length > 0) {
@@ -205,7 +205,6 @@ function handleBarcodeScanned(barcode) {
     const t_start = performance.now();
     console.log('⏱️ [PERF-UI] 바코드 처리 시작:', barcode);
     
-    // 서버로 바코드 전송
     const t_api_start = performance.now();
     fetch('/api/barcode/process', {
         method: 'POST',
@@ -226,7 +225,6 @@ function handleBarcodeScanned(barcode) {
         
         if (data.success) {
             const t_navigate_start = performance.now();
-            // 성공 시 화면 전환
             if (data.action === 'rental') {
                 navigateTo('member-check', { member_id: data.member_id, action: 'rental' });
             } else if (data.action === 'return') {
@@ -235,7 +233,6 @@ function handleBarcodeScanned(barcode) {
             console.log(`⏱️ [PERF-UI] 화면 전환 시작: ${(performance.now() - t_navigate_start).toFixed(2)}ms`);
             console.log(`⏱️ [PERF-UI] === 전체 프로세스: ${(performance.now() - t_start).toFixed(2)}ms ===`);
         } else {
-            // 에러 시 에러 화면
             navigateTo('error', { 
                 type: data.error_type || 'unknown',
                 message: data.error || '바코드 처리 중 오류가 발생했습니다.'
@@ -267,7 +264,7 @@ function setupAdminTrigger() {
     trigger.addEventListener('mousedown', function() {
         pressTimer = setTimeout(function() {
             openAdminMode();
-        }, 3000); // 3초 누르기
+        }, 3000);
     });
     
     trigger.addEventListener('mouseup', function() {
@@ -300,4 +297,3 @@ document.addEventListener('keydown', function(e) {
 });
 </script>
 {% endblock %}
-

@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS members (
     barcode TEXT UNIQUE,                 -- 바코드 번호 (인증 수단 1)
     qr_code TEXT UNIQUE,                 -- QR 코드 (인증 수단 2, 선택적)
     member_name TEXT NOT NULL,           -- 회원명
+    email TEXT DEFAULT '',               -- 이메일 주소
     phone TEXT DEFAULT '',               -- 전화번호
     membership_type TEXT DEFAULT 'basic', -- 회원권 종류 (basic, premium, vip)
     program_name TEXT DEFAULT '',        -- 가입 프로그램명 (예: 1.헬스1개월, 1.헬스3+1)
