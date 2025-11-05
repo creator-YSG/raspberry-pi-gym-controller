@@ -288,22 +288,18 @@
                 
                 if (state === 'HIGH') {
                     // 락커키 제거됨 (IR 센서: HIGH = 물체 감지 안 됨)
-                    detectedNumber.textContent = lockerId;
-                    detectedDiv.classList.remove('hidden');
-                    detectedDiv.classList.add('show');
-                    
-                    // 대여 액션이면 대여 프로세스 진행
+                    // 대여 액션이면 알림 없이 바로 대여 프로세스 진행
                     if (actionType === 'rental') {
                         console.log('[RENTAL] 락커키 제거 감지:', lockerId);
                         processRental(lockerId);
                     }
                 } else if (state === 'LOW') {
                     // 락커키 삽입됨 (IR 센서: LOW = 물체 감지됨)
+                    // 반납 액션이면 알림 표시 후 반납 프로세스 진행
                     detectedNumber.textContent = lockerId;
                     detectedDiv.classList.remove('hidden');
                     detectedDiv.classList.add('show');
                     
-                    // 반납 액션이면 반납 프로세스 진행
                     if (actionType === 'return') {
                         console.log('[RETURN] 락커키 삽입 감지:', lockerId);
                         processReturn(lockerId);
@@ -388,17 +384,6 @@
     function processReturn(lockerNumber) {
         console.log('[RETURN] 반납 처리 시작:', lockerNumber);
         
-        // 타임아웃 취소
-        if (timeoutHandler) {
-            clearTimeout(timeoutHandler);
-        }
-        if (timerInterval) {
-            clearInterval(timerInterval);
-        }
-        
-        // 센서 폴링 중지
-        stopSensorPolling();
-        
         document.getElementById('waitingSection').style.display = 'block';
         
         fetch('/api/rentals/process', {
@@ -417,24 +402,52 @@
             console.log('[RETURN] 반납 처리 완료:', data);
             
             if (data.success) {
+                // 성공: 센서 폴링 중지, 타이머 정리
+                stopSensorPolling();
+                if (timeoutHandler) {
+                    clearTimeout(timeoutHandler);
+                }
+                if (timerInterval) {
+                    clearInterval(timerInterval);
+                }
+                
                 // 반납 완료 페이지로 이동
                 window.location.href = `/return-complete?member_id=${memberData.member_id}&locker=${lockerNumber}`;
             } else if (data.error_code === 'WRONG_LOCKER') {
-                // 잘못된 락커에 삽입 - 경고만 표시하고 재시도 허용
+                // 잘못된 락커: 경고만 표시, 센서는 계속 감지, 타이머는 계속 진행
                 console.warn('[RETURN] 잘못된 락커:', data.message);
+                
+                // 경고 표시
                 showWrongLockerWarning(data.message);
                 
-                // processedSensors 클리어하고 폴링 재시작
-                processedSensors.clear();
-                startSensorPolling();
-                
-                document.getElementById('waitingSection').style.display = 'none';
+                // 3초 후 경고만 숨김 (센서는 계속 감지 중)
+                setTimeout(() => {
+                    document.getElementById('waitingSection').style.display = 'none';
+                }, 3000);
             } else {
+                // 기타 에러: 센서 폴링 중지, 타이머 정리 후 에러 페이지로
+                stopSensorPolling();
+                if (timeoutHandler) {
+                    clearTimeout(timeoutHandler);
+                }
+                if (timerInterval) {
+                    clearInterval(timerInterval);
+                }
+                
                 console.error('[RETURN] 반납 실패:', data.error);
                 window.location.href = '/error?message=' + encodeURIComponent(data.error || '반납 처리 중 오류가 발생했습니다');
             }
         })
         .catch(error => {
+            // API 오류: 센서 폴링 중지, 타이머 정리 후 에러 페이지로
+            stopSensorPolling();
+            if (timeoutHandler) {
+                clearTimeout(timeoutHandler);
+            }
+            if (timerInterval) {
+                clearInterval(timerInterval);
+            }
+            
             console.error('[RETURN] 반납 API 오류:', error);
             window.location.href = '/error?message=시스템 오류가 발생했습니다';
         });
@@ -445,12 +458,18 @@
         if (waitingSection) {
             waitingSection.style.display = 'block';
             waitingSection.innerHTML = `
-                <div style="color: #ff6b6b; font-size: 1.8rem; font-weight: bold; margin-bottom: 15px;">
+                <div id="wrongLockerWarning" style="font-size: 1.8rem; font-weight: bold; margin-bottom: 15px; animation: blink 0.5s linear infinite;">
                     ⚠️ ${message}
                 </div>
                 <div style="font-size: 1.3rem; color: white;">
                     올바른 락커에 다시 꽂아주세요
                 </div>
+                <style>
+                    @keyframes blink {
+                        0%, 49% { color: #ff6b6b; opacity: 1; }
+                        50%, 100% { color: #ff0000; opacity: 0.3; }
+                    }
+                </style>
             `;
         }
     }

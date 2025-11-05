@@ -35,34 +35,56 @@ class SensorEventHandler:
     def _build_sensor_locker_map(self) -> Dict[int, str]:
         """센서 번호와 락카 ID 매핑 테이블 생성
         
+        설정 파일(config/sensor_mapping.json)에서 매핑을 로드합니다.
+        파일이 없으면 기본 순차 매핑을 사용합니다.
+        
         Returns:
             센서 번호 → 락카 ID 매핑 딕셔너리
         """
-        # 새로운 시스템 (140개 락카)
-        # 남성 구역: 센서 1-70 → M01-M70
-        # 여성 구역: 센서 71-120 → F01-F50
-        # 교직원 구역: 센서 121-140 → S01-S20
+        try:
+            import json
+            from pathlib import Path
+            
+            # 설정 파일 경로
+            config_file = Path(__file__).parent.parent.parent / "config" / "sensor_mapping.json"
+            
+            if config_file.exists():
+                with open(config_file, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                    mapping_config = config.get("mapping", {})
+                    
+                    # 문자열 키를 정수로 변환
+                    mapping = {int(k): v for k, v in mapping_config.items()}
+                    
+                    logger.info(f"✅ 센서 매핑 설정 로드 완료: {len(mapping)}개 센서")
+                    logger.info(f"   교직원: S01~S10, 남성: M01~M40, 여성: F01~F10")
+                    return mapping
+            else:
+                logger.warning(f"⚠️ 센서 매핑 파일 없음: {config_file}, 기본 매핑 사용")
+                
+        except Exception as e:
+            logger.error(f"❌ 센서 매핑 로드 실패: {e}, 기본 매핑 사용")
+        
+        # 기본 매핑 (순차)
+        # 10개 x 6줄 = 60개 락커
+        # 센서 1-10: S01~S10 (교직원)
+        # 센서 11-50: M01~M40 (남성)
+        # 센서 51-60: F01~F10 (여성)
         mapping = {}
         
-        # 남성 구역 매핑 (센서 1-70 → M01-M70)
-        for i in range(1, 71):
-            sensor_num = i
-            locker_id = f"M{i:02d}"
-            mapping[sensor_num] = locker_id
+        # 교직원 (센서 1-10)
+        for i in range(1, 11):
+            mapping[i] = f"S{i:02d}"
         
-        # 여성 구역 매핑 (센서 71-120 → F01-F50)
-        for i in range(1, 51):
-            sensor_num = i + 70
-            locker_id = f"F{i:02d}"
-            mapping[sensor_num] = locker_id
+        # 남성 (센서 11-50)
+        for i in range(1, 41):
+            mapping[i + 10] = f"M{i:02d}"
         
-        # 교직원 구역 매핑 (센서 121-140 → S01-S20)
-        for i in range(1, 21):
-            sensor_num = i + 120
-            locker_id = f"S{i:02d}"
-            mapping[sensor_num] = locker_id
+        # 여성 (센서 51-60)
+        for i in range(1, 11):
+            mapping[i + 50] = f"F{i:02d}"
         
-        logger.info(f"센서-락카 매핑 생성: {len(mapping)}개 (남성 70개, 여성 50개, 교직원 20개)")
+        logger.info(f"센서-락카 기본 매핑 생성: {len(mapping)}개 (교직원 10개, 남성 40개, 여성 10개)")
         return mapping
     
     async def handle_sensor_event(self, sensor_num: int, state: str, timestamp: Optional[float] = None) -> Dict:

@@ -187,49 +187,30 @@ INSERT OR IGNORE INTO system_settings (setting_key, setting_value, setting_type,
 ('last_sync_time', '', 'string', '마지막 동기화 시간'),
 ('maintenance_mode', 'false', 'boolean', '유지보수 모드 여부');
 
--- 락카 상태 기본 데이터 (남성 70개, 여성 50개, 교직원 20개)
+-- 락카 상태 기본 데이터 (교직원 10개, 남성 40개, 여성 10개 = 총 60개)
+-- 10개 x 6줄 락커 시스템
 INSERT OR IGNORE INTO locker_status (locker_number, zone, device_id, size) VALUES
--- 남성 구역 70개 (M01-M70)
-('M01', 'MALE', 'esp32_male', 'medium'), ('M02', 'MALE', 'esp32_male', 'medium'), ('M03', 'MALE', 'esp32_male', 'medium'), ('M04', 'MALE', 'esp32_male', 'medium'),
-('M05', 'MALE', 'esp32_male', 'medium'), ('M06', 'MALE', 'esp32_male', 'medium'), ('M07', 'MALE', 'esp32_male', 'medium'), ('M08', 'MALE', 'esp32_male', 'medium'),
-('M09', 'MALE', 'esp32_male', 'medium'), ('M10', 'MALE', 'esp32_male', 'medium'), ('M11', 'MALE', 'esp32_male', 'medium'), ('M12', 'MALE', 'esp32_male', 'medium'),
-('M13', 'MALE', 'esp32_male', 'medium'), ('M14', 'MALE', 'esp32_male', 'medium'), ('M15', 'MALE', 'esp32_male', 'medium'), ('M16', 'MALE', 'esp32_male', 'medium'),
-('M17', 'MALE', 'esp32_male', 'medium'), ('M18', 'MALE', 'esp32_male', 'medium'), ('M19', 'MALE', 'esp32_male', 'medium'), ('M20', 'MALE', 'esp32_male', 'medium'),
-('M21', 'MALE', 'esp32_male', 'medium'), ('M22', 'MALE', 'esp32_male', 'medium'), ('M23', 'MALE', 'esp32_male', 'medium'), ('M24', 'MALE', 'esp32_male', 'medium'),
-('M25', 'MALE', 'esp32_male', 'medium'), ('M26', 'MALE', 'esp32_male', 'medium'), ('M27', 'MALE', 'esp32_male', 'medium'), ('M28', 'MALE', 'esp32_male', 'medium'),
-('M29', 'MALE', 'esp32_male', 'medium'), ('M30', 'MALE', 'esp32_male', 'medium'), ('M31', 'MALE', 'esp32_male', 'medium'), ('M32', 'MALE', 'esp32_male', 'medium'),
-('M33', 'MALE', 'esp32_male', 'medium'), ('M34', 'MALE', 'esp32_male', 'medium'), ('M35', 'MALE', 'esp32_male', 'medium'), ('M36', 'MALE', 'esp32_male', 'medium'),
-('M37', 'MALE', 'esp32_male', 'medium'), ('M38', 'MALE', 'esp32_male', 'medium'), ('M39', 'MALE', 'esp32_male', 'medium'), ('M40', 'MALE', 'esp32_male', 'medium'),
-('M41', 'MALE', 'esp32_male', 'medium'), ('M42', 'MALE', 'esp32_male', 'medium'), ('M43', 'MALE', 'esp32_male', 'medium'), ('M44', 'MALE', 'esp32_male', 'medium'),
-('M45', 'MALE', 'esp32_male', 'medium'), ('M46', 'MALE', 'esp32_male', 'medium'), ('M47', 'MALE', 'esp32_male', 'medium'), ('M48', 'MALE', 'esp32_male', 'medium'),
-('M49', 'MALE', 'esp32_male', 'medium'), ('M50', 'MALE', 'esp32_male', 'medium'), ('M51', 'MALE', 'esp32_male', 'large'), ('M52', 'MALE', 'esp32_male', 'large'),
-('M53', 'MALE', 'esp32_male', 'large'), ('M54', 'MALE', 'esp32_male', 'large'), ('M55', 'MALE', 'esp32_male', 'large'), ('M56', 'MALE', 'esp32_male', 'large'),
-('M57', 'MALE', 'esp32_male', 'large'), ('M58', 'MALE', 'esp32_male', 'large'), ('M59', 'MALE', 'esp32_male', 'large'), ('M60', 'MALE', 'esp32_male', 'large'),
-('M61', 'MALE', 'esp32_male', 'large'), ('M62', 'MALE', 'esp32_male', 'large'), ('M63', 'MALE', 'esp32_male', 'large'), ('M64', 'MALE', 'esp32_male', 'large'),
-('M65', 'MALE', 'esp32_male', 'large'), ('M66', 'MALE', 'esp32_male', 'large'), ('M67', 'MALE', 'esp32_male', 'large'), ('M68', 'MALE', 'esp32_male', 'large'),
-('M69', 'MALE', 'esp32_male', 'large'), ('M70', 'MALE', 'esp32_male', 'large'),
+-- 교직원 구역 10개 (S01-S10) - ESP32 #1 (esp32_staff)
+('S01', 'STAFF', 'esp32_staff', 'medium'), ('S02', 'STAFF', 'esp32_staff', 'medium'), ('S03', 'STAFF', 'esp32_staff', 'medium'), ('S04', 'STAFF', 'esp32_staff', 'medium'),
+('S05', 'STAFF', 'esp32_staff', 'medium'), ('S06', 'STAFF', 'esp32_staff', 'medium'), ('S07', 'STAFF', 'esp32_staff', 'medium'), ('S08', 'STAFF', 'esp32_staff', 'medium'),
+('S09', 'STAFF', 'esp32_staff', 'medium'), ('S10', 'STAFF', 'esp32_staff', 'medium'),
 
--- 여성 구역 50개 (F01-F50)
-('F01', 'FEMALE', 'esp32_female', 'medium'), ('F02', 'FEMALE', 'esp32_female', 'medium'), ('F03', 'FEMALE', 'esp32_female', 'medium'), ('F04', 'FEMALE', 'esp32_female', 'medium'),
-('F05', 'FEMALE', 'esp32_female', 'medium'), ('F06', 'FEMALE', 'esp32_female', 'medium'), ('F07', 'FEMALE', 'esp32_female', 'medium'), ('F08', 'FEMALE', 'esp32_female', 'medium'),
-('F09', 'FEMALE', 'esp32_female', 'medium'), ('F10', 'FEMALE', 'esp32_female', 'medium'), ('F11', 'FEMALE', 'esp32_female', 'medium'), ('F12', 'FEMALE', 'esp32_female', 'medium'),
-('F13', 'FEMALE', 'esp32_female', 'medium'), ('F14', 'FEMALE', 'esp32_female', 'medium'), ('F15', 'FEMALE', 'esp32_female', 'medium'), ('F16', 'FEMALE', 'esp32_female', 'medium'),
-('F17', 'FEMALE', 'esp32_female', 'medium'), ('F18', 'FEMALE', 'esp32_female', 'medium'), ('F19', 'FEMALE', 'esp32_female', 'medium'), ('F20', 'FEMALE', 'esp32_female', 'medium'),
-('F21', 'FEMALE', 'esp32_female', 'medium'), ('F22', 'FEMALE', 'esp32_female', 'medium'), ('F23', 'FEMALE', 'esp32_female', 'medium'), ('F24', 'FEMALE', 'esp32_female', 'medium'),
-('F25', 'FEMALE', 'esp32_female', 'medium'), ('F26', 'FEMALE', 'esp32_female', 'medium'), ('F27', 'FEMALE', 'esp32_female', 'medium'), ('F28', 'FEMALE', 'esp32_female', 'medium'),
-('F29', 'FEMALE', 'esp32_female', 'medium'), ('F30', 'FEMALE', 'esp32_female', 'medium'), ('F31', 'FEMALE', 'esp32_female', 'large'), ('F32', 'FEMALE', 'esp32_female', 'large'),
-('F33', 'FEMALE', 'esp32_female', 'large'), ('F34', 'FEMALE', 'esp32_female', 'large'), ('F35', 'FEMALE', 'esp32_female', 'large'), ('F36', 'FEMALE', 'esp32_female', 'large'),
-('F37', 'FEMALE', 'esp32_female', 'large'), ('F38', 'FEMALE', 'esp32_female', 'large'), ('F39', 'FEMALE', 'esp32_female', 'large'), ('F40', 'FEMALE', 'esp32_female', 'large'),
-('F41', 'FEMALE', 'esp32_female', 'large'), ('F42', 'FEMALE', 'esp32_female', 'large'), ('F43', 'FEMALE', 'esp32_female', 'large'), ('F44', 'FEMALE', 'esp32_female', 'large'),
-('F45', 'FEMALE', 'esp32_female', 'large'), ('F46', 'FEMALE', 'esp32_female', 'large'), ('F47', 'FEMALE', 'esp32_female', 'large'), ('F48', 'FEMALE', 'esp32_female', 'large'),
-('F49', 'FEMALE', 'esp32_female', 'large'), ('F50', 'FEMALE', 'esp32_female', 'large'),
+-- 남성 구역 40개 (M01-M40) - ESP32 #2 (esp32_male_female)
+('M01', 'MALE', 'esp32_male_female', 'medium'), ('M02', 'MALE', 'esp32_male_female', 'medium'), ('M03', 'MALE', 'esp32_male_female', 'medium'), ('M04', 'MALE', 'esp32_male_female', 'medium'),
+('M05', 'MALE', 'esp32_male_female', 'medium'), ('M06', 'MALE', 'esp32_male_female', 'medium'), ('M07', 'MALE', 'esp32_male_female', 'medium'), ('M08', 'MALE', 'esp32_male_female', 'medium'),
+('M09', 'MALE', 'esp32_male_female', 'medium'), ('M10', 'MALE', 'esp32_male_female', 'medium'), ('M11', 'MALE', 'esp32_male_female', 'medium'), ('M12', 'MALE', 'esp32_male_female', 'medium'),
+('M13', 'MALE', 'esp32_male_female', 'medium'), ('M14', 'MALE', 'esp32_male_female', 'medium'), ('M15', 'MALE', 'esp32_male_female', 'medium'), ('M16', 'MALE', 'esp32_male_female', 'medium'),
+('M17', 'MALE', 'esp32_male_female', 'medium'), ('M18', 'MALE', 'esp32_male_female', 'medium'), ('M19', 'MALE', 'esp32_male_female', 'medium'), ('M20', 'MALE', 'esp32_male_female', 'medium'),
+('M21', 'MALE', 'esp32_male_female', 'medium'), ('M22', 'MALE', 'esp32_male_female', 'medium'), ('M23', 'MALE', 'esp32_male_female', 'medium'), ('M24', 'MALE', 'esp32_male_female', 'medium'),
+('M25', 'MALE', 'esp32_male_female', 'medium'), ('M26', 'MALE', 'esp32_male_female', 'medium'), ('M27', 'MALE', 'esp32_male_female', 'medium'), ('M28', 'MALE', 'esp32_male_female', 'medium'),
+('M29', 'MALE', 'esp32_male_female', 'medium'), ('M30', 'MALE', 'esp32_male_female', 'medium'), ('M31', 'MALE', 'esp32_male_female', 'medium'), ('M32', 'MALE', 'esp32_male_female', 'medium'),
+('M33', 'MALE', 'esp32_male_female', 'medium'), ('M34', 'MALE', 'esp32_male_female', 'medium'), ('M35', 'MALE', 'esp32_male_female', 'medium'), ('M36', 'MALE', 'esp32_male_female', 'medium'),
+('M37', 'MALE', 'esp32_male_female', 'medium'), ('M38', 'MALE', 'esp32_male_female', 'medium'), ('M39', 'MALE', 'esp32_male_female', 'medium'), ('M40', 'MALE', 'esp32_male_female', 'medium'),
 
--- 교직원 구역 20개 (S01-S20)
-('S01', 'STAFF', 'esp32_staff', 'large'), ('S02', 'STAFF', 'esp32_staff', 'large'), ('S03', 'STAFF', 'esp32_staff', 'large'), ('S04', 'STAFF', 'esp32_staff', 'large'),
-('S05', 'STAFF', 'esp32_staff', 'large'), ('S06', 'STAFF', 'esp32_staff', 'large'), ('S07', 'STAFF', 'esp32_staff', 'large'), ('S08', 'STAFF', 'esp32_staff', 'large'),
-('S09', 'STAFF', 'esp32_staff', 'large'), ('S10', 'STAFF', 'esp32_staff', 'large'), ('S11', 'STAFF', 'esp32_staff', 'large'), ('S12', 'STAFF', 'esp32_staff', 'large'),
-('S13', 'STAFF', 'esp32_staff', 'large'), ('S14', 'STAFF', 'esp32_staff', 'large'), ('S15', 'STAFF', 'esp32_staff', 'large'), ('S16', 'STAFF', 'esp32_staff', 'large'),
-('S17', 'STAFF', 'esp32_staff', 'large'), ('S18', 'STAFF', 'esp32_staff', 'large'), ('S19', 'STAFF', 'esp32_staff', 'large'), ('S20', 'STAFF', 'esp32_staff', 'large');
+-- 여성 구역 10개 (F01-F10) - ESP32 #2 (esp32_male_female)
+('F01', 'FEMALE', 'esp32_male_female', 'medium'), ('F02', 'FEMALE', 'esp32_male_female', 'medium'), ('F03', 'FEMALE', 'esp32_male_female', 'medium'), ('F04', 'FEMALE', 'esp32_male_female', 'medium'),
+('F05', 'FEMALE', 'esp32_male_female', 'medium'), ('F06', 'FEMALE', 'esp32_male_female', 'medium'), ('F07', 'FEMALE', 'esp32_male_female', 'medium'), ('F08', 'FEMALE', 'esp32_male_female', 'medium'),
+('F09', 'FEMALE', 'esp32_male_female', 'medium'), ('F10', 'FEMALE', 'esp32_male_female', 'medium');
 
 -- =====================================================
 -- 트리거 생성 (자동 업데이트)

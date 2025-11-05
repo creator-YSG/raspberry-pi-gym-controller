@@ -151,6 +151,31 @@ class ESP32Manager:
             device.stats["last_error"] = str(e)
             return False
     
+    def _load_esp32_mapping(self) -> dict:
+        """ESP32 포트 매핑 설정 파일 로드
+        
+        Returns:
+            매핑 설정 딕셔너리
+        """
+        try:
+            import json
+            from pathlib import Path
+            
+            config_file = Path(__file__).parent.parent / "config" / "esp32_mapping.json"
+            
+            if config_file.exists():
+                with open(config_file, 'r', encoding='utf-8') as f:
+                    mapping = json.load(f)
+                logger.info(f"✅ ESP32 매핑 설정 로드 완료: {config_file}")
+                return mapping
+            else:
+                logger.warning(f"⚠️ ESP32 매핑 설정 파일 없음: {config_file}")
+                return {"devices": {}, "fallback": {}}
+                
+        except Exception as e:
+            logger.error(f"❌ ESP32 매핑 설정 로드 실패: {e}")
+            return {"devices": {}, "fallback": {}}
+    
     async def scan_and_connect_esp32_devices(self) -> int:
         """ESP32 디바이스 자동 스캔 및 연결
         
@@ -160,6 +185,11 @@ class ESP32Manager:
         if not SERIAL_AVAILABLE:
             logger.warning("pyserial 없음, ESP32 자동 감지 불가")
             return 0
+        
+        # ESP32 매핑 설정 로드
+        mapping_config = self._load_esp32_mapping()
+        port_mapping = mapping_config.get("devices", {})
+        fallback_mapping = mapping_config.get("fallback", {})
         
         logger.info("🔍 ESP32 디바이스 자동 스캔 시작...")
         connected_count = 0
@@ -221,8 +251,18 @@ class ESP32Manager:
             
             # 감지된 포트들에 연결 시도
             for i, port_info in enumerate(detected_ports):
-                device_id = f"esp32_auto_{i}"
                 port_device = port_info["device"]
+                
+                # 포트 매핑에서 device_id 찾기
+                if port_device in port_mapping:
+                    device_id = port_mapping[port_device]["device_id"]
+                    zones = port_mapping[port_device].get("zones", [])
+                    logger.info(f"🗺️ 매핑 발견: {port_device} → {device_id} (구역: {zones})")
+                else:
+                    # fallback: auto_0, auto_1 형식으로 매핑
+                    auto_key = f"auto_{i}"
+                    device_id = fallback_mapping.get(auto_key, f"esp32_auto_{i}")
+                    logger.info(f"🔄 Fallback 매핑: {port_device} → {device_id}")
                 
                 # 이미 등록된 포트인지 확인
                 existing_device = None

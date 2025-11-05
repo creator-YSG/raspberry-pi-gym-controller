@@ -41,6 +41,8 @@
 let socket = null;
 let barcodeBuffer = '';
 let barcodeTimeout = null;
+let pollingInterval = null;
+let isProcessingBarcode = false;
 
 // 페이지 로드 시 초기화
 document.addEventListener('DOMContentLoaded', function() {
@@ -60,12 +62,17 @@ document.addEventListener('DOMContentLoaded', function() {
     setupAdminTrigger();
     
     // 바코드 폴링 (200ms마다 체크)
-    setInterval(function() {
+    pollingInterval = setInterval(function() {
+        // 이미 처리 중이면 폴링 건너뛰기
+        if (isProcessingBarcode) {
+            return;
+        }
+        
         const t_poll_start = performance.now();
         fetch('/api/barcode/poll')
             .then(response => response.json())
             .then(data => {
-                if (data.has_barcode) {
+                if (data.has_barcode && !isProcessingBarcode) {
                     const t_poll_end = performance.now();
                     console.log(`⏱️ [PERF-POLL] 바코드 폴링 성공: ${(t_poll_end - t_poll_start).toFixed(2)}ms | 바코드: ${data.barcode}`);
                     handleBarcodeScanned(data.barcode);
@@ -201,6 +208,19 @@ function handleBarcodeScanned(barcode) {
         return;
     }
     
+    // 이미 처리 중이면 무시
+    if (isProcessingBarcode) {
+        console.log('⚠️ 이미 바코드 처리 중 - 무시:', barcode);
+        return;
+    }
+    
+    // 처리 시작 플래그 설정 (중복 방지)
+    isProcessingBarcode = true;
+    console.log('🔒 바코드 처리 시작 - 추가 폴링 차단');
+    
+    // 큐에 남은 바코드들 모두 비우기
+    clearBarcodeQueue();
+    
     barcode = barcode.trim();
     const t_start = performance.now();
     console.log('⏱️ [PERF-UI] 바코드 처리 시작:', barcode);
@@ -241,11 +261,31 @@ function handleBarcodeScanned(barcode) {
     })
     .catch(error => {
         console.error('❌ 바코드 처리 오류:', error);
+        isProcessingBarcode = false; // 오류 시 플래그 해제
         navigateTo('error', { 
             type: 'system_error',
             message: '시스템 오류가 발생했습니다. 관리자에게 문의하세요.'
         });
     });
+}
+
+// 바코드 큐 비우기 (중복 바코드 제거)
+function clearBarcodeQueue() {
+    console.log('🧹 바코드 큐 비우는 중...');
+    
+    // 큐에 남은 모든 바코드 제거 (최대 10회 시도)
+    let cleared = 0;
+    for (let i = 0; i < 10; i++) {
+        fetch('/api/barcode/poll')
+            .then(response => response.json())
+            .then(data => {
+                if (data.has_barcode) {
+                    cleared++;
+                    console.log(`🗑️ 큐에서 제거: ${data.barcode} (${cleared}번째)`);
+                }
+            })
+            .catch(() => {});
+    }
 }
 
 // 화면 전환
@@ -293,6 +333,15 @@ function openAdminMode() {
 document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') {
         e.preventDefault();
+    }
+});
+
+// 페이지 떠날 때 정리
+window.addEventListener('beforeunload', function() {
+    // 폴링 중지
+    if (pollingInterval) {
+        clearInterval(pollingInterval);
+        console.log('🛑 폴링 중지');
     }
 });
 </script>
