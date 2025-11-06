@@ -81,6 +81,7 @@ CREATE TABLE IF NOT EXISTS locker_status (
     -- 락카 메타 정보
     size TEXT DEFAULT 'medium',          -- 락카 크기 (small, medium, large)
     maintenance_status TEXT DEFAULT 'normal', -- 유지보수 상태 (normal, maintenance, broken)
+    nfc_uid TEXT UNIQUE,                 -- NFC 태그 UID (락커키 식별용)
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

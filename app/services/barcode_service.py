@@ -6,6 +6,7 @@ import re
 from typing import Dict
 from app.services.member_service import MemberService
 from app.services.locker_service import LockerService
+from app.services.nfc_service import NFCService
 
 
 class BarcodeService:
@@ -14,6 +15,7 @@ class BarcodeService:
     def __init__(self):
         self.member_service = MemberService()
         self.locker_service = LockerService()
+        self.nfc_service = NFCService()
     
     def process_barcode(self, barcode: str, scan_type: str = 'auto') -> Dict:
         """바코드 처리 메인 로직"""
@@ -223,3 +225,70 @@ class BarcodeService:
                 return f"F{(num-50):02d}"
         
         return ""
+    
+    def process_nfc_return(self, nfc_uid: str) -> Dict:
+        """NFC 태그로 반납 처리 (바코드 반납과 동일한 로직)
+        
+        Args:
+            nfc_uid: NFC 태그 UID
+            
+        Returns:
+            처리 결과 딕셔너리
+        """
+        try:
+            import logging
+            logger = logging.getLogger(__name__)
+            
+            logger.info(f"🔍 NFC 반납 처리 시작: UID={nfc_uid}")
+            
+            # 1. NFC UID로 락커 ID 조회
+            locker_id = self.nfc_service.get_locker_by_nfc_uid(nfc_uid)
+            
+            if not locker_id:
+                logger.warning(f'❌ 등록되지 않은 NFC UID: {nfc_uid}')
+                return {
+                    'success': False,
+                    'error': '등록되지 않은 락커키입니다. 관리자에게 문의하세요.',
+                    'error_type': 'nfc_not_registered',
+                    'nfc_uid': nfc_uid
+                }
+            
+            logger.info(f"✅ NFC UID → 락커 ID 변환: {nfc_uid} → {locker_id}")
+            
+            # 2. 기존 락커 반납 로직 호출 (바코드 반납과 동일)
+            result = self.locker_service.return_locker(locker_id)
+            
+            if result['success']:
+                logger.info(f"✅ NFC 반납 완료: {locker_id} (UID: {nfc_uid})")
+                return {
+                    'success': True,
+                    'action': 'process_return',
+                    'type': 'locker_returned_nfc',
+                    'locker': result['locker'].to_dict(),
+                    'rental': result['rental'].to_dict(),
+                    'message': result['message'],
+                    'nfc_uid': nfc_uid,
+                    'locker_id': locker_id
+                }
+            else:
+                logger.error(f"❌ NFC 반납 실패: {result.get('error')}")
+                return {
+                    'success': False,
+                    'error': result['error'],
+                    'error_type': 'return_failed',
+                    'nfc_uid': nfc_uid,
+                    'locker_id': locker_id
+                }
+                
+        except Exception as e:
+            import logging
+            import traceback
+            logger = logging.getLogger(__name__)
+            logger.error(f"❌ NFC 반납 처리 오류: {e}")
+            logger.error(f"📍 Traceback: {traceback.format_exc()}")
+            return {
+                'success': False,
+                'error': f'NFC 반납 처리 중 오류가 발생했습니다: {str(e)}',
+                'error_type': 'system_error',
+                'nfc_uid': nfc_uid
+            }

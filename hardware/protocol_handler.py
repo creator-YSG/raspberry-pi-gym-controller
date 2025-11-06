@@ -15,6 +15,7 @@ class MessageType(Enum):
     """메시지 타입 열거형"""
     QR_SCAN = "qr_scan"
     BARCODE_SCAN = "barcode_scan"
+    NFC_SCAN = "nfc_scan"
     STATUS_REPORT = "status_report"
     HEARTBEAT = "heartbeat"
     COMMAND_RESPONSE = "command_response"
@@ -56,6 +57,13 @@ class QRScanData:
 class BarcodeScanData:
     """바코드 스캔 데이터 구조"""
     barcode: str
+
+
+@dataclass
+class NFCScanData:
+    """NFC 스캔 데이터 구조"""
+    nfc_uid: str
+    uid_length: Optional[int] = None
 
 
 @dataclass
@@ -293,6 +301,23 @@ class ProtocolHandler:
                             "scan_type": data.get("scan_type", "barcode"),
                             "format": data.get("format", "unknown"),
                             "quality": data.get("quality", 95)
+                        },
+                        timestamp=timestamp,
+                        raw_message=raw_message
+                    )
+            
+            # NFC 스캔 이벤트
+            elif event_type == "nfc_scanned":
+                nfc_uid = str(data.get("nfc_uid", "")).strip()
+                if nfc_uid:
+                    print(f"[ProtocolHandler] ESP32 NFC: {nfc_uid}")
+                    return ParsedMessage(
+                        type=MessageType.NFC_SCAN,
+                        data={
+                            "nfc_uid": nfc_uid,
+                            "device_id": device_id,
+                            "uid_length": data.get("uid_length"),
+                            "scan_count": data.get("scan_count")
                         },
                         timestamp=timestamp,
                         raw_message=raw_message

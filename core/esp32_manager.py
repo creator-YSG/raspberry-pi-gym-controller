@@ -66,6 +66,7 @@ class ESP32Manager:
         self._event_handlers: Dict[str, List[Callable]] = {
             "barcode_scanned": [],
             "qr_scanned": [],
+            "nfc_scanned": [],
             "motor_completed": [],
             "sensor_triggered": [],
             "device_error": [],
@@ -589,6 +590,8 @@ class ESP32Manager:
             event_type = "barcode_scanned"
         elif message.type == MessageType.QR_SCAN:
             event_type = "qr_scanned"
+        elif message.type == MessageType.NFC_SCAN:
+            event_type = "nfc_scanned"
         elif message.type == MessageType.STATUS_REPORT:
             # 센서 이벤트인지 확인
             if message.data.get("sensor_type") == "ir_sensor":

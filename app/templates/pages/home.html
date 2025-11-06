@@ -20,7 +20,7 @@
 
     <!-- 하단: 안내 멘트 -->
     <div class="scan-message">
-        바코드 또는 QR코드를 스캔해주세요
+        바코드, QR코드 또는 NFC 태그를 스캔해주세요
     </div>
 
     <!-- 시스템 상태 (작게) -->
@@ -143,6 +143,9 @@ function connectWebSocket() {
             if (data.event_type === 'barcode_scanned') {
                 console.log('ESP32 바코드:', data.data.barcode);
                 handleBarcodeScanned(data.data.barcode);
+            } else if (data.event_type === 'nfc_scanned') {
+                console.log('🔖 ESP32 NFC 스캔:', data.data.nfc_uid);
+                handleNFCScanned(data.data.nfc_uid);
             }
         });
         
@@ -262,6 +265,72 @@ function handleBarcodeScanned(barcode) {
     .catch(error => {
         console.error('❌ 바코드 처리 오류:', error);
         isProcessingBarcode = false; // 오류 시 플래그 해제
+        navigateTo('error', { 
+            type: 'system_error',
+            message: '시스템 오류가 발생했습니다. 관리자에게 문의하세요.'
+        });
+    });
+}
+
+// NFC 스캔 처리
+function handleNFCScanned(nfcUid) {
+    if (!nfcUid || nfcUid.trim().length === 0) {
+        console.log('⚠️ 빈 NFC UID 무시');
+        return;
+    }
+    
+    // 이미 처리 중이면 무시
+    if (isProcessingBarcode) {
+        console.log('⚠️ 이미 처리 중 - NFC 스캔 무시:', nfcUid);
+        return;
+    }
+    
+    // 처리 시작 플래그 설정
+    isProcessingBarcode = true;
+    console.log('🔒 NFC 반납 처리 시작 - 추가 입력 차단');
+    
+    nfcUid = nfcUid.trim();
+    const t_start = performance.now();
+    console.log('⏱️ [PERF-NFC] NFC 반납 처리 시작:', nfcUid);
+    
+    const t_api_start = performance.now();
+    fetch('/api/nfc/return', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ nfc_uid: nfcUid })
+    })
+    .then(response => {
+        const t_api_response = performance.now();
+        console.log(`⏱️ [PERF-NFC] API 응답 수신: ${(t_api_response - t_api_start).toFixed(2)}ms`);
+        return response.json();
+    })
+    .then(data => {
+        const t_api_parsed = performance.now();
+        console.log(`⏱️ [PERF-NFC] 응답 파싱: ${(t_api_parsed - t_api_start).toFixed(2)}ms | 전체: ${(t_api_parsed - t_start).toFixed(2)}ms`);
+        console.log('✅ NFC 반납 결과:', data);
+        
+        if (data.success) {
+            // 반납 완료 화면으로 이동
+            navigateTo('return-complete', { 
+                locker_id: data.locker_id,
+                nfc_uid: nfcUid,
+                method: 'nfc'
+            });
+            console.log(`⏱️ [PERF-NFC] === 전체 프로세스: ${(performance.now() - t_start).toFixed(2)}ms ===`);
+        } else {
+            // 오류 화면으로 이동
+            isProcessingBarcode = false;
+            navigateTo('error', { 
+                type: data.error_type || 'nfc_error',
+                message: data.error || 'NFC 반납 처리 중 오류가 발생했습니다.'
+            });
+        }
+    })
+    .catch(error => {
+        console.error('❌ NFC 반납 API 오류:', error);
+        isProcessingBarcode = false;
         navigateTo('error', { 
             type: 'system_error',
             message: '시스템 오류가 발생했습니다. 관리자에게 문의하세요.'

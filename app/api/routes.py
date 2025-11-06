@@ -1080,6 +1080,75 @@ def return_locker(locker_id):
         }), 500
 
 
+@bp.route('/nfc/return', methods=['POST'])
+def nfc_return():
+    """NFC 태그로 락카 반납"""
+    try:
+        data = request.get_json()
+        nfc_uid = data.get('nfc_uid')
+        
+        if not nfc_uid:
+            return jsonify({
+                'success': False,
+                'error': 'NFC UID가 필요합니다.'
+            }), 400
+        
+        current_app.logger.info(f"🔖 NFC 반납 API 호출: UID={nfc_uid}")
+        
+        barcode_service = BarcodeService()
+        result = barcode_service.process_nfc_return(nfc_uid)
+        
+        if result['success']:
+            return jsonify({
+                'success': True,
+                'locker_id': result['locker_id'],
+                'rental': result['rental'],
+                'message': result['message'],
+                'nfc_uid': nfc_uid
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': result['error'],
+                'error_type': result.get('error_type', 'unknown'),
+                'nfc_uid': nfc_uid
+            }), 400
+            
+    except Exception as e:
+        current_app.logger.error(f'NFC 반납 API 오류: {e}')
+        return jsonify({
+            'success': False,
+            'error': 'NFC 반납 처리 중 오류가 발생했습니다.'
+        }), 500
+
+
+@bp.route('/nfc/validate', methods=['POST'])
+def nfc_validate():
+    """NFC UID 유효성 검증"""
+    try:
+        data = request.get_json()
+        nfc_uid = data.get('nfc_uid')
+        
+        if not nfc_uid:
+            return jsonify({
+                'success': False,
+                'error': 'NFC UID가 필요합니다.'
+            }), 400
+        
+        from app.services.nfc_service import NFCService
+        nfc_service = NFCService()
+        result = nfc_service.validate_nfc_uid(nfc_uid)
+        
+        return jsonify(result)
+            
+    except Exception as e:
+        current_app.logger.error(f'NFC 검증 API 오류: {e}')
+        return jsonify({
+            'success': False,
+            'error': 'NFC 검증 중 오류가 발생했습니다.'
+        }), 500
+
+
 @bp.route('/members/<member_id>/rent-by-sensor', methods=['POST'])
 def rent_locker_by_sensor(member_id):
     """센서 기반 락카 대여 (실제 헬스장 운영 로직)"""
