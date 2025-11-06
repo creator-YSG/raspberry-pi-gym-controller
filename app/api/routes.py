@@ -49,12 +49,17 @@ def poll_barcode():
         
         if barcode_queue:
             try:
-                # 큐에서 바코드 가져오기 (non-blocking)
+                # 큐에서 데이터 가져오기 (non-blocking)
                 barcode_data = barcode_queue.get_nowait()
+                
+                # 'barcode' 또는 'data' 키 모두 지원 (NFC/바코드 호환)
+                barcode_value = barcode_data.get('barcode') or barcode_data.get('data', '')
+                
                 return jsonify({
                     'has_barcode': True,
-                    'barcode': barcode_data['barcode'],
-                    'device_id': barcode_data.get('device_id', 'unknown')
+                    'barcode': barcode_value,
+                    'device_id': barcode_data.get('device_id', 'unknown'),
+                    'type': barcode_data.get('type', 'barcode')
                 })
             except queue.Empty:
                 # 큐가 비어있음

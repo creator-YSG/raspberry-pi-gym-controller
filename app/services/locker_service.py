@@ -143,7 +143,7 @@ class LockerService:
                         mapping = config.get("mapping", {})
                         locker_id = mapping.get(str(sensor_num))
                         
-                        if locker_id:
+            if locker_id:
                             logger.info(f"센서 {sensor_num} → 락커 {locker_id} (설정 파일 매핑)")
                             return locker_id
             except Exception as e:

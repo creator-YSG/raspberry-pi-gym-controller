@@ -211,6 +211,16 @@ function handleBarcodeScanned(barcode) {
         return;
     }
     
+    barcode = barcode.trim();
+    
+    // NFC 태그 체크
+    if (barcode.startsWith('NFC:')) {
+        console.log('🔖 NFC 태그 감지:', barcode);
+        const nfcUid = barcode.substring(4); // "NFC:" 접두사 제거
+        handleNFCScanned(nfcUid);
+        return;
+    }
+    
     // 이미 처리 중이면 무시
     if (isProcessingBarcode) {
         console.log('⚠️ 이미 바코드 처리 중 - 무시:', barcode);
@@ -223,8 +233,6 @@ function handleBarcodeScanned(barcode) {
     
     // 큐에 남은 바코드들 모두 비우기
     clearBarcodeQueue();
-    
-    barcode = barcode.trim();
     const t_start = performance.now();
     console.log('⏱️ [PERF-UI] 바코드 처리 시작:', barcode);
     
@@ -287,14 +295,14 @@ function handleNFCScanned(nfcUid) {
     
     // 처리 시작 플래그 설정
     isProcessingBarcode = true;
-    console.log('🔒 NFC 반납 처리 시작 - 추가 입력 차단');
+    console.log('🔒 NFC 처리 시작 - 추가 입력 차단');
     
     nfcUid = nfcUid.trim();
     const t_start = performance.now();
-    console.log('⏱️ [PERF-NFC] NFC 반납 처리 시작:', nfcUid);
+    console.log('⏱️ [PERF-NFC] NFC 검증 시작:', nfcUid);
     
     const t_api_start = performance.now();
-    fetch('/api/nfc/return', {
+    fetch('/api/nfc/validate', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
@@ -309,11 +317,20 @@ function handleNFCScanned(nfcUid) {
     .then(data => {
         const t_api_parsed = performance.now();
         console.log(`⏱️ [PERF-NFC] 응답 파싱: ${(t_api_parsed - t_api_start).toFixed(2)}ms | 전체: ${(t_api_parsed - t_start).toFixed(2)}ms`);
-        console.log('✅ NFC 반납 결과:', data);
+        console.log('✅ NFC 검증 결과:', data);
         
-        if (data.success) {
-            // 반납 완료 화면으로 이동
-            navigateTo('return-complete', { 
+        if (data.success && data.locker_info) {
+            // member_check 페이지로 이동 (반납 모드)
+            navigateTo('member-check', {
+                action: 'return',
+                locker_id: data.locker_info.locker_number,
+                zone: data.locker_info.zone,
+                method: 'nfc',
+                nfc_uid: nfcUid
+            });
+        } else {
+            // 오류 화면으로 이동
+            navigateTo('error', { 
                 locker_id: data.locker_id,
                 nfc_uid: nfcUid,
                 method: 'nfc'
