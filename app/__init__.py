@@ -129,21 +129,27 @@ def setup_esp32_event_handlers(app, esp32_manager):
     """ESP32 이벤트 핸들러 설정"""
     
     async def handle_barcode_scanned(event_data):
-        """바코드 스캔 이벤트 처리"""
+        """바코드 스캔 이벤트 처리 - 폴링 방식"""
         barcode = event_data.get("barcode", "")
         device_id = event_data.get("device_id", "unknown")
         
         app.logger.info(f"🔍 바코드 스캔: {barcode} (from {device_id})")
         
-        # WebSocket으로 프론트엔드에 알림
-        socketio.emit('esp32_event', {
-            'event_type': 'barcode_scanned',
-            'data': {
-                'barcode': barcode,
-                'device_id': device_id,
-                'timestamp': event_data.get('timestamp')
-            }
-        })
+        # 바코드 큐에 추가 (폴링 방식)
+        try:
+            import queue
+            barcode_queue = getattr(app, 'barcode_queue', None)
+            if barcode_queue:
+                barcode_queue.put_nowait({
+                    'type': 'barcode',
+                    'barcode': barcode,
+                    'device_id': device_id
+                })
+                app.logger.info(f"✅ 바코드를 큐에 추가: {barcode}")
+        except queue.Full:
+            app.logger.warning("⚠️ 바코드 큐가 가득 참")
+        except Exception as e:
+            app.logger.error(f"❌ 바코드 큐 추가 오류: {e}")
     
     async def handle_sensor_triggered(event_data):
         """센서 이벤트 처리"""

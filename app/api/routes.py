@@ -1144,7 +1144,21 @@ def nfc_validate():
         nfc_service = NFCService()
         result = nfc_service.validate_nfc_uid(nfc_uid)
         
-        return jsonify(result)
+        # valid → success로 변환 (프론트엔드 호환)
+        response = {
+            'success': result.get('valid', False),
+            'locker_info': {
+                'locker_number': result.get('locker_number'),
+                'zone': result.get('zone'),
+                'current_member': result.get('current_member'),
+                'is_rented': result.get('is_rented', False)
+            } if result.get('valid') else None,
+            'message': result.get('message', ''),
+            'error': None if result.get('valid') else result.get('message', 'NFC 검증 실패')
+        }
+        
+        current_app.logger.info(f'📤 NFC 검증 API 응답: {response}')
+        return jsonify(response)
             
     except Exception as e:
         current_app.logger.error(f'NFC 검증 API 오류: {e}')

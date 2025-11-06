@@ -143,9 +143,6 @@ function connectWebSocket() {
             if (data.event_type === 'barcode_scanned') {
                 console.log('ESP32 바코드:', data.data.barcode);
                 handleBarcodeScanned(data.data.barcode);
-            } else if (data.event_type === 'nfc_scanned') {
-                console.log('🔖 ESP32 NFC 스캔:', data.data.nfc_uid);
-                handleNFCScanned(data.data.nfc_uid);
             }
         });
         
@@ -216,7 +213,7 @@ function handleBarcodeScanned(barcode) {
     // NFC 태그 체크
     if (barcode.startsWith('NFC:')) {
         console.log('🔖 NFC 태그 감지:', barcode);
-        const nfcUid = barcode.substring(4); // "NFC:" 접두사 제거
+        const nfcUid = barcode.substring(4);
         handleNFCScanned(nfcUid);
         return;
     }
@@ -273,81 +270,6 @@ function handleBarcodeScanned(barcode) {
     .catch(error => {
         console.error('❌ 바코드 처리 오류:', error);
         isProcessingBarcode = false; // 오류 시 플래그 해제
-        navigateTo('error', { 
-            type: 'system_error',
-            message: '시스템 오류가 발생했습니다. 관리자에게 문의하세요.'
-        });
-    });
-}
-
-// NFC 스캔 처리
-function handleNFCScanned(nfcUid) {
-    if (!nfcUid || nfcUid.trim().length === 0) {
-        console.log('⚠️ 빈 NFC UID 무시');
-        return;
-    }
-    
-    // 이미 처리 중이면 무시
-    if (isProcessingBarcode) {
-        console.log('⚠️ 이미 처리 중 - NFC 스캔 무시:', nfcUid);
-        return;
-    }
-    
-    // 처리 시작 플래그 설정
-    isProcessingBarcode = true;
-    console.log('🔒 NFC 처리 시작 - 추가 입력 차단');
-    
-    nfcUid = nfcUid.trim();
-    const t_start = performance.now();
-    console.log('⏱️ [PERF-NFC] NFC 검증 시작:', nfcUid);
-    
-    const t_api_start = performance.now();
-    fetch('/api/nfc/validate', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ nfc_uid: nfcUid })
-    })
-    .then(response => {
-        const t_api_response = performance.now();
-        console.log(`⏱️ [PERF-NFC] API 응답 수신: ${(t_api_response - t_api_start).toFixed(2)}ms`);
-        return response.json();
-    })
-    .then(data => {
-        const t_api_parsed = performance.now();
-        console.log(`⏱️ [PERF-NFC] 응답 파싱: ${(t_api_parsed - t_api_start).toFixed(2)}ms | 전체: ${(t_api_parsed - t_start).toFixed(2)}ms`);
-        console.log('✅ NFC 검증 결과:', data);
-        
-        if (data.success && data.locker_info) {
-            // member_check 페이지로 이동 (반납 모드)
-            navigateTo('member-check', {
-                action: 'return',
-                locker_id: data.locker_info.locker_number,
-                zone: data.locker_info.zone,
-                method: 'nfc',
-                nfc_uid: nfcUid
-            });
-        } else {
-            // 오류 화면으로 이동
-            navigateTo('error', { 
-                locker_id: data.locker_id,
-                nfc_uid: nfcUid,
-                method: 'nfc'
-            });
-            console.log(`⏱️ [PERF-NFC] === 전체 프로세스: ${(performance.now() - t_start).toFixed(2)}ms ===`);
-        } else {
-            // 오류 화면으로 이동
-            isProcessingBarcode = false;
-            navigateTo('error', { 
-                type: data.error_type || 'nfc_error',
-                message: data.error || 'NFC 반납 처리 중 오류가 발생했습니다.'
-            });
-        }
-    })
-    .catch(error => {
-        console.error('❌ NFC 반납 API 오류:', error);
-        isProcessingBarcode = false;
         navigateTo('error', { 
             type: 'system_error',
             message: '시스템 오류가 발생했습니다. 관리자에게 문의하세요.'
@@ -430,5 +352,46 @@ window.addEventListener('beforeunload', function() {
         console.log('🛑 폴링 중지');
     }
 });
+
+// NFC 스캔 처리
+function handleNFCScanned(nfcUid) {
+    if (!nfcUid || nfcUid.trim().length === 0) return;
+    if (isProcessingBarcode) return;
+    
+    isProcessingBarcode = true;
+    nfcUid = nfcUid.trim();
+    console.log('🔒 NFC 처리 시작:', nfcUid);
+    
+    // 큐에 남은 NFC/바코드 모두 비우기 (중복 방지)
+    clearBarcodeQueue();
+    
+    fetch('/api/nfc/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nfc_uid: nfcUid })
+    })
+    .then(r => r.json())
+    .then(data => {
+        console.log('✅ NFC 검증 결과:', data);
+        if (data.success && data.locker_info) {
+            navigateTo('member-check', {
+                action: 'return',
+                locker_id: data.locker_info.locker_number,
+                zone: data.locker_info.zone,
+                method: 'nfc',
+                nfc_uid: nfcUid
+            });
+        } else {
+            isProcessingBarcode = false;
+            navigateTo('error', { type: 'nfc_error', message: data.error || 'NFC 오류' });
+        }
+    })
+    .catch(e => {
+        console.error('❌ NFC 오류:', e);
+        isProcessingBarcode = false;
+        navigateTo('error', { type: 'system_error', message: '시스템 오류' });
+    });
+}
+
 </script>
 {% endblock %}

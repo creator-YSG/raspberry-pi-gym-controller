@@ -16,7 +16,11 @@ class NFCService:
     """NFC UID-락커 매핑 서비스"""
     
     def __init__(self):
-        self.db_manager = DatabaseManager()
+        # 항상 명시적으로 DB 경로 지정
+        from pathlib import Path
+        db_path = Path(__file__).parent.parent.parent / "instance" / "gym_system.db"
+        self.db_manager = DatabaseManager(str(db_path))
+        self.db_manager.connect()  # ← 핵심! DB 연결 필수
     
     def get_locker_by_nfc_uid(self, nfc_uid: str) -> Optional[str]:
         """NFC UID로 락커 번호 조회
