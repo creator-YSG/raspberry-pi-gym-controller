@@ -62,8 +62,11 @@ def member_check():
                 member_dict['expiry_date'] = None
                 current_app.logger.warning(f"⚠️ 회원 {member.id}의 만료일 정보 없음")
             
-            # 접근 가능한 구역 확인 (allowed_zones는 이미 포함됨, zone은 기본값만)
-            zone = member.allowed_zones[0] if member.allowed_zones else 'MALE'
+            # 접근 가능한 구역 확인 (교직원은 STAFF 우선)
+            if member.member_category == 'staff' and 'STAFF' in member.allowed_zones:
+                zone = 'STAFF'
+            else:
+                zone = member.allowed_zones[0] if member.allowed_zones else 'MALE'
             member_dict['zone'] = zone
             
             # 🆕 대여 프로세스인 경우: 바코드 인증 시점에 pending 레코드 생성

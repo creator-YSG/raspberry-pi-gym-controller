@@ -91,7 +91,7 @@ class SensorEventHandler:
         """센서 이벤트 처리 및 트랜잭션 연동
         
         Args:
-            sensor_num: 센서 번호 (1-140)
+            sensor_num: 센서 번호 (1-60, 교직원: 1-10, 남성: 11-50, 여성: 51-60)
             state: 센서 상태 ('HIGH' 또는 'LOW')
             timestamp: 이벤트 발생 시간 (None이면 현재 시간)
             

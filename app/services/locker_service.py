@@ -130,24 +130,38 @@ class LockerService:
                 if row:
                     return row['locker_number']
             
-            # DB에 없으면 기본 매핑 로직 사용 (하드코딩)
-            # 테스트용 매핑
-            sensor_to_locker = {
-                1: "M01",
-                2: "M02",
-                3: "M03",
-                4: "M04",
-                5: "M05",
-                6: "M06",
-                7: "M07",
-                8: "M08",
-                9: "M10",  # 테스트에서 확인된 매핑
-                10: "M09"
-            }
+            # DB에 없으면 센서 매핑 파일에서 로드
+            try:
+                import json
+                from pathlib import Path
+                
+                config_file = Path(__file__).parent.parent.parent / "config" / "sensor_mapping.json"
+                
+                if config_file.exists():
+                    with open(config_file, 'r', encoding='utf-8') as f:
+                        config = json.load(f)
+                        mapping = config.get("mapping", {})
+                        locker_id = mapping.get(str(sensor_num))
+                        
+                        if locker_id:
+                            logger.info(f"센서 {sensor_num} → 락커 {locker_id} (설정 파일 매핑)")
+                            return locker_id
+            except Exception as e:
+                logger.error(f"센서 매핑 파일 로드 실패: {e}")
             
-            locker_id = sensor_to_locker.get(sensor_num)
+            # 센서 매핑 파일도 없으면 기본 순차 매핑 (60개 락커)
+            # 센서 1-10: S01~S10, 11-50: M01~M40, 51-60: F01~F10
+            if 1 <= sensor_num <= 10:
+                locker_id = f"S{sensor_num:02d}"
+            elif 11 <= sensor_num <= 50:
+                locker_id = f"M{(sensor_num-10):02d}"
+            elif 51 <= sensor_num <= 60:
+                locker_id = f"F{(sensor_num-50):02d}"
+            else:
+                locker_id = None
+            
             if locker_id:
-                logger.info(f"센서 {sensor_num} → 락커 {locker_id} (기본 매핑)")
+                logger.info(f"센서 {sensor_num} → 락커 {locker_id} (기본 순차 매핑)")
                 return locker_id
             
             logger.warning(f"센서 {sensor_num}에 매핑된 락커가 없습니다")
@@ -491,7 +505,7 @@ class LockerService:
                 return True
             
             # 락카 ID에 따라 적절한 ESP32 디바이스 선택
-            # M01~M70, F01~F50 → esp32_male_female (남녀 혼성), S01~S20 → esp32_staff
+            # M01~M40, F01~F10 → esp32_male_female (남녀 혼성), S01~S10 → esp32_staff
             if locker_id.startswith('M') or locker_id.startswith('F'):
                 # 남녀 혼성 구역 (하나의 ESP32로 관리)
                 device_id = 'esp32_male_female'

@@ -44,3 +44,4 @@ instance/*.backup.*
 instance/gym_system.db
 instance/gym_system.db-wal
 instance/gym_system.db-shm
+

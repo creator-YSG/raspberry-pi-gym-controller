@@ -339,3 +339,4 @@ if not QR_AVAILABLE:
         print(f"[QR_STUB] QR 데이터용 플레이스홀더 모드")
         return _create_stub_qr_image(qr_data)
 
+

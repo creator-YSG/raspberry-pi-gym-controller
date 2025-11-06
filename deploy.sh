@@ -70,3 +70,4 @@ echo ""
 echo "로그 확인: ssh raspberry-pi 'tail -f /tmp/flask_app.log'"
 echo ""
 
+

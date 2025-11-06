@@ -152,7 +152,12 @@ def open_locker_door():
                 'zone': zone
             })
         
-        # 기존 방식: esp32_auto_0 디바이스로 MOTOR_MOVE 명령 전송
+        # zone에 따라 ESP32 선택
+        if zone == 'STAFF':
+            device_id = 'esp32_staff'
+        else:  # MALE, FEMALE
+            device_id = 'esp32_male_female'
+        
         try:
             # 백그라운드 스레드에서 비동기 명령 실행
             import threading
@@ -166,10 +171,10 @@ def open_locker_door():
                     loop = asyncio.new_event_loop()
                     asyncio.set_event_loop(loop)
                     loop.run_until_complete(
-                        esp32_manager.send_command("esp32_auto_0", "MOTOR_MOVE", revs=0.917, rpm=30)
+                        esp32_manager.send_command(device_id, "MOTOR_MOVE", revs=0.917, rpm=30)
                     )
                     loop.close()
-                    current_app.logger.info('🔓 모터 명령 실행 완료')
+                    current_app.logger.info(f'🔓 모터 명령 실행 완료: {device_id}')
                 except Exception as e:
                     current_app.logger.warning(f'모터 명령 실행 오류: {e}')
             
@@ -518,15 +523,21 @@ def process_rental():
                     current_app.logger.info(f'⏳ 손 끼임 방지 대기 중... (3초)')
                     time.sleep(3)
                     
+                    # locker_id에서 zone 판단하여 device_id 선택
+                    if locker_id.startswith('S'):
+                        device_id = 'esp32_staff'
+                    else:  # M or F
+                        device_id = 'esp32_male_female'
+                    
                     # ESP32로 문 닫기 명령
                     esp32_manager = getattr(current_app, 'esp32_manager', None)
                     if esp32_manager:
                         try:
-                            current_app.logger.info(f'🚪 문 닫기 명령 전송: {locker_id}')
+                            current_app.logger.info(f'🚪 문 닫기 명령 전송: {locker_id} → {device_id}')
                             loop = asyncio.new_event_loop()
                             asyncio.set_event_loop(loop)
                             loop.run_until_complete(
-                                esp32_manager.send_command("esp32_auto_0", "MOTOR_MOVE", revs=-0.917, rpm=30)
+                                esp32_manager.send_command(device_id, "MOTOR_MOVE", revs=-0.917, rpm=30)
                             )
                             loop.close()
                             current_app.logger.info(f'✅ 문 닫기 완료: {locker_id}')
@@ -656,15 +667,21 @@ def process_rental():
                             current_app.logger.info(f'⏳ 손 끼임 방지 대기 중... (3초)')
                             time.sleep(3)
                             
+                            # target_locker에서 zone 판단하여 device_id 선택
+                            if target_locker.startswith('S'):
+                                device_id = 'esp32_staff'
+                            else:  # M or F
+                                device_id = 'esp32_male_female'
+                            
                             # ESP32로 문 닫기 명령
                             esp32_manager = getattr(current_app, 'esp32_manager', None)
                             if esp32_manager:
                                 try:
-                                    current_app.logger.info(f'🚪 문 닫기 명령 전송: {target_locker}')
+                                    current_app.logger.info(f'🚪 문 닫기 명령 전송: {target_locker} → {device_id}')
                                     loop = asyncio.new_event_loop()
                                     asyncio.set_event_loop(loop)
                                     loop.run_until_complete(
-                                        esp32_manager.send_command("esp32_auto_0", "MOTOR_MOVE", revs=-0.917, rpm=30)
+                                        esp32_manager.send_command(device_id, "MOTOR_MOVE", revs=-0.917, rpm=30)
                                     )
                                     loop.close()
                                     current_app.logger.info(f'✅ 문 닫기 완료: {target_locker}')
@@ -1543,6 +1560,7 @@ def hardware_motor_move():
         revs = data.get('revs', 1.0)
         rpm = data.get('rpm', 60.0)
         accel = data.get('accel', True)
+        device_id = data.get('device_id', 'esp32_staff')  # 기본값: 교직원
         
         esp32_manager = getattr(current_app, 'esp32_manager', None)
         
@@ -1557,7 +1575,7 @@ def hardware_motor_move():
         try:
             # MOTOR_MOVE 명령으로 직접 회전수 제어 (음수 회전수 지원)
             result = asyncio.run(esp32_manager.send_command(
-                "esp32_auto_0",  # 자동 감지된 디바이스 ID
+                device_id,  # 지정된 ESP32로 전송
                 "MOTOR_MOVE",
                 revs=revs,
                 rpm=rpm,

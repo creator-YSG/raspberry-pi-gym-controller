@@ -57,7 +57,7 @@ class BarcodeService:
         if re.match(r'^(LOCKER|KEY)_[MFS]\d{2}$', barcode):
             return 'locker_key'
         
-        # 락카 ID 패턴 (예: M01, F50, S20)
+        # 락카 ID 패턴 (예: M01, F10, S10)
         if re.match(r'^[MFS]\d{2}$', barcode):
             return 'locker_key'
         
@@ -198,7 +198,7 @@ class BarcodeService:
         if match:
             return match.group(2)
         
-        # M01, F50, S20 형태 (직접 락카 ID - 새 시스템)
+        # M01, F10, S10 형태 (직접 락카 ID - 새 시스템)
         if re.match(r'^[MFS]\d{2}$', barcode):
             return barcode
         
@@ -211,15 +211,15 @@ class BarcodeService:
         if re.match(r'^[A-Z]\d{2}$', barcode):
             return barcode
         
-        # 숫자만 있는 경우 - 새 시스템 기준으로 변환
-        # 예: 001~070 → M01~M70, 071~120 → F01~F50, 121~140 → S01~S20
+        # 숫자만 있는 경우 - 새 시스템 기준으로 변환 (60개 락커)
+        # 예: 001~010 → S01~S10 (교직원), 011~050 → M01~M40 (남성), 051~060 → F01~F10 (여성)
         if barcode.isdigit():
             num = int(barcode)
-            if 1 <= num <= 70:
-                return f"M{num:02d}"
-            elif 71 <= num <= 120:
-                return f"F{(num-70):02d}"
-            elif 121 <= num <= 140:
-                return f"S{(num-120):02d}"
+            if 1 <= num <= 10:
+                return f"S{num:02d}"
+            elif 11 <= num <= 50:
+                return f"M{(num-10):02d}"
+            elif 51 <= num <= 60:
+                return f"F{(num-50):02d}"
         
         return ""
