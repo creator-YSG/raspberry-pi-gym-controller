@@ -1,37 +1,41 @@
 # 센서 매핑 빠른 가이드
 
-## 🚀 3단계로 끝내기
+> **⚠️ 주의**: 현재 센서 매핑은 `app/__init__.py`에 **하드코딩**되어 있습니다.
+> 이 문서는 참고용이며, 실제 매핑은 물리적 테스트로 검증되었습니다 (2025-11-07).
 
-### 1️⃣ 로그 모니터링 시작
-```bash
-ssh raspberry-pi "tail -f ~/gym-controller/logs/locker_system.log | grep -E 'pin.*state.*LOW'"
-```
+## ✅ 완료된 매핑
 
-### 2️⃣ 순서대로 락커 키 빼기
-- S01 → S02 → ... → S10 (교직원)
-- M01 → M02 → ... → M40 (남성)
-- F01 → F02 → ... → F10 (여성)
+### 전체 60개 센서 하드코딩 완료
+- ✅ S01-S10 (교직원): 센서 1-10
+- ✅ M01-M40 (남성): 센서 11-50
+- ✅ F01-F10 (여성): 센서 51-60
 
-### 3️⃣ Pin 번호 기록하고 매핑
-```
-Pin 1 = 센서 2번
-Pin 0 = 센서 1번
-Pin 6 = 센서 7번
-...
-```
+### 핵심 특징
+- **addr로 구분**: 같은 Chip0이지만 addr가 다름
+  - addr=0x26, Chip0 → S01-S10
+  - addr=0x23, Chip0 → M01-M10
+- **공식 사용 안함**: 하드코딩된 매핑 테이블 사용
 
 ---
 
-## 📝 매핑 파일 수정
+## 📝 매핑 파일 위치
 
-**파일**: `config/sensor_mapping.json`
+**핵심 매핑**: `app/__init__.py` (하드코딩)
+```python
+chip_addr_pin_to_sensor = {
+    ("0x26", 0, 1): 1,   # S01
+    ("0x23", 0, 1): 11,  # M01
+    # ... 전체 60개
+}
+```
 
+**UI 표시용**: `config/sensor_mapping.json`
 ```json
 {
   "mapping": {
-    "1": "S02",   ← 센서 1번이 S02 락커
-    "2": "S01",   ← 센서 2번이 S01 락커
-    "3": "S07",
+    "1": "S01",   ← 센서 1번이 S01 락커
+    "2": "S02",   ← 센서 2번이 S02 락커
+    "11": "M01",  ← 센서 11번이 M01 락커 (addr로 구분!)
     ...
   }
 }
@@ -39,28 +43,14 @@ Pin 6 = 센서 7번
 
 ---
 
-## 🔄 적용
-
-```bash
-# 동기화
-rsync -av config/sensor_mapping.json raspberry-pi:~/gym-controller/config/
-
-# 재시작
-ssh raspberry-pi "cd ~/gym-controller && bash scripts/deployment/stop_kiosk.sh && sleep 2 && bash scripts/deployment/start_kiosk.sh > /dev/null 2>&1 &"
-```
-
----
-
-## 💡 핵심 공식
+## ❌ 사용하지 않는 방식
 
 ```
-센서 번호 = Pin + 1
-
-예:
-Pin 0 → 센서 1번
-Pin 1 → 센서 2번
-Pin 9 → 센서 10번
+센서 번호 = Pin + 1              # 작동 안함!
+센서 번호 = (chip_idx × 16) + pin + 1  # 작동 안함!
 ```
+
+**이유**: addr가 다른 같은 Chip+Pin 조합이 존재하기 때문
 
 ---
 
