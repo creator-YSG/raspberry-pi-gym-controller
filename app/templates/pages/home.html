@@ -26,10 +26,18 @@
     <!-- 시스템 상태 (작게) -->
     <div class="system-status">
         <span class="status-indicator" id="systemStatus">●</span>
+        <button class="sensor-debug-toggle" id="sensorDebugToggle" title="센서 디버그 모드">
+            <span id="sensorDebugIcon">🔧</span>
+        </button>
     </div>
 
     <!-- 숨겨진 관리자 버튼 -->
     <div class="admin-trigger" id="adminTrigger"></div>
+    
+    <!-- 센서 디버그 알림 -->
+    <div class="sensor-debug-notification" id="sensorDebugNotification" style="display: none;">
+        <div class="sensor-info" id="sensorInfo"></div>
+    </div>
     
     <!-- NFC 락커 알림 -->
     <div class="nfc-locker-notification" id="nfcLockerNotification" style="display: none;">
@@ -40,6 +48,55 @@
 </div>
 
 <style>
+/* 센서 디버그 토글 버튼 */
+.sensor-debug-toggle {
+    margin-left: 15px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 8px;
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 20px;
+    transition: all 0.3s ease;
+}
+
+.sensor-debug-toggle:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: scale(1.1);
+}
+
+.sensor-debug-toggle.active {
+    background: rgba(76, 175, 80, 0.3);
+    border-color: #4caf50;
+}
+
+/* 센서 디버그 알림 */
+.sensor-debug-notification {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(33, 150, 243, 0.95);
+    padding: 40px 60px;
+    border-radius: 20px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+    z-index: 9999;
+    animation: sensorPulse 0.3s ease-out;
+}
+
+@keyframes sensorPulse {
+    0% { transform: translate(-50%, -50%) scale(0.8); opacity: 0; }
+    100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+}
+
+.sensor-info {
+    color: white;
+    font-size: 48px;
+    font-weight: bold;
+    text-align: center;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+}
+
 .nfc-locker-notification {
     position: fixed;
     top: 50%;
@@ -72,6 +129,8 @@ let barcodeBuffer = '';
 let barcodeTimeout = null;
 let pollingInterval = null;
 let isProcessingBarcode = false;
+let sensorDebugMode = false;
+let sensorNotificationTimeout = null;
 
 // 페이지 로드 시 초기화
 document.addEventListener('DOMContentLoaded', function() {
@@ -89,6 +148,9 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // 숨겨진 관리자 모드 (좌측 하단 3초 누르기)
     setupAdminTrigger();
+    
+    // 센서 디버그 모드 초기화
+    initSensorDebugMode();
     
     // 바코드 폴링 (200ms마다 체크)
     pollingInterval = setInterval(function() {
@@ -455,6 +517,90 @@ function handleNFCScanned(nfcUid) {
         isProcessingBarcode = false;
         navigateTo('error', { type: 'system_error', message: '시스템 오류' });
     });
+}
+
+// 센서 디버그 모드 초기화
+function initSensorDebugMode() {
+    // localStorage에서 설정 불러오기
+    const savedMode = localStorage.getItem('sensorDebugMode');
+    if (savedMode === 'true') {
+        sensorDebugMode = true;
+        document.getElementById('sensorDebugToggle').classList.add('active');
+        document.getElementById('sensorDebugIcon').textContent = '🔧✓';
+        startSensorPolling();
+    }
+    
+    // 토글 버튼 클릭 이벤트
+    document.getElementById('sensorDebugToggle').addEventListener('click', function() {
+        sensorDebugMode = !sensorDebugMode;
+        localStorage.setItem('sensorDebugMode', sensorDebugMode);
+        
+        if (sensorDebugMode) {
+            this.classList.add('active');
+            document.getElementById('sensorDebugIcon').textContent = '🔧✓';
+            console.log('✅ 센서 디버그 모드 활성화');
+            startSensorPolling();
+        } else {
+            this.classList.remove('active');
+            document.getElementById('sensorDebugIcon').textContent = '🔧';
+            console.log('❌ 센서 디버그 모드 비활성화');
+        }
+    });
+}
+
+// 센서 폴링 시작
+let sensorPollingInterval = null;
+function startSensorPolling() {
+    if (sensorPollingInterval) {
+        clearInterval(sensorPollingInterval);
+    }
+    
+    sensorPollingInterval = setInterval(function() {
+        if (!sensorDebugMode) {
+            if (sensorPollingInterval) {
+                clearInterval(sensorPollingInterval);
+                sensorPollingInterval = null;
+            }
+            return;
+        }
+        
+        fetch('/api/hardware/sensor_events')
+            .then(response => response.json())
+            .then(events => {
+                if (events && events.length > 0) {
+                    events.forEach(event => {
+                        if (event.locker_id && event.state === 'LOW') {
+                            showSensorDebugNotification(event.locker_id);
+                        }
+                    });
+                }
+            })
+            .catch(error => {
+                // 조용히 무시
+            });
+    }, 200);  // 200ms마다 체크
+}
+
+// 센서 디버그 알림 표시
+function showSensorDebugNotification(lockerId) {
+    const notification = document.getElementById('sensorDebugNotification');
+    const sensorInfo = document.getElementById('sensorInfo');
+    
+    // 기존 타임아웃 클리어
+    if (sensorNotificationTimeout) {
+        clearTimeout(sensorNotificationTimeout);
+    }
+    
+    // 락커 번호 표시
+    sensorInfo.textContent = `${lockerId}번 센서 감지`;
+    notification.style.display = 'block';
+    
+    console.log(`🔔 [센서 디버그] ${lockerId} 감지됨`);
+    
+    // 2초 후 자동 숨김
+    sensorNotificationTimeout = setTimeout(function() {
+        notification.style.display = 'none';
+    }, 2000);
 }
 
 </script>

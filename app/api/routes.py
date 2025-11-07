@@ -1510,8 +1510,20 @@ def add_sensor_event(sensor_num, state, timestamp=None):
             print(f"🔥 [상태업데이트] 센서{sensor_num}: {state} (지속상태)")
     
     # 기존 이벤트 저장 (호환성 유지)
+    # 🔥 센서 번호를 락커 ID로 매핑
+    locker_id = None
+    try:
+        import json
+        with open('/home/pi/gym-controller/config/sensor_mapping.json', 'r', encoding='utf-8') as f:
+            mapping_data = json.load(f)
+            locker_id = mapping_data.get('mapping', {}).get(str(sensor_num))
+    except Exception as e:
+        if has_app_context():
+            current_app.logger.warning(f"⚠️ 센서 매핑 로드 실패: {e}")
+    
     event = {
         'sensor_num': sensor_num,
+        'locker_id': locker_id,  # 🔥 락커 ID 추가
         'state': state,
         'timestamp': timestamp,
         'active': state == 'LOW'  # LOW일 때 활성(감지됨)
