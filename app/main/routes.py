@@ -97,13 +97,17 @@ def member_check():
                     return_barcode_time = datetime.now().isoformat()
                     
                     # 현재 대여 중인 락커 번호 조회
-                    current_rental = locker_service.db.fetch_one("""
+                    cursor = locker_service.db.execute_query("""
                         SELECT locker_number 
                         FROM rentals 
                         WHERE member_id = ? AND status = 'active'
-                        ORDER BY rental_time DESC 
+                        ORDER BY rental_barcode_time DESC 
                         LIMIT 1
                     """, (member_id,))
+                    
+                    current_rental = None
+                    if cursor:
+                        current_rental = cursor.fetchone()
                     
                     if current_rental:
                         member_dict['current_locker'] = current_rental[0]

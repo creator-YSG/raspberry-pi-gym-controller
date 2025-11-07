@@ -93,6 +93,9 @@ def setup_esp32_connection(app):
     # 바코드/NFC 폴링 큐 생성
     app.barcode_queue = queue.Queue(maxsize=10)
     
+    # 센서 폴링 큐 생성 (대여 중 센서 감지용)
+    app.sensor_queue = queue.Queue(maxsize=10)
+    
     def esp32_connection_worker():
         """ESP32 연결 워커 스레드"""
         try:
@@ -263,16 +266,18 @@ def setup_esp32_event_handlers(app, esp32_manager):
                 'timestamp': event_data.get('timestamp')
             }
             try:
-                sensor_queue.put_nowait(sensor_data)
-                app.logger.info(f"📦 센서 큐에 저장: 센서{sensor_num}, 상태{raw_state}")
+                app.sensor_queue.put_nowait(sensor_data)
+                print(f"📦 센서 큐에 저장: 센서{sensor_num}, 상태{raw_state}")  # Flask 컨텍스트 밖이므로 print 사용
             except queue.Full:
                 # 큐가 꽉 찼으면 가장 오래된 것 제거하고 새로운 것 추가
                 try:
-                    sensor_queue.get_nowait()
-                    sensor_queue.put_nowait(sensor_data)
-                    app.logger.warning(f"⚠️ 센서 큐가 가득 차서 오래된 데이터 제거")
-                except:
-                    pass
+                    app.sensor_queue.get_nowait()
+                    app.sensor_queue.put_nowait(sensor_data)
+                    print(f"⚠️ 센서 큐가 가득 차서 오래된 데이터 제거")
+                except Exception as e:
+                    print(f"❌ 센서 큐 오류 (Full 처리): {e}")
+            except Exception as e:
+                print(f"❌ 센서 큐 저장 오류: {e}, app.sensor_queue={getattr(app, 'sensor_queue', None)}")
         else:
             app.logger.warning(f"🔥 [DEBUG] 알 수 없는 핀 번호: {pin}")
         

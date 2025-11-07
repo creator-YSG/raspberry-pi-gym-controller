@@ -1573,18 +1573,19 @@ def add_sensor_event(sensor_num, state, timestamp=None):
                     current_app.logger.info(f"🔥 [센서처리] 실행중인 루프 발견, 백그라운드 스레드에서 실행")
                 
                 import threading
-                from flask import copy_current_request_context
                 
-                @copy_current_request_context
+                # 현재 앱 객체 캡처 (클로저로 사용)
+                app = current_app._get_current_object()
+                
                 def run_in_thread():
-                    if has_app_context():
-                        current_app.logger.info(f"🔥 [센서처리] 백그라운드 스레드 시작")
-                    new_loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(new_loop)
-                    new_loop.run_until_complete(process_sensor_event())
-                    new_loop.close()
-                    if has_app_context():
-                        current_app.logger.info(f"🔥 [센서처리] 백그라운드 스레드 완료")
+                    # Flask 앱 컨텍스트 생성 (요청 컨텍스트 없이)
+                    with app.app_context():
+                        app.logger.info(f"🔥 [센서처리] 백그라운드 스레드 시작")
+                        new_loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(new_loop)
+                        new_loop.run_until_complete(process_sensor_event())
+                        new_loop.close()
+                        app.logger.info(f"🔥 [센서처리] 백그라운드 스레드 완료")
                 
                 thread = threading.Thread(target=run_in_thread, daemon=True)
                 thread.start()
