@@ -22,28 +22,6 @@ def member_check():
     """회원 확인 화면"""
     member_id = request.args.get('member_id', '')
     action = request.args.get('action', 'rental')  # 'rental' or 'return'
-    method = request.args.get('method', 'barcode')  # 'barcode' or 'nfc'
-    locker_id = request.args.get('locker_id', '')
-    
-    # NFC 반납인 경우 locker_id로부터 member_id 조회
-    if not member_id and method == 'nfc' and locker_id and action == 'return':
-        from database.database_manager import DatabaseManager
-        db = DatabaseManager()
-        db.connect()
-        
-        cursor = db.conn.cursor()
-        cursor.execute("""
-            SELECT current_member
-            FROM locker_status
-            WHERE locker_number = ? AND current_member IS NOT NULL
-        """, (locker_id,))
-        result = cursor.fetchone()
-        
-        if result and result[0]:
-            member_id = result[0]
-            current_app.logger.info(f'🔍 NFC 반납: 락커 {locker_id} → 회원 {member_id}')
-        else:
-            current_app.logger.warning(f'⚠️ NFC 반납: 락커 {locker_id}에 대여 중인 회원 없음')
     
     if member_id:
         member_service = MemberService()
@@ -84,11 +62,8 @@ def member_check():
                 member_dict['expiry_date'] = None
                 current_app.logger.warning(f"⚠️ 회원 {member.id}의 만료일 정보 없음")
             
-            # NFC 반납인 경우 URL 파라미터의 zone 사용, 아니면 회원 정보에서 zone 결정
-            url_zone = request.args.get('zone', '')
-            if url_zone and method == 'nfc' and action == 'return':
-                zone = url_zone
-            elif member.member_category == 'staff' and 'STAFF' in member.allowed_zones:
+            # 접근 가능한 구역 확인 (교직원은 STAFF 우선)
+            if member.member_category == 'staff' and 'STAFF' in member.allowed_zones:
                 zone = 'STAFF'
             else:
                 zone = member.allowed_zones[0] if member.allowed_zones else 'MALE'

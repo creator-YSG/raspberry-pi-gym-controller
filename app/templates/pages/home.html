@@ -30,7 +30,36 @@
 
     <!-- 숨겨진 관리자 버튼 -->
     <div class="admin-trigger" id="adminTrigger"></div>
+    
+    <!-- NFC 락커 알림 -->
+    <div class="nfc-locker-notification" id="nfcLockerNotification" style="display: none;">
+        <div class="notification-content">
+            <div class="locker-number-display" id="lockerNumberDisplay"></div>
+        </div>
+    </div>
 </div>
+
+<style>
+.nfc-locker-notification {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0, 0, 0, 0.9);
+    padding: 60px 80px;
+    border-radius: 30px;
+    z-index: 9999;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+}
+
+.locker-number-display {
+    font-size: 6rem;
+    font-weight: bold;
+    color: #4caf50;
+    text-align: center;
+    text-shadow: 0 0 20px rgba(76, 175, 80, 0.5);
+}
+</style>
 
 <!-- 바코드 입력 숨김 필드 (하드웨어 스캐너용) -->
 <input type="text" id="barcodeInput" class="barcode-hidden-input" autocomplete="off" />
@@ -374,6 +403,41 @@ function handleNFCScanned(nfcUid) {
     .then(data => {
         console.log('✅ NFC 검증 결과:', data);
         if (data.success && data.locker_info) {
+            // 대여 기록이 없는 경우 문만 열고 10초 후 닫기
+            if (!data.locker_info.is_rented) {
+                console.log('🚪 대여 기록 없음 - 문만 열기');
+                const zone = data.locker_info.zone;
+                const lockerNumber = data.locker_info.locker_number;
+                const deviceId = zone === 'STAFF' ? 'esp32_staff' : 'esp32_male_female';
+                
+                // 락커 번호 알림 표시
+                const notification = document.getElementById('nfcLockerNotification');
+                const lockerDisplay = document.getElementById('lockerNumberDisplay');
+                lockerDisplay.textContent = `${lockerNumber}번 락커`;
+                notification.style.display = 'block';
+                
+                // 문 열기
+                fetch('/api/hardware/motor_move', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ revs: 0.917, rpm: 30, device_id: deviceId })
+                });
+                
+                // 10초 후 문 닫기 + 알림 숨기기
+                setTimeout(() => {
+                    fetch('/api/hardware/motor_move', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ revs: -0.917, rpm: 30, device_id: deviceId })
+                    });
+                    notification.style.display = 'none';
+                }, 10000);
+                
+                isProcessingBarcode = false;
+                return;
+            }
+            
+            // 대여 기록이 있으면 기존 로직대로 진행
             navigateTo('member-check', {
                 action: 'return',
                 locker_id: data.locker_info.locker_number,
