@@ -149,35 +149,9 @@ class SensorEventHandler:
             
             logger.info(f"관련 트랜잭션 발견: {tx_id} (단계: {tx_step}, 타입: {tx_type})")
             
-            # 대여 프로세스: HIGH 상태 = 락카키 제거 → 바로 대여 완료 처리
-            if tx_type == 'rental' and state == 'HIGH':
-                logger.info(f"락카키 제거 감지 → 대여 완료 처리 시작: {locker_id}")
-                
-                # 3초 대기 (손 끼임 방지)
-                import asyncio
-                await asyncio.sleep(3)
-                
-                # 문 닫기 명령 (ESP32Manager 사용)
-                try:
-                    if self.esp32_manager:
-                        logger.info("문 닫기 명령 전송")
-                        await self.esp32_manager.send_command("esp32_auto_0", "MOTOR_MOVE", revs=-0.917, rpm=30)
-                        logger.info("✅ 문 닫기 명령 전송 완료")
-                    else:
-                        logger.warning("ESP32 매니저가 없어 문 닫기를 건너뜁니다")
-                except Exception as e:
-                    logger.warning(f"문 닫기 명령 오류: {e}")
-                
-                # 대여 완료 처리
-                await self._complete_rental_process(locker_id, tx_id, member_id)
-                
-                return {
-                    'success': True,
-                    'message': f'락카키 {locker_id} 대여 완료',
-                    'action': 'rental_completed',
-                    'locker_id': locker_id,
-                    'member_id': member_id
-                }
+            # [DEPRECATED - 2025-12-09 제거됨]
+            # 이 로직은 사용되지 않습니다. 실제 대여 완료는 프론트엔드에서 /rentals/process API를 통해 처리됩니다.
+            # 원본 코드: archive/deprecated/sensor_event_handler_deprecated.py 참조
             
             # 센서 이벤트를 트랜잭션에 기록
             await self.tx_manager.record_sensor_event(
@@ -359,49 +333,9 @@ class SensorEventHandler:
         """센서-락카 매핑 정보 반환"""
         return self.sensor_to_locker_map.copy()
     
-    async def _complete_rental_process(self, locker_id: str, tx_id: str, member_id: str):
-        """[DEPRECATED - 사용 안 함] 대여 완료 처리 - 실제 선택된 락카키로 기록 업데이트
-        
-        ⚠️ 이 함수는 더 이상 사용되지 않습니다.
-        현재는 api/routes.py의 /rentals/process 엔드포인트가 사용됩니다.
-        """
-        try:
-            from datetime import datetime
-            from database.transaction_manager import TransactionStatus
-            
-            # 1. 대여 기록을 실제 선택된 락카키로 업데이트하고 'active' 상태로 변경
-            self.db.execute_query("""
-                UPDATE rentals 
-                SET locker_number = ?, status = 'active', updated_at = ?
-                WHERE transaction_id = ? AND member_id = ?
-            """, (locker_id, datetime.now().isoformat(), tx_id, member_id))
-            
-            # 2. 락커 상태 업데이트 (실제 선택된 락카키)
-            self.db.execute_query("""
-                UPDATE locker_status 
-                SET current_member = ?, updated_at = ?
-                WHERE locker_number = ?
-            """, (member_id, datetime.now().isoformat(), locker_id))
-            
-            # 3. 회원 현재 대여 정보 업데이트
-            self.db.execute_query("""
-                UPDATE members 
-                SET currently_renting = ?, 
-                    daily_rental_count = daily_rental_count + 1,
-                    last_rental_time = ?,
-                    updated_at = ?
-                WHERE member_id = ?
-            """, (locker_id, datetime.now().isoformat(), datetime.now().isoformat(), member_id))
-            
-            # 4. 트랜잭션 완료 처리
-            await self.tx_manager.end_transaction(tx_id, TransactionStatus.COMPLETED)
-            
-            logger.info(f"센서 기반 대여 완료 처리 성공: 회원 {member_id} → 락커 {locker_id}, 트랜잭션 {tx_id}")
-            
-        except Exception as e:
-            logger.error(f"센서 기반 대여 완료 처리 오류: 회원 {member_id}, 락커 {locker_id}, 트랜잭션 {tx_id}, {e}")
-            # 트랜잭션 실패 처리
-            await self.tx_manager.end_transaction(tx_id, TransactionStatus.FAILED)
+    # [DEPRECATED 함수 제거됨 - 2025-12-09]
+    # _complete_rental_process 함수는 사용되지 않아 삭제됨
+    # 원본 코드: archive/deprecated/sensor_event_handler_deprecated.py 참조
 
     def close(self):
         """데이터베이스 연결 종료"""

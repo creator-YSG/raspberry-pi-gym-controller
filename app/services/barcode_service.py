@@ -241,6 +241,13 @@ class BarcodeService:
             
             logger.info(f"🔍 NFC 반납 처리 시작: UID={nfc_uid}")
             
+            # NFC 스캔 비프음
+            try:
+                import os
+                os.system('aplay -q /usr/share/sounds/alsa/Front_Left.wav &')
+            except:
+                pass
+            
             # 1. NFC UID로 락커 ID 조회
             locker_id = self.nfc_service.get_locker_by_nfc_uid(nfc_uid)
             
