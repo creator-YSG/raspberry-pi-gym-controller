@@ -25,3 +25,13 @@ flake8>=5.0.0
 
 # 유틸리티
 psutil>=5.9.0
+
+# 얼굴인식 - 카메라 및 이미지 처리
+opencv-python>=4.8.0
+numpy>=1.24.0
+
+# 얼굴인식 - MediaPipe (Apache 2.0 라이선스)
+mediapipe>=0.10.0
+
+# 라즈베리파이 카메라 (Pi에서만 설치)
+# picamera2>=0.3.12  # pip install picamera2 (라즈베리파이에서만)

@@ -40,6 +40,197 @@ def health_check():
     })
 
 
+@bp.route('/member/by-nfc/<nfc_uid>')
+def get_member_by_nfc(nfc_uid):
+    """NFC UID로 회원 정보 조회 (운동복/수건 대여기 연동용)
+    
+    운동복 대여기가 NFC 태그 시 호출하는 API
+    NFC UID → 락카 번호 매핑 후, 해당 락카를 빌리고 있는 회원 정보 반환
+    
+    Args:
+        nfc_uid: NFC 태그 UID (예: 5A41B914524189)
+    
+    Returns:
+        성공: {status: "ok", locker_number, member_id, name, assigned_at}
+        실패: {status: "error", message, ...}
+    """
+    try:
+        locker_service = LockerService()
+        
+        # 1단계: NFC UID로 락카 번호 찾기
+        cursor = locker_service.db.execute_query("""
+            SELECT locker_number FROM locker_status 
+            WHERE nfc_uid = ?
+        """, (nfc_uid,))
+        
+        if not cursor:
+            current_app.logger.error(f'NFC UID 조회 쿼리 실행 실패: {nfc_uid}')
+            return jsonify({
+                'status': 'error',
+                'message': '서버 오류'
+            }), 500
+        
+        locker_row = cursor.fetchone()
+        
+        if not locker_row:
+            current_app.logger.warning(f'등록되지 않은 NFC UID: {nfc_uid}')
+            return jsonify({
+                'status': 'error',
+                'nfc_uid': nfc_uid,
+                'message': '해당 락카가 배정되어 있지 않습니다'
+            }), 404
+        
+        locker_number = locker_row['locker_number']
+        current_app.logger.info(f'NFC UID 매핑: {nfc_uid} → 락카 {locker_number}')
+        
+        # 2단계: 락카 번호로 대여 정보 및 회원 정보 조회
+        cursor = locker_service.db.execute_query("""
+            SELECT 
+                ls.locker_number,
+                ls.current_member,
+                r.member_id,
+                r.rental_barcode_time as assigned_at,
+                m.member_name,
+                m.barcode
+            FROM locker_status ls
+            LEFT JOIN rentals r ON ls.locker_number = r.locker_number 
+                AND r.status = 'active'
+            LEFT JOIN members m ON r.member_id = m.member_id
+            WHERE ls.locker_number = ?
+        """, (locker_number,))
+        
+        if not cursor:
+            current_app.logger.error(f'락카 조회 쿼리 실행 실패: {locker_number}')
+            return jsonify({
+                'status': 'error',
+                'message': '서버 오류'
+            }), 500
+        
+        row = cursor.fetchone()
+        
+        # 락카는 있지만 현재 대여중이 아님
+        if not row['current_member'] or not row['member_id']:
+            current_app.logger.info(f'대여 중이 아닌 락카: {locker_number} (NFC: {nfc_uid})')
+            return jsonify({
+                'status': 'error',
+                'locker_number': locker_number,
+                'nfc_uid': nfc_uid,
+                'message': '해당 락카가 배정되어 있지 않습니다'
+            }), 404
+        
+        # 회원 ID는 있지만 회원 정보가 없음 (데이터 정합성 문제)
+        if not row['member_name']:
+            current_app.logger.error(f'회원 정보 없음: locker={locker_number}, member_id={row["member_id"]}')
+            return jsonify({
+                'status': 'error',
+                'locker_number': locker_number,
+                'member_id': row['member_id'],
+                'message': '회원 정보를 찾을 수 없습니다'
+            }), 404
+        
+        # 정상 응답
+        current_app.logger.info(f'✅ NFC 회원 조회 성공: {nfc_uid} → {locker_number} → {row["member_id"]} ({row["member_name"]})')
+        return jsonify({
+            'status': 'ok',
+            'locker_number': locker_number,
+            'member_id': row['member_id'],
+            'name': row['member_name'],
+            'assigned_at': row['assigned_at'] or ''
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f'NFC 회원 조회 오류: {nfc_uid}, {e}')
+        return jsonify({
+            'status': 'error',
+            'message': '서버 오류'
+        }), 500
+
+
+@bp.route('/member/by-locker/<locker_number>')
+def get_member_by_locker(locker_number):
+    """락카 번호로 회원 정보 조회 (내부용 또는 디버깅용)
+    
+    Args:
+        locker_number: 락카 번호 (예: M01, F05, S10)
+    
+    Returns:
+        성공: {status: "ok", locker_number, member_id, name, assigned_at}
+        실패: {status: "error", message, ...}
+    """
+    try:
+        locker_service = LockerService()
+        
+        # DB에서 락카 상태 및 대여 정보 조회
+        cursor = locker_service.db.execute_query("""
+            SELECT 
+                ls.locker_number,
+                ls.current_member,
+                r.member_id,
+                r.rental_barcode_time as assigned_at,
+                m.member_name,
+                m.barcode
+            FROM locker_status ls
+            LEFT JOIN rentals r ON ls.locker_number = r.locker_number 
+                AND r.status = 'active'
+            LEFT JOIN members m ON r.member_id = m.member_id
+            WHERE ls.locker_number = ?
+        """, (locker_number,))
+        
+        if not cursor:
+            current_app.logger.error(f'락카 조회 쿼리 실행 실패: {locker_number}')
+            return jsonify({
+                'status': 'error',
+                'message': '서버 오류'
+            }), 500
+        
+        row = cursor.fetchone()
+        
+        # 1. 락카 자체가 존재하지 않음
+        if not row:
+            current_app.logger.warning(f'존재하지 않는 락카 번호: {locker_number}')
+            return jsonify({
+                'status': 'error',
+                'locker_number': locker_number,
+                'message': '해당 락카가 배정되어 있지 않습니다'
+            }), 404
+        
+        # 2. 락카는 있지만 현재 대여중이 아님
+        if not row['current_member'] or not row['member_id']:
+            current_app.logger.info(f'대여 중이 아닌 락카: {locker_number}')
+            return jsonify({
+                'status': 'error',
+                'locker_number': locker_number,
+                'message': '해당 락카가 배정되어 있지 않습니다'
+            }), 404
+        
+        # 3. 회원 ID는 있지만 회원 정보가 없음 (데이터 정합성 문제)
+        if not row['member_name']:
+            current_app.logger.error(f'회원 정보 없음: locker={locker_number}, member_id={row["member_id"]}')
+            return jsonify({
+                'status': 'error',
+                'locker_number': locker_number,
+                'member_id': row['member_id'],
+                'message': '회원 정보를 찾을 수 없습니다'
+            }), 404
+        
+        # 4. 정상 응답
+        current_app.logger.info(f'락카 회원 조회 성공: {locker_number} -> {row["member_id"]} ({row["member_name"]})')
+        return jsonify({
+            'status': 'ok',
+            'locker_number': locker_number,
+            'member_id': row['member_id'],
+            'name': row['member_name'],
+            'assigned_at': row['assigned_at'] or ''
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f'락카 회원 조회 오류: {locker_number}, {e}')
+        return jsonify({
+            'status': 'error',
+            'message': '서버 오류'
+        }), 500
+
+
 @bp.route('/barcode/poll', methods=['GET'])
 def poll_barcode():
     """바코드 폴링 (큐에서 가져오기)"""
@@ -427,6 +618,13 @@ def process_barcode():
         
         current_app.logger.info(f'⏱️ [PERF] 바코드 처리 완료: {t_service:.2f}ms | 전체: {t_total:.2f}ms')
         
+        # 인증 성공 시 사진 촬영 (백그라운드)
+        if result.get('success'):
+            try:
+                _capture_auth_photo(result.get('member_id'), 'barcode')
+            except Exception as photo_error:
+                current_app.logger.warning(f'인증 사진 촬영 실패 (무시): {photo_error}')
+        
         if result['success']:
             return jsonify(result)
         else:
@@ -439,6 +637,64 @@ def process_barcode():
             'error': '바코드 처리 중 시스템 오류가 발생했습니다.',
             'error_type': 'system_error'
         }), 500
+
+
+def _capture_auth_photo(member_id: str, auth_method: str):
+    """인증 시 사진 촬영 (백그라운드)
+    
+    Args:
+        member_id: 회원 ID
+        auth_method: 인증 방법 (barcode, qr, nfc, face)
+    """
+    import threading
+    
+    def capture_async():
+        try:
+            from app.services.camera_service import get_camera_service
+            from datetime import datetime
+            from pathlib import Path
+            from database.database_manager import DatabaseManager
+            
+            camera_service = get_camera_service()
+            
+            if not camera_service.is_running:
+                return
+            
+            # 스냅샷 촬영
+            now = datetime.now()
+            photos_dir = Path('instance/photos/rentals') / str(now.year) / f"{now.month:02d}"
+            photos_dir.mkdir(parents=True, exist_ok=True)
+            
+            filename = f"{member_id}_{now.strftime('%Y%m%d_%H%M%S')}.jpg"
+            photo_path = str(photos_dir / filename)
+            
+            saved_path = camera_service.capture_snapshot(photo_path)
+            
+            if saved_path:
+                # DB에 사진 경로 업데이트 (최근 활성 대여 레코드)
+                db = DatabaseManager('instance/gym_system.db')
+                db.connect()
+                
+                db.execute_query("""
+                    UPDATE rentals 
+                    SET rental_photo_path = ?, auth_method = ?
+                    WHERE member_id = ? AND status IN ('active', 'pending')
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                """, (saved_path, auth_method, member_id))
+                
+                db.close()
+                
+                current_app.logger.info(f'📸 인증 사진 촬영: {saved_path} (method: {auth_method})')
+                
+        except Exception as e:
+            # 사진 촬영 실패는 치명적이지 않음 - 로그만 남김
+            import logging
+            logging.getLogger(__name__).warning(f'인증 사진 촬영 오류: {e}')
+    
+    # 비동기로 실행 (메인 응답 지연 방지)
+    thread = threading.Thread(target=capture_async, daemon=True)
+    thread.start()
 
 
 @bp.route('/rentals/process', methods=['POST'])
@@ -1156,6 +1412,13 @@ def nfc_validate():
             'message': result.get('message', ''),
             'error': None if result.get('valid') else result.get('message', 'NFC 검증 실패')
         }
+        
+        # NFC 인증 성공 시 사진 촬영 (대여 중인 경우만)
+        if result.get('valid') and result.get('current_member'):
+            try:
+                _capture_auth_photo(result.get('current_member'), 'nfc')
+            except Exception as photo_error:
+                current_app.logger.warning(f'NFC 인증 사진 촬영 실패 (무시): {photo_error}')
         
         current_app.logger.info(f'📤 NFC 검증 API 응답: {response}')
         return jsonify(response)
@@ -1971,4 +2234,321 @@ def get_sensor_mapping():
         return jsonify({
             'success': False,
             'error': f'센서 매핑 조회 중 오류가 발생했습니다: {str(e)}'
+        }), 500
+
+
+# =====================================================
+# 카메라 API
+# =====================================================
+
+@bp.route('/camera/motion')
+def poll_camera_motion():
+    """프레임 변화 감지 폴링 (대기 화면용)
+    
+    Returns:
+        {motion: true/false} - 사람이 접근했는지 여부
+    """
+    try:
+        from app.services.camera_service import get_camera_service
+        camera_service = get_camera_service()
+        
+        motion = camera_service.check_motion()
+        
+        return jsonify({
+            'motion': motion
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f'모션 감지 폴링 오류: {e}')
+        return jsonify({
+            'motion': False,
+            'error': str(e)
+        })
+
+
+@bp.route('/camera/start', methods=['POST'])
+def start_camera():
+    """카메라 시작"""
+    try:
+        from app.services.camera_service import get_camera_service
+        
+        # picamera 사용 여부 (기본값: True)
+        use_picamera = request.json.get('use_picamera', True) if request.json else True
+        
+        camera_service = get_camera_service(use_picamera=use_picamera)
+        success = camera_service.start()
+        
+        if success:
+            return jsonify({
+                'success': True,
+                'message': '카메라가 시작되었습니다.',
+                'status': camera_service.get_status()
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': '카메라 시작 실패'
+            }), 500
+            
+    except Exception as e:
+        current_app.logger.error(f'카메라 시작 오류: {e}')
+        return jsonify({
+            'success': False,
+            'error': f'카메라 시작 오류: {str(e)}'
+        }), 500
+
+
+@bp.route('/camera/stop', methods=['POST'])
+def stop_camera():
+    """카메라 정지"""
+    try:
+        from app.services.camera_service import get_camera_service
+        camera_service = get_camera_service()
+        camera_service.stop()
+        
+        return jsonify({
+            'success': True,
+            'message': '카메라가 정지되었습니다.'
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f'카메라 정지 오류: {e}')
+        return jsonify({
+            'success': False,
+            'error': f'카메라 정지 오류: {str(e)}'
+        }), 500
+
+
+@bp.route('/camera/status')
+def camera_status():
+    """카메라 상태 조회"""
+    try:
+        from app.services.camera_service import get_camera_service
+        camera_service = get_camera_service()
+        
+        return jsonify({
+            'success': True,
+            'status': camera_service.get_status()
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f'카메라 상태 조회 오류: {e}')
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@bp.route('/video_feed')
+def video_feed():
+    """MJPEG 비디오 스트림
+    
+    사용법: <img src="/api/video_feed">
+    """
+    from flask import Response
+    from app.services.camera_service import get_camera_service
+    
+    try:
+        camera_service = get_camera_service()
+        
+        if not camera_service.is_running:
+            camera_service.start()
+        
+        return Response(
+            camera_service.generate_mjpeg_stream(),
+            mimetype='multipart/x-mixed-replace; boundary=frame'
+        )
+        
+    except Exception as e:
+        current_app.logger.error(f'비디오 스트림 오류: {e}')
+        return jsonify({'error': str(e)}), 500
+
+
+# =====================================================
+# 얼굴인식 API
+# =====================================================
+
+@bp.route('/auth/face', methods=['POST'])
+def authenticate_face():
+    """얼굴 인증 (서버에서 스냅샷 촬영)
+    
+    카메라에서 현재 프레임으로 얼굴 인증 수행
+    
+    Returns:
+        성공: {success: true, action: rental/return, member_id, member_name, ...}
+        실패: {success: false, error, error_type, ...}
+    """
+    try:
+        from app.services.camera_service import get_camera_service
+        from app.services.face_service import get_face_service
+        
+        camera_service = get_camera_service()
+        face_service = get_face_service()
+        
+        # 카메라에서 현재 프레임 가져오기
+        frame = camera_service.capture_frame()
+        
+        if frame is None:
+            return jsonify({
+                'success': False,
+                'error': '카메라에서 프레임을 가져올 수 없습니다.',
+                'error_type': 'camera_error'
+            }), 500
+        
+        # 얼굴 인증 처리
+        result = face_service.process_face_auth(frame)
+        
+        current_app.logger.info(f"얼굴 인증: {'성공' if result.get('success') else '실패'} "
+                               f"- {result.get('member_id', 'N/A')}")
+        
+        # 얼굴 인증 성공 시 사진 촬영 (백그라운드)
+        if result.get('success'):
+            try:
+                _capture_auth_photo(result.get('member_id'), 'face')
+            except Exception as photo_error:
+                current_app.logger.warning(f'얼굴 인증 사진 촬영 실패 (무시): {photo_error}')
+        
+        if result.get('success'):
+            return jsonify(result)
+        else:
+            # 실패해도 200 OK (클라이언트에서 처리)
+            return jsonify(result)
+        
+    except Exception as e:
+        current_app.logger.error(f'얼굴 인증 오류: {e}', exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': '얼굴 인증 처리 중 오류가 발생했습니다.',
+            'error_type': 'system_error'
+        }), 500
+
+
+@bp.route('/face/register/<member_id>', methods=['POST'])
+def register_face(member_id):
+    """회원 얼굴 등록 (테스트용)
+    
+    카메라에서 현재 프레임으로 얼굴 등록
+    
+    Args:
+        member_id: 회원 ID (URL 파라미터)
+        
+    Returns:
+        성공: {success: true, member_id, photo_path, message}
+        실패: {success: false, error, error_type}
+    """
+    try:
+        from app.services.camera_service import get_camera_service
+        from app.services.face_service import get_face_service
+        
+        camera_service = get_camera_service()
+        face_service = get_face_service()
+        
+        # 회원 존재 확인
+        member_service = MemberService()
+        member = member_service.get_member(member_id)
+        
+        if not member:
+            return jsonify({
+                'success': False,
+                'error': f'회원을 찾을 수 없습니다: {member_id}',
+                'error_type': 'member_not_found'
+            }), 404
+        
+        # 카메라에서 현재 프레임 가져오기
+        frame = camera_service.capture_frame()
+        
+        if frame is None:
+            return jsonify({
+                'success': False,
+                'error': '카메라에서 프레임을 가져올 수 없습니다.',
+                'error_type': 'camera_error'
+            }), 500
+        
+        # 얼굴 등록
+        result = face_service.register_face(member_id, frame, save_photo=True)
+        
+        current_app.logger.info(f"얼굴 등록: {member_id} - {'성공' if result.get('success') else '실패'}")
+        
+        if result.get('success'):
+            return jsonify(result)
+        else:
+            return jsonify(result), 400
+        
+    except Exception as e:
+        current_app.logger.error(f'얼굴 등록 오류: {member_id}, {e}', exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': '얼굴 등록 중 오류가 발생했습니다.',
+            'error_type': 'system_error'
+        }), 500
+
+
+@bp.route('/face/unregister/<member_id>', methods=['DELETE'])
+def unregister_face(member_id):
+    """회원 얼굴 등록 해제
+    
+    Args:
+        member_id: 회원 ID (URL 파라미터)
+        
+    Returns:
+        {success: true/false, message/error}
+    """
+    try:
+        from app.services.face_service import get_face_service
+        face_service = get_face_service()
+        
+        result = face_service.unregister_face(member_id)
+        
+        current_app.logger.info(f"얼굴 등록 해제: {member_id} - {'성공' if result.get('success') else '실패'}")
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        current_app.logger.error(f'얼굴 등록 해제 오류: {member_id}, {e}')
+        return jsonify({
+            'success': False,
+            'error': '얼굴 등록 해제 중 오류가 발생했습니다.'
+        }), 500
+
+
+@bp.route('/face/status')
+def face_service_status():
+    """얼굴인식 서비스 상태 조회"""
+    try:
+        from app.services.face_service import get_face_service
+        face_service = get_face_service()
+        
+        return jsonify({
+            'success': True,
+            'status': face_service.get_status()
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f'얼굴인식 서비스 상태 조회 오류: {e}')
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@bp.route('/face/reload', methods=['POST'])
+def reload_face_embeddings():
+    """얼굴 임베딩 DB 새로고침"""
+    try:
+        from app.services.face_service import get_face_service
+        face_service = get_face_service()
+        
+        face_service.reload_embeddings()
+        
+        return jsonify({
+            'success': True,
+            'message': '얼굴 임베딩 DB가 새로고침되었습니다.',
+            'registered_count': face_service.get_registered_count()
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f'얼굴 임베딩 새로고침 오류: {e}')
+        return jsonify({
+            'success': False,
+            'error': str(e)
         }), 500

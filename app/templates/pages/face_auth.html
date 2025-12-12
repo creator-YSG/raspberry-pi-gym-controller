@@ -1,0 +1,477 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}얼굴 인증{% endblock %}
+
+{% block body_class %}face-auth-page{% endblock %}
+
+{% block content %}
+<div class="face-auth-container">
+    <!-- 상단: 안내 메시지 -->
+    <div class="auth-header">
+        <h1 class="auth-title" id="authTitle">카메라를 바라봐주세요</h1>
+        <p class="auth-subtitle" id="authSubtitle">자동으로 얼굴을 인식합니다</p>
+    </div>
+
+    <!-- 중앙: 카메라 영상 -->
+    <div class="camera-container">
+        <div class="camera-frame">
+            <img id="cameraFeed" src="/api/video_feed" alt="카메라 영상" />
+            <div class="face-guide"></div>
+        </div>
+        <div class="camera-status" id="cameraStatus">
+            <span class="status-icon">📷</span>
+            <span class="status-text">인식 중...</span>
+        </div>
+    </div>
+
+    <!-- 하단: 대체 인증 안내 -->
+    <div class="alt-auth-message">
+        <p>바코드 또는 QR코드로도 인증할 수 있습니다</p>
+    </div>
+    
+    <!-- 타임아웃 프로그레스 바 -->
+    <div class="timeout-progress">
+        <div class="progress-bar" id="progressBar"></div>
+    </div>
+</div>
+
+<style>
+.face-auth-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 100vh;
+    padding: 40px 20px;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    color: white;
+}
+
+.auth-header {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.auth-title {
+    font-size: 2.5rem;
+    font-weight: 700;
+    margin-bottom: 10px;
+    color: #ffffff;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+
+.auth-subtitle {
+    font-size: 1.2rem;
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.camera-container {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex: 1;
+}
+
+.camera-frame {
+    position: relative;
+    width: 480px;
+    height: 360px;
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+    border: 4px solid rgba(76, 175, 80, 0.5);
+}
+
+.camera-frame img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.face-guide {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 200px;
+    height: 260px;
+    border: 3px dashed rgba(76, 175, 80, 0.7);
+    border-radius: 50% 50% 45% 45%;
+    pointer-events: none;
+}
+
+.camera-status {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 20px;
+    padding: 12px 24px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 30px;
+    font-size: 1.1rem;
+}
+
+.camera-status.success {
+    background: rgba(76, 175, 80, 0.3);
+    border: 2px solid #4caf50;
+}
+
+.camera-status.error {
+    background: rgba(244, 67, 54, 0.3);
+    border: 2px solid #f44336;
+}
+
+.status-icon {
+    font-size: 1.5rem;
+}
+
+.alt-auth-message {
+    text-align: center;
+    margin-top: 20px;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 1rem;
+}
+
+.timeout-progress {
+    width: 100%;
+    max-width: 500px;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+    margin-top: 30px;
+    overflow: hidden;
+}
+
+.progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #4caf50, #8bc34a);
+    width: 100%;
+    transition: width 0.3s ease;
+}
+
+/* 인증 성공 애니메이션 */
+@keyframes successPulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+
+.camera-frame.success {
+    border-color: #4caf50;
+    animation: successPulse 0.5s ease;
+}
+
+.camera-frame.error {
+    border-color: #f44336;
+}
+</style>
+
+<!-- 바코드 입력 숨김 필드 (하드웨어 스캐너용) -->
+<input type="text" id="barcodeInput" class="barcode-hidden-input" autocomplete="off" />
+{% endblock %}
+
+{% block scripts %}
+<script>
+let pollingInterval = null;
+let authPollingInterval = null;
+let timeoutInterval = null;
+let isProcessingAuth = false;
+let isProcessingBarcode = false;
+const TIMEOUT_SECONDS = 20;
+let remainingSeconds = TIMEOUT_SECONDS;
+
+// 페이지 로드 시 초기화
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('📷 얼굴 인증 화면 시작');
+    
+    // 바코드 스캐너 리스닝
+    setupBarcodeScanner();
+    
+    // 바코드 폴링 시작 (200ms)
+    startBarcodePolling();
+    
+    // 얼굴 인증 시작 (0.5초 후)
+    setTimeout(function() {
+        startFaceAuthPolling();
+    }, 500);
+    
+    // 타임아웃 카운터 시작
+    startTimeoutCounter();
+});
+
+// 바코드 스캐너 리스닝
+function setupBarcodeScanner() {
+    const barcodeInput = document.getElementById('barcodeInput');
+    barcodeInput.focus();
+    
+    document.addEventListener('click', function() {
+        barcodeInput.focus();
+    });
+    
+    let barcodeBuffer = '';
+    
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' || e.keyCode === 13) {
+            const inputValue = barcodeInput.value || barcodeBuffer;
+            
+            if (inputValue.length > 0) {
+                console.log('바코드 완료:', inputValue);
+                handleBarcodeScanned(inputValue);
+                barcodeBuffer = '';
+                barcodeInput.value = '';
+            }
+            e.preventDefault();
+            return false;
+        }
+        
+        if (e.key && e.key.length === 1) {
+            barcodeBuffer += e.key;
+        }
+    });
+}
+
+// 바코드 폴링 시작
+function startBarcodePolling() {
+    pollingInterval = setInterval(function() {
+        if (isProcessingBarcode || isProcessingAuth) return;
+        
+        fetch('/api/barcode/poll')
+            .then(response => response.json())
+            .then(data => {
+                if (data.has_barcode && !isProcessingBarcode && !isProcessingAuth) {
+                    console.log('📊 바코드 감지:', data.barcode);
+                    handleBarcodeScanned(data.barcode);
+                }
+            })
+            .catch(error => {});
+    }, 200);
+}
+
+// 얼굴 인증 폴링 시작
+function startFaceAuthPolling() {
+    authPollingInterval = setInterval(function() {
+        if (isProcessingAuth || isProcessingBarcode) return;
+        
+        attemptFaceAuth();
+    }, 800);  // 0.8초마다 시도
+}
+
+// 얼굴 인증 시도
+function attemptFaceAuth() {
+    if (isProcessingAuth || isProcessingBarcode) return;
+    
+    isProcessingAuth = true;
+    updateStatus('processing', '인식 중...');
+    
+    fetch('/api/auth/face', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+    })
+    .then(response => response.json())
+    .then(data => {
+        console.log('얼굴 인증 결과:', data);
+        
+        if (data.success) {
+            // 인증 성공
+            updateStatus('success', `${data.member_name}님 확인!`);
+            document.querySelector('.camera-frame').classList.add('success');
+            
+            // 폴링 중지
+            stopAllPolling();
+            
+            // 화면 전환
+            setTimeout(function() {
+                if (data.action === 'rental') {
+                    navigateTo('member-check', { member_id: data.member_id, action: 'rental' });
+                } else if (data.action === 'return') {
+                    navigateTo('member-check', { member_id: data.member_id, action: 'return' });
+                }
+            }, 800);
+        } else {
+            // 인증 실패 - 계속 시도
+            if (data.error_type === 'face_not_detected') {
+                updateStatus('waiting', '얼굴을 인식할 수 없습니다');
+            } else if (data.error_type === 'face_not_found') {
+                updateStatus('error', '등록된 얼굴이 아닙니다');
+            } else if (data.error_type === 'member_invalid') {
+                updateStatus('error', data.error);
+                // 폴링 중지하고 에러 표시
+                stopAllPolling();
+                setTimeout(function() {
+                    navigateTo('error', { type: 'member_error', message: data.error });
+                }, 2000);
+                return;
+            }
+            
+            isProcessingAuth = false;
+        }
+    })
+    .catch(error => {
+        console.error('얼굴 인증 오류:', error);
+        updateStatus('error', '카메라 오류');
+        isProcessingAuth = false;
+    });
+}
+
+// 바코드 스캔 처리
+function handleBarcodeScanned(barcode) {
+    if (!barcode || barcode.trim().length === 0) return;
+    if (isProcessingBarcode || isProcessingAuth) return;
+    
+    barcode = barcode.trim();
+    
+    // NFC 태그 처리
+    if (barcode.startsWith('NFC:')) {
+        const nfcUid = barcode.substring(4);
+        handleNFCScanned(nfcUid);
+        return;
+    }
+    
+    isProcessingBarcode = true;
+    stopAllPolling();
+    
+    updateStatus('processing', '바코드 확인 중...');
+    
+    fetch('/api/barcode/process', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ barcode: barcode })
+    })
+    .then(response => response.json())
+    .then(data => {
+        console.log('바코드 처리 결과:', data);
+        
+        if (data.success) {
+            if (data.action === 'rental') {
+                navigateTo('member-check', { member_id: data.member_id, action: 'rental' });
+            } else if (data.action === 'return') {
+                navigateTo('member-check', { member_id: data.member_id, action: 'return' });
+            }
+        } else {
+            navigateTo('error', { 
+                type: data.error_type || 'unknown',
+                message: data.error || '바코드 처리 오류'
+            });
+        }
+    })
+    .catch(error => {
+        console.error('바코드 처리 오류:', error);
+        isProcessingBarcode = false;
+        startBarcodePolling();
+        startFaceAuthPolling();
+    });
+}
+
+// NFC 스캔 처리
+function handleNFCScanned(nfcUid) {
+    if (!nfcUid) return;
+    if (isProcessingBarcode) return;
+    
+    isProcessingBarcode = true;
+    stopAllPolling();
+    
+    fetch('/api/nfc/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nfc_uid: nfcUid })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success && data.locker_info) {
+            navigateTo('member-check', {
+                action: 'return',
+                locker_id: data.locker_info.locker_number,
+                zone: data.locker_info.zone,
+                method: 'nfc',
+                nfc_uid: nfcUid
+            });
+        } else {
+            navigateTo('error', { type: 'nfc_error', message: data.error || 'NFC 오류' });
+        }
+    })
+    .catch(e => {
+        isProcessingBarcode = false;
+        startBarcodePolling();
+        startFaceAuthPolling();
+    });
+}
+
+// 상태 업데이트
+function updateStatus(type, message) {
+    const statusEl = document.getElementById('cameraStatus');
+    const iconEl = statusEl.querySelector('.status-icon');
+    const textEl = statusEl.querySelector('.status-text');
+    
+    statusEl.className = 'camera-status ' + type;
+    
+    switch(type) {
+        case 'processing':
+            iconEl.textContent = '🔄';
+            break;
+        case 'success':
+            iconEl.textContent = '✅';
+            break;
+        case 'error':
+            iconEl.textContent = '❌';
+            break;
+        case 'waiting':
+            iconEl.textContent = '👤';
+            break;
+        default:
+            iconEl.textContent = '📷';
+    }
+    
+    textEl.textContent = message;
+}
+
+// 타임아웃 카운터
+function startTimeoutCounter() {
+    const progressBar = document.getElementById('progressBar');
+    
+    timeoutInterval = setInterval(function() {
+        remainingSeconds--;
+        
+        const progress = (remainingSeconds / TIMEOUT_SECONDS) * 100;
+        progressBar.style.width = progress + '%';
+        
+        if (remainingSeconds <= 0) {
+            // 타임아웃 - 홈으로 돌아가기
+            console.log('⏰ 타임아웃 - 홈으로 이동');
+            stopAllPolling();
+            navigateTo('', {});  // 홈으로
+        }
+    }, 1000);
+}
+
+// 모든 폴링 중지
+function stopAllPolling() {
+    if (pollingInterval) {
+        clearInterval(pollingInterval);
+        pollingInterval = null;
+    }
+    if (authPollingInterval) {
+        clearInterval(authPollingInterval);
+        authPollingInterval = null;
+    }
+    if (timeoutInterval) {
+        clearInterval(timeoutInterval);
+        timeoutInterval = null;
+    }
+}
+
+// 화면 전환
+function navigateTo(page, params) {
+    const queryString = new URLSearchParams(params).toString();
+    const url = `/${page}${queryString ? '?' + queryString : ''}`;
+    console.log('🔄 이동:', url);
+    window.location.href = url;
+}
+
+// 페이지 떠날 때 정리
+window.addEventListener('beforeunload', function() {
+    stopAllPolling();
+});
+</script>
+{% endblock %}
+

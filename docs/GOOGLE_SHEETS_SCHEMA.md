@@ -18,6 +18,7 @@ SQLite와 양방향 동기화를 통해 데이터를 관리합니다.
 | 락카현황 | 락카 실시간 상태 | 양방향 |
 | 센서이벤트 | 센서 로그 | DB → Sheets |
 | 시스템설정 | 설정값 | Sheets → DB |
+| 인증사진 | 인증 시 촬영된 사진 정보 | DB → Sheets |
 
 ---
 
@@ -203,6 +204,37 @@ SQLite와 양방향 동기화를 통해 데이터를 관리합니다.
 ### 동기화 규칙
 - **방향**: Sheets → DB (10분마다 다운로드)
 - 관리자가 구글 시트에서 설정 변경 가능
+
+---
+
+## 시트 6: 인증사진 (rental_photos)
+
+### 컬럼 구조
+
+| 컬럼명 | 타입 | 필수 | 설명 | 예시 |
+|--------|------|------|------|------|
+| rental_id | NUMBER | O | 대여 ID | 1, 2, 3... |
+| transaction_id | TEXT | O | 트랜잭션 UUID | uuid-xxxx-xxxx |
+| member_id | TEXT | O | 회원 ID | M001 |
+| locker_number | TEXT | | 락카 번호 | M01, F05 |
+| auth_method | TEXT | O | 인증 방법 | barcode, qr, nfc, face |
+| photo_path | TEXT | O | 사진 파일 경로 | instance/photos/rentals/2025/12/M001_20251212_143052.jpg |
+| auth_time | DATETIME | O | 인증 시각 | 2024-12-08 10:05:00 |
+| status | TEXT | O | 상태 | active, returned |
+
+### 동기화 규칙
+- **방향**: DB → Sheets (5분마다 업로드)
+- 최근 100건만 동기화
+- 사진 파일 자체는 로컬에 저장 (Google Drive 연동은 별도)
+
+### 예시 데이터
+
+```
+| rental_id | transaction_id | member_id | locker_number | auth_method | photo_path | auth_time | status |
+|-----------|----------------|-----------|---------------|-------------|------------|-----------|--------|
+| 1 | uuid-001 | M001 | M05 | barcode | instance/photos/rentals/2025/12/M001_20251208_100500.jpg | 2024-12-08 10:05:00 | returned |
+| 2 | uuid-002 | M002 | S03 | face | instance/photos/rentals/2025/12/M002_20251208_103000.jpg | 2024-12-08 10:30:00 | active |
+```
 
 ---
 

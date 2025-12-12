@@ -208,3 +208,11 @@ def error():
                          page_class='error-page')
 
 
+@bp.route('/face-auth')
+def face_auth():
+    """얼굴 인증 화면 - 카메라 영상 표시 및 자동 인증"""
+    return render_template('pages/face_auth.html',
+                         title='얼굴 인증',
+                         page_class='face-auth-page')
+
+

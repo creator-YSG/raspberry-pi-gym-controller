@@ -128,9 +128,11 @@ let socket = null;
 let barcodeBuffer = '';
 let barcodeTimeout = null;
 let pollingInterval = null;
+let motionPollingInterval = null;
 let isProcessingBarcode = false;
 let sensorDebugMode = false;
 let sensorNotificationTimeout = null;
+let cameraEnabled = true; // 카메라 기반 얼굴인식 활성화 여부
 
 // 페이지 로드 시 초기화
 document.addEventListener('DOMContentLoaded', function() {
@@ -173,6 +175,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 // 조용히 무시
             });
     }, 200);
+    
+    // 카메라 프레임 변화 감지 폴링 (300ms마다)
+    if (cameraEnabled) {
+        startMotionPolling();
+    }
     
     // 키오스크 최적화
     if (!document.fullscreenElement) {
@@ -437,11 +444,13 @@ document.addEventListener('keydown', function(e) {
 
 // 페이지 떠날 때 정리
 window.addEventListener('beforeunload', function() {
-    // 폴링 중지
+    // 바코드 폴링 중지
     if (pollingInterval) {
         clearInterval(pollingInterval);
-        console.log('🛑 폴링 중지');
+        console.log('🛑 바코드 폴링 중지');
     }
+    // 모션 감지 폴링 중지
+    stopMotionPolling();
 });
 
 // NFC 스캔 처리
@@ -601,6 +610,90 @@ function showSensorDebugNotification(lockerId) {
     sensorNotificationTimeout = setTimeout(function() {
         notification.style.display = 'none';
     }, 2000);
+}
+
+// =====================================================
+// 카메라 프레임 변화 감지 (얼굴인식 트리거)
+// =====================================================
+
+// 모션 감지 폴링 시작
+function startMotionPolling() {
+    if (motionPollingInterval) {
+        clearInterval(motionPollingInterval);
+    }
+    
+    console.log('📷 카메라 모션 감지 폴링 시작');
+    
+    motionPollingInterval = setInterval(function() {
+        // 이미 처리 중이면 폴링 건너뛰기
+        if (isProcessingBarcode) {
+            return;
+        }
+        
+        fetch('/api/camera/motion')
+            .then(response => response.json())
+            .then(data => {
+                if (data.motion && !isProcessingBarcode) {
+                    console.log('👤 모션 감지! 얼굴 인증 화면으로 이동');
+                    // 얼굴 인증 화면으로 이동
+                    navigateTo('face-auth', {});
+                }
+            })
+            .catch(error => {
+                // 카메라가 없거나 오류면 조용히 무시
+                // 초기 시작 시 카메라 시작 시도
+                if (!window._cameraStartAttempted) {
+                    window._cameraStartAttempted = true;
+                    startCamera();
+                }
+            });
+    }, 300);  // 300ms마다 체크
+}
+
+// 카메라 시작 (백그라운드)
+function startCamera() {
+    console.log('📷 카메라 시작 요청');
+    
+    fetch('/api/camera/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ use_picamera: true })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            console.log('✅ 카메라 시작 성공:', data.status);
+        } else {
+            console.warn('⚠️ 카메라 시작 실패:', data.error);
+            // USB 웹캠으로 재시도
+            return fetch('/api/camera/start', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ use_picamera: false })
+            });
+        }
+    })
+    .then(response => {
+        if (response) return response.json();
+    })
+    .then(data => {
+        if (data && data.success) {
+            console.log('✅ USB 웹캠 시작 성공:', data.status);
+        }
+    })
+    .catch(error => {
+        console.warn('⚠️ 카메라 시작 오류 (얼굴인식 비활성화):', error);
+        cameraEnabled = false;
+    });
+}
+
+// 모션 감지 폴링 중지
+function stopMotionPolling() {
+    if (motionPollingInterval) {
+        clearInterval(motionPollingInterval);
+        motionPollingInterval = null;
+        console.log('📷 카메라 모션 감지 폴링 중지');
+    }
 }
 
 </script>
