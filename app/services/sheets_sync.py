@@ -509,10 +509,12 @@ class SheetsSync:
                     r.locker_number,
                     r.auth_method,
                     r.rental_photo_path,
+                    r.rental_photo_url,
                     r.rental_barcode_time,
                     r.status
                 FROM rentals r
                 WHERE r.rental_photo_path IS NOT NULL
+                   OR r.rental_photo_url IS NOT NULL
                 ORDER BY r.created_at DESC
                 LIMIT 100
             """)
@@ -534,6 +536,7 @@ class SheetsSync:
                     record.get('member_id', ''),
                     record.get('locker_number', ''),
                     record.get('auth_method', ''),
+                    record.get('rental_photo_url', '') or '',  # 드라이브 URL 우선
                     record.get('rental_photo_path', ''),
                     record.get('rental_barcode_time', ''),
                     record.get('status', '')
@@ -542,7 +545,7 @@ class SheetsSync:
             # 헤더 포함 전체 데이터 구성
             headers = [
                 "rental_id", "transaction_id", "member_id", "locker_number",
-                "auth_method", "photo_path", "auth_time", "status"
+                "auth_method", "photo_url", "photo_path", "auth_time", "status"
             ]
             
             all_rows = [headers] + rows
@@ -553,9 +556,9 @@ class SheetsSync:
             self._rate_limit()
             worksheet.update(values=all_rows, range_name='A1')
             
-            # 헤더 스타일
+            # 헤더 스타일 (9 컬럼)
             self._rate_limit()
-            worksheet.format('A1:H1', {
+            worksheet.format('A1:I1', {
                 'textFormat': {'bold': True},
                 'backgroundColor': {'red': 0.9, 'green': 0.9, 'blue': 0.9}
             })

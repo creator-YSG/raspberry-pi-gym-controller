@@ -71,6 +71,7 @@ def migrate_face_recognition():
     member_new_columns = [
         ('face_embedding', 'BLOB'),
         ('face_photo_path', 'TEXT'),
+        ('face_photo_url', 'TEXT'),
         ('face_registered_at', 'TIMESTAMP'),
         ('face_enabled', 'INTEGER DEFAULT 0'),
     ]
@@ -92,6 +93,7 @@ def migrate_face_recognition():
     rental_new_columns = [
         ('auth_method', "TEXT DEFAULT 'barcode'"),
         ('rental_photo_path', 'TEXT'),
+        ('rental_photo_url', 'TEXT'),
     ]
     
     for col_name, col_def in rental_new_columns:

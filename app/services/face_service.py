@@ -194,10 +194,14 @@ class FaceService:
             
             # 사진 저장
             photo_path = None
+            photo_url = None
             if save_photo:
                 photo_path = str(self.photos_dir / f"{member_id}.jpg")
                 image_bgr = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
                 cv2.imwrite(photo_path, image_bgr)
+                
+                # 구글 드라이브 업로드 (백그라운드)
+                self._upload_member_photo_async(member_id, photo_path)
             
             # DB 업데이트
             db = self._get_db_connection()
@@ -410,6 +414,40 @@ class FaceService:
                 'error': '얼굴 인증 처리 중 오류가 발생했습니다.',
                 'error_type': 'system_error'
             }
+    
+    def _upload_member_photo_async(self, member_id: str, photo_path: str):
+        """회원 사진을 구글 드라이브에 업로드 (백그라운드)
+        
+        Args:
+            member_id: 회원 ID
+            photo_path: 로컬 사진 경로
+        """
+        import threading
+        
+        def upload_task():
+            try:
+                from app.services.drive_service import get_drive_service
+                
+                drive_service = get_drive_service()
+                photo_url = drive_service.upload_member_photo(photo_path, member_id)
+                
+                if photo_url:
+                    # DB에 URL 저장
+                    db = self._get_db_connection()
+                    db.execute_query("""
+                        UPDATE members 
+                        SET face_photo_url = ?
+                        WHERE member_id = ?
+                    """, (photo_url, member_id))
+                    db.close()
+                    
+                    logger.info(f"☁️ 회원 사진 드라이브 업로드 완료: {member_id} → {photo_url}")
+                    
+            except Exception as e:
+                logger.warning(f"회원 사진 드라이브 업로드 오류: {member_id}, {e}")
+        
+        thread = threading.Thread(target=upload_task, daemon=True)
+        thread.start()
     
     def get_registered_count(self) -> int:
         """등록된 얼굴 수 반환"""

@@ -640,7 +640,7 @@ def process_barcode():
 
 
 def _capture_auth_photo(member_id: str, auth_method: str):
-    """인증 시 사진 촬영 (백그라운드)
+    """인증 시 사진 촬영 + 드라이브 업로드 (백그라운드)
     
     Args:
         member_id: 회원 ID
@@ -651,6 +651,7 @@ def _capture_auth_photo(member_id: str, auth_method: str):
     def capture_async():
         try:
             from app.services.camera_service import get_camera_service
+            from app.services.drive_service import get_drive_service
             from datetime import datetime
             from pathlib import Path
             from database.database_manager import DatabaseManager
@@ -671,7 +672,7 @@ def _capture_auth_photo(member_id: str, auth_method: str):
             saved_path = camera_service.capture_snapshot(photo_path)
             
             if saved_path:
-                # DB에 사진 경로 업데이트 (최근 활성 대여 레코드)
+                # DB에 로컬 경로 먼저 업데이트
                 db = DatabaseManager('instance/gym_system.db')
                 db.connect()
                 
@@ -686,6 +687,28 @@ def _capture_auth_photo(member_id: str, auth_method: str):
                 db.close()
                 
                 current_app.logger.info(f'📸 인증 사진 촬영: {saved_path} (method: {auth_method})')
+                
+                # 구글 드라이브 업로드 (백그라운드)
+                def upload_callback(drive_url):
+                    if drive_url:
+                        try:
+                            db2 = DatabaseManager('instance/gym_system.db')
+                            db2.connect()
+                            db2.execute_query("""
+                                UPDATE rentals 
+                                SET rental_photo_url = ?
+                                WHERE rental_photo_path = ?
+                            """, (drive_url, saved_path))
+                            db2.close()
+                            import logging
+                            logging.getLogger(__name__).info(f'☁️ 드라이브 업로드 완료: {drive_url}')
+                        except Exception as e:
+                            import logging
+                            logging.getLogger(__name__).warning(f'드라이브 URL 저장 오류: {e}')
+                
+                drive_service = get_drive_service()
+                drive_folder = f"rentals/{now.year}/{now.month:02d}"
+                drive_service.upload_async(saved_path, drive_folder, upload_callback)
                 
         except Exception as e:
             # 사진 촬영 실패는 치명적이지 않음 - 로그만 남김

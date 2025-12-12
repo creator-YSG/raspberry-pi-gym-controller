@@ -26,7 +26,8 @@ CREATE TABLE IF NOT EXISTS members (
     customer_type TEXT DEFAULT '학부',    -- 고객구분 (학부, 대학교수, 대학직원, 기타 등)
     -- 🆕 얼굴인식 관련 필드들
     face_embedding BLOB,                  -- 얼굴 임베딩 벡터 (pickle 직렬화)
-    face_photo_path TEXT,                 -- 등록된 얼굴 사진 경로
+    face_photo_path TEXT,                 -- 등록된 얼굴 사진 로컬 경로
+    face_photo_url TEXT,                  -- 구글 드라이브 공유 URL (회원 확인용)
     face_registered_at TIMESTAMP,         -- 얼굴 등록 시각
     face_enabled INTEGER DEFAULT 0,       -- 얼굴인식 활성화 여부 (0:비활성, 1:활성)
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -64,7 +65,8 @@ CREATE TABLE IF NOT EXISTS rentals (
     sync_status INTEGER DEFAULT 0,       -- 구글시트 동기화 상태 (0:미동기화, 1:동기화완료)
     -- 🆕 얼굴인식/사진 관련 필드들
     auth_method TEXT DEFAULT 'barcode',  -- 인증 방법 (barcode, qr, nfc, face)
-    rental_photo_path TEXT,              -- 인증 시 촬영된 사진 경로
+    rental_photo_path TEXT,              -- 인증 시 촬영된 사진 로컬 경로
+    rental_photo_url TEXT,               -- 구글 드라이브 공유 URL
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     
