@@ -50,6 +50,7 @@ def migrate_face_recognition():
     """얼굴인식 관련 컬럼 추가"""
     
     db_manager = DatabaseManager()
+    db_manager.connect()
     cursor = db_manager.conn.cursor()
     
     print("=" * 60)

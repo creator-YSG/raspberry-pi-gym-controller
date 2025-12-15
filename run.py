@@ -47,6 +47,19 @@ def main():
     print(f"🔧 설정: {config_name}")
     print("=" * 50)
     
+    # 🆕 시스템 통합 정보 업로드 (운동복 대여기와 통신용)
+    try:
+        from app.services.integration_sync import IntegrationSync
+        sync = IntegrationSync()
+        if sync.upload_locker_api_info():
+            print(f"🔗 통합 시트 업로드 완료: {sync.get_local_ip()}:5000")
+        else:
+            print("⚠️  통합 시트 업로드 실패 (계속 진행)")
+    except Exception as e:
+        print(f"⚠️  통합 시트 업로드 오류: {e} (계속 진행)")
+    
+    print("=" * 50)
+    
     try:
         # SocketIO 서버 실행
         socketio.run(

@@ -1,12 +1,14 @@
 """
-Google Drive 업로드 서비스
+Google Drive 업로드 서비스 (OAuth 2.0)
 
 사진 파일을 구글 드라이브에 업로드하고 공유 URL 반환
+- OAuth 2.0 사용자 인증 방식 (개인 계정 저장 공간 사용)
 - 인증 사진: rentals/{year}/{month}/ 폴더에 업로드
 - 회원 사진: members/ 폴더에 업로드
 """
 
 import logging
+import pickle
 import threading
 from datetime import datetime
 from pathlib import Path
@@ -15,38 +17,48 @@ from typing import Optional, Dict
 logger = logging.getLogger(__name__)
 
 try:
-    from google.oauth2.service_account import Credentials
+    from google.oauth2.credentials import Credentials
+    from google_auth_oauthlib.flow import InstalledAppFlow
+    from google.auth.transport.requests import Request
     from googleapiclient.discovery import build
     from googleapiclient.http import MediaFileUpload
     DRIVE_AVAILABLE = True
 except ImportError:
     DRIVE_AVAILABLE = False
-    logger.warning("[DriveService] google-api-python-client 없음, 스텁 모드")
+    logger.warning("[DriveService] google-api-python-client 또는 google-auth-oauthlib 없음, 스텁 모드")
 
 
 class DriveService:
-    """Google Drive 업로드 서비스"""
+    """Google Drive 업로드 서비스 (OAuth 2.0)"""
     
-    # 드라이브 폴더 ID (초기화 시 설정 또는 자동 생성)
-    ROOT_FOLDER_NAME = "락카키대여기-사진"
+    # OAuth scopes
+    SCOPES = ['https://www.googleapis.com/auth/drive']
     
-    def __init__(self, credentials_path: str = None):
+    # 루트 폴더 ID (락카키대여기-사진)
+    ROOT_FOLDER_ID = "1fTnW_MSrzMaWXpA5lPYJ9Ce9rUMu4wWL"
+    
+    def __init__(self, oauth_credentials_path: str = None, token_path: str = None):
         """
         Args:
-            credentials_path: 서비스 계정 인증 파일 경로
+            oauth_credentials_path: OAuth 클라이언트 인증 파일 경로
+            token_path: 저장된 토큰 파일 경로 (자동 생성됨)
         """
         self.project_root = Path(__file__).parent.parent.parent
         
-        if credentials_path is None:
-            credentials_path = self.project_root / "config" / "google_credentials.json"
+        if oauth_credentials_path is None:
+            oauth_credentials_path = self.project_root / "client_secret_59516272673-h30ecghk38d912tkcal5k3mkgpqm11ad.apps.googleusercontent.com.json"
         
-        self.credentials_path = Path(credentials_path)
+        if token_path is None:
+            token_path = self.project_root / "instance" / "drive_token.pickle"
+        
+        self.oauth_credentials_path = Path(oauth_credentials_path)
+        self.token_path = Path(token_path)
         self.service = None
         self.connected = False
         
         # 폴더 ID 캐시
         self._folder_cache: Dict[str, str] = {}
-        self._root_folder_id: Optional[str] = None
+        self._root_folder_id: Optional[str] = self.ROOT_FOLDER_ID
         
         # 업로드 큐 (백그라운드 처리용)
         self._upload_queue = []
@@ -54,22 +66,48 @@ class DriveService:
         self._upload_lock = threading.Lock()
         
     def connect(self) -> bool:
-        """Google Drive API 연결"""
+        """Google Drive API 연결 (OAuth 2.0)"""
         if not DRIVE_AVAILABLE:
             logger.warning("[DriveService] google-api-python-client 없음")
             return False
         
         try:
-            scope = ['https://www.googleapis.com/auth/drive.file']
+            credentials = None
             
-            credentials = Credentials.from_service_account_file(
-                str(self.credentials_path), scopes=scope
-            )
+            # 저장된 토큰이 있으면 로드
+            if self.token_path.exists():
+                with open(self.token_path, 'rb') as token:
+                    credentials = pickle.load(token)
+                    logger.info("[DriveService] 저장된 토큰 로드")
             
+            # 토큰이 없거나 만료되었으면 새로 인증
+            if not credentials or not credentials.valid:
+                if credentials and credentials.expired and credentials.refresh_token:
+                    logger.info("[DriveService] 토큰 갱신 중...")
+                    credentials.refresh(Request())
+                else:
+                    logger.info("[DriveService] 최초 OAuth 인증 필요")
+                    if not self.oauth_credentials_path.exists():
+                        logger.error(f"[DriveService] OAuth 인증 파일을 찾을 수 없습니다: {self.oauth_credentials_path}")
+                        return False
+                    
+                    flow = InstalledAppFlow.from_client_secrets_file(
+                        str(self.oauth_credentials_path), self.SCOPES
+                    )
+                    credentials = flow.run_local_server(port=0)
+                    logger.info("[DriveService] OAuth 인증 완료")
+                
+                # 토큰 저장
+                self.token_path.parent.mkdir(parents=True, exist_ok=True)
+                with open(self.token_path, 'wb') as token:
+                    pickle.dump(credentials, token)
+                    logger.info(f"[DriveService] 토큰 저장: {self.token_path}")
+            
+            # Drive API 서비스 생성
             self.service = build('drive', 'v3', credentials=credentials)
             self.connected = True
             
-            logger.info("[DriveService] ✓ 연결 성공")
+            logger.info("[DriveService] ✓ 연결 성공 (OAuth)")
             
             # 루트 폴더 확인/생성
             self._ensure_root_folder()
@@ -82,28 +120,20 @@ class DriveService:
             return False
     
     def _ensure_root_folder(self):
-        """루트 폴더 확인/생성"""
+        """루트 폴더 확인 (고정 폴더 ID 사용)"""
         try:
-            # 기존 폴더 검색
-            query = f"name='{self.ROOT_FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false"
-            results = self.service.files().list(q=query, fields="files(id, name)").execute()
-            files = results.get('files', [])
+            # 폴더 접근 권한 확인
+            folder = self.service.files().get(
+                fileId=self.ROOT_FOLDER_ID, 
+                fields='id, name'
+            ).execute()
             
-            if files:
-                self._root_folder_id = files[0]['id']
-                logger.info(f"[DriveService] 루트 폴더 발견: {self._root_folder_id}")
-            else:
-                # 폴더 생성
-                folder_metadata = {
-                    'name': self.ROOT_FOLDER_NAME,
-                    'mimeType': 'application/vnd.google-apps.folder'
-                }
-                folder = self.service.files().create(body=folder_metadata, fields='id').execute()
-                self._root_folder_id = folder.get('id')
-                logger.info(f"[DriveService] 루트 폴더 생성: {self._root_folder_id}")
+            logger.info(f"[DriveService] 루트 폴더 확인: {folder.get('name')} ({self.ROOT_FOLDER_ID})")
+            self._root_folder_id = self.ROOT_FOLDER_ID
                 
         except Exception as e:
-            logger.error(f"[DriveService] 루트 폴더 확인/생성 실패: {e}")
+            logger.error(f"[DriveService] 루트 폴더 접근 실패: {e}")
+            logger.error("폴더 권한을 확인하세요")
     
     def _get_or_create_folder(self, folder_path: str) -> Optional[str]:
         """폴더 경로에 해당하는 폴더 ID 반환 (없으면 생성)
@@ -319,4 +349,3 @@ def get_drive_service() -> DriveService:
         _drive_service = DriveService()
         
     return _drive_service
-

@@ -35,6 +35,11 @@ config/*.json
 !*.env.template
 !*.env.example
 
+# Google OAuth 인증 파일들 (민감 정보)
+client_secret_*.json
+*_credentials.json
+instance/drive_token.pickle
+
 # 테스트 서버 관련
 test_server_*.log
 
