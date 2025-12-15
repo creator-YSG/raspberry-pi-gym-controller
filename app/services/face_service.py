@@ -192,6 +192,18 @@ class FaceService:
             # 임베딩 직렬화
             embedding_blob = pickle.dumps(embedding)
             
+            # 임베딩 파일 저장 (로컬)
+            embeddings_dir = Path('instance/embeddings')
+            embeddings_dir.mkdir(parents=True, exist_ok=True)
+            embedding_file_path = str(embeddings_dir / f"{member_id}.pkl")
+            
+            with open(embedding_file_path, 'wb') as f:
+                pickle.dump({
+                    'member_id': member_id,
+                    'embedding': embedding,
+                    'registered_at': datetime.now().isoformat()
+                }, f)
+            
             # 사진 저장
             photo_path = None
             photo_url = None
@@ -202,6 +214,9 @@ class FaceService:
                 
                 # 구글 드라이브 업로드 (백그라운드)
                 self._upload_member_photo_async(member_id, photo_path)
+            
+            # 임베딩 파일도 드라이브 업로드 (백그라운드)
+            self._upload_embedding_async(member_id, embedding_file_path)
             
             # DB 업데이트
             db = self._get_db_connection()
@@ -269,6 +284,11 @@ class FaceService:
             
             # 메모리 캐시 갱신
             self._load_embeddings_from_db()
+            
+            # 참고: 
+            # - 로컬 임베딩 파일(.pkl)은 백업용으로 유지
+            # - Drive 파일도 백업용으로 유지
+            # - 실제 얼굴 인식은 DB의 face_embedding(NULL로 설정됨)을 사용
             
             logger.info(f"얼굴 등록 해제: {member_id}")
             return {
@@ -445,6 +465,40 @@ class FaceService:
                     
             except Exception as e:
                 logger.warning(f"회원 사진 드라이브 업로드 오류: {member_id}, {e}")
+        
+        thread = threading.Thread(target=upload_task, daemon=True)
+        thread.start()
+    
+    def _upload_embedding_async(self, member_id: str, embedding_path: str):
+        """임베딩 파일을 구글 드라이브에 업로드 (백그라운드)
+        
+        Args:
+            member_id: 회원 ID
+            embedding_path: 로컬 임베딩 파일 경로
+        """
+        import threading
+        
+        def upload_task():
+            try:
+                from app.services.drive_service import get_drive_service
+                
+                drive_service = get_drive_service()
+                
+                if drive_service.connect():
+                    # embeddings 폴더에 업로드
+                    url = drive_service.upload_file(
+                        embedding_path,
+                        'embeddings',  # 락카키대여기-사진/embeddings/
+                        f'{member_id}.pkl'
+                    )
+                    
+                    if url:
+                        logger.info(f"☁️ 임베딩 드라이브 업로드 완료: {member_id} → {url}")
+                    else:
+                        logger.warning(f"임베딩 드라이브 업로드 실패: {member_id}")
+                    
+            except Exception as e:
+                logger.warning(f"임베딩 드라이브 업로드 오류: {member_id}, {e}")
         
         thread = threading.Thread(target=upload_task, daemon=True)
         thread.start()

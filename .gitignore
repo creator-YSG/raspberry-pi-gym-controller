@@ -50,3 +50,8 @@ instance/gym_system.db
 instance/gym_system.db-wal
 instance/gym_system.db-shm
 
+# 얼굴 인식 데이터 (민감 정보)
+instance/embeddings/
+instance/photos/faces/
+instance/photos/rentals/
+
