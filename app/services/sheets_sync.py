@@ -291,7 +291,10 @@ class SheetsSync:
                     record.get('return_sensor_time', ''),
                     record.get('status'),
                     record.get('device_id', ''),
-                    record.get('created_at')
+                    record.get('created_at'),
+                    record.get('auth_method', ''),
+                    record.get('rental_photo_path', ''),
+                    record.get('rental_photo_url', '')
                 ])
                 rental_ids.append(record.get('rental_id'))
             
