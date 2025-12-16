@@ -257,16 +257,20 @@ function startBarcodePolling() {
     }, 200);
 }
 
+// 얼굴 검출 상태
+let faceDetectedAt = null;  // 첫 검출 시간
+const DETECTION_CONFIRM_DELAY = 800;  // 0.8초간 연속 검출 시 인증
+
 // 얼굴 인증 폴링 시작
 function startFaceAuthPolling() {
     authPollingInterval = setInterval(function() {
         if (isProcessingAuth || isProcessingBarcode) return;
         
         checkAndAuthenticate();
-    }, 500);  // 0.5초마다 검출 체크
+    }, 300);  // 0.3초마다 검출 체크 (가벼우니까 빠르게)
 }
 
-// 얼굴 검출 후 인증 (2단계)
+// 얼굴 검출 후 인증 (2단계 - 연속 검출 확인)
 function checkAndAuthenticate() {
     if (isProcessingAuth || isProcessingBarcode) return;
     
@@ -275,15 +279,33 @@ function checkAndAuthenticate() {
     .then(response => response.json())
     .then(data => {
         if (data.detected) {
-            // 얼굴 있음 → 인증 시도
-            attemptFaceAuth();
+            // 얼굴 검출됨
+            if (faceDetectedAt === null) {
+                // 첫 검출 → 시간 기록
+                faceDetectedAt = Date.now();
+                updateStatus('waiting', '얼굴 확인 중...');
+                console.log('👤 얼굴 첫 검출');
+            } else if (Date.now() - faceDetectedAt >= DETECTION_CONFIRM_DELAY) {
+                // 0.8초 이상 연속 검출 → 인증 진행!
+                console.log('✅ 연속 검출 확인, 인증 시작');
+                faceDetectedAt = null;  // 초기화
+                attemptFaceAuth();
+            } else {
+                // 아직 확인 중
+                updateStatus('waiting', '얼굴 확인 중...');
+            }
         } else {
-            // 얼굴 없음 → 대기 메시지
+            // 얼굴 없음 → 초기화
+            if (faceDetectedAt !== null) {
+                console.log('👻 얼굴 사라짐, 초기화');
+            }
+            faceDetectedAt = null;
             updateStatus('waiting', '카메라를 바라봐주세요');
         }
     })
     .catch(error => {
         console.error('검출 오류:', error);
+        faceDetectedAt = null;
     });
 }
 
