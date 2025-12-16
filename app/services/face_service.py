@@ -448,7 +448,7 @@ class FaceService:
         
         try:
             # 1. 얼굴 인증
-            result = self.authenticate_by_face(image, threshold=0.85)
+            result = self.authenticate_by_face(image, threshold=0.5)
             
             t_auth = time.time()
             
