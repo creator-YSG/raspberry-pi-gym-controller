@@ -33,9 +33,11 @@ class CameraService:
         
         self._prev_frame = None
         self._motion_detected = False
-        self._motion_threshold = 25000  # 민감도 낮춤 (5000 → 25000)
+        self._motion_threshold = 50000  # 민감도 더 낮춤 (25000 → 50000)
         self._last_motion_time = 0
-        self._motion_cooldown = 2.0  # 쿨다운 늘림 (1초 → 2초)
+        self._motion_cooldown = 2.0  # 쿨다운 (2초)
+        self._camera_start_time = 0  # 카메라 시작 시간
+        self._motion_warmup = 5.0  # 시작 후 5초간 모션 무시
         
         self._current_frame = None
         self._frame_lock = threading.Lock()
@@ -55,6 +57,8 @@ class CameraService:
                 
                 if success:
                     self.is_running = True
+                    self._camera_start_time = time.time()  # 시작 시간 기록
+                    self._prev_frame = None  # 모션 감지 초기화
                     self._capture_thread = threading.Thread(target=self._capture_loop, daemon=True)
                     self._capture_thread.start()
                     logger.info(f"카메라 시작 완료 (picamera: {self.use_picamera})")
@@ -177,6 +181,12 @@ class CameraService:
     
     def _update_motion_detection(self, frame: np.ndarray):
         try:
+            current_time = time.time()
+            
+            # 카메라 시작 후 warmup 시간 동안은 모션 무시 (자동 노출 안정화)
+            if current_time - self._camera_start_time < self._motion_warmup:
+                return
+            
             # BGR → GRAY
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             gray = cv2.GaussianBlur(gray, (21, 21), 0)
@@ -190,12 +200,11 @@ class CameraService:
             thresh = cv2.dilate(thresh, None, iterations=2)
             motion_pixels = cv2.countNonZero(thresh)
             
-            current_time = time.time()
             if motion_pixels > self._motion_threshold:
                 if current_time - self._last_motion_time > self._motion_cooldown:
                     self._motion_detected = True
                     self._last_motion_time = current_time
-                    logger.debug(f"모션 감지: {motion_pixels} 픽셀")
+                    logger.info(f"모션 감지: {motion_pixels} 픽셀 (threshold: {self._motion_threshold})")
             
             self._prev_frame = gray
         except Exception as e:
