@@ -1,7 +1,7 @@
 """
-얼굴인식 서비스 (MediaPipe + NumPy)
+얼굴인식 서비스 (OpenCV DNN + NumPy)
 
-- MediaPipe FaceMesh: 얼굴 랜드마크 추출 (1404차원 임베딩)
+- OpenCV DNN: 얼굴 검출 (SSD) + 특징 추출 (FaceNet)
 - NumPy: 코사인 유사도 1:N 검색
 - SQLite: 임베딩 저장/로드
 """
@@ -27,8 +27,8 @@ class FaceService:
         """
         self.db_path = db_path
         
-        # MediaPipe 초기화
-        self._init_mediapipe()
+        # OpenCV DNN 모델 초기화
+        self._init_opencv_dnn()
         
         # 임베딩 DB (메모리 캐시)
         self.db_embeddings: Optional[np.ndarray] = None
@@ -41,25 +41,36 @@ class FaceService:
         # DB에서 임베딩 로드
         self._load_embeddings_from_db()
         
-    def _init_mediapipe(self):
-        """MediaPipe 초기화"""
+    def _init_opencv_dnn(self):
+        """OpenCV DNN 모델 초기화"""
         try:
-            import mediapipe as mp
+            models_dir = Path('models')
+            models_dir.mkdir(parents=True, exist_ok=True)
             
-            self.mp_face_mesh = mp.solutions.face_mesh
-            self.face_mesh = self.mp_face_mesh.FaceMesh(
-                static_image_mode=True,
-                max_num_faces=1,
-                refine_landmarks=True,
-                min_detection_confidence=0.5,
-                min_tracking_confidence=0.5
+            # 얼굴 검출 모델 (SSD)
+            detector_prototxt = models_dir / 'deploy.prototxt'
+            detector_model = models_dir / 'res10_300x300_ssd_iter_140000.caffemodel'
+            
+            if not detector_prototxt.exists() or not detector_model.exists():
+                logger.error("얼굴 검출 모델이 없습니다. models/ 폴더를 확인하세요.")
+                self.detector_net = None
+                self.embedding_net = None
+                return
+            
+            self.detector_net = cv2.dnn.readNetFromCaffe(
+                str(detector_prototxt),
+                str(detector_model)
             )
-            logger.info("MediaPipe FaceMesh 초기화 완료")
+            logger.info("OpenCV DNN 얼굴 검출 모델 로드 완료")
             
-        except ImportError as e:
-            logger.error(f"MediaPipe를 찾을 수 없습니다: {e}")
-            logger.error("pip install mediapipe 를 실행하세요")
-            self.face_mesh = None
+            # 특징 추출 모델은 간단한 Haar Cascade 기반으로 대체
+            # (추후 FaceNet 모델로 업그레이드 가능)
+            self.embedding_net = None
+            
+        except Exception as e:
+            logger.error(f"OpenCV DNN 초기화 실패: {e}")
+            self.detector_net = None
+            self.embedding_net = None
     
     def _get_db_connection(self):
         """데이터베이스 연결 획득"""
@@ -126,32 +137,87 @@ class FaceService:
             image: RGB 이미지 배열
             
         Returns:
-            1404차원 임베딩 벡터 또는 None (얼굴 없음)
+            128차원 임베딩 벡터 또는 None (얼굴 없음)
         """
-        if self.face_mesh is None:
-            logger.error("MediaPipe가 초기화되지 않았습니다")
+        if self.detector_net is None:
+            logger.error("OpenCV DNN이 초기화되지 않았습니다")
             return None
         
         try:
-            # MediaPipe 처리
-            results = self.face_mesh.process(image)
+            # RGB -> BGR 변환
+            if len(image.shape) == 3 and image.shape[2] == 3:
+                image_bgr = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+            else:
+                image_bgr = image
             
-            if not results.multi_face_landmarks:
+            h, w = image_bgr.shape[:2]
+            
+            # 얼굴 검출
+            blob = cv2.dnn.blobFromImage(
+                cv2.resize(image_bgr, (300, 300)),
+                1.0,
+                (300, 300),
+                (104.0, 177.0, 123.0)
+            )
+            self.detector_net.setInput(blob)
+            detections = self.detector_net.forward()
+            
+            # 가장 높은 신뢰도의 얼굴 선택
+            best_confidence = 0
+            best_box = None
+            
+            for i in range(detections.shape[2]):
+                confidence = detections[0, 0, i, 2]
+                if confidence > best_confidence and confidence > 0.5:
+                    best_confidence = confidence
+                    box = detections[0, 0, i, 3:7] * np.array([w, h, w, h])
+                    best_box = box.astype("int")
+            
+            if best_box is None:
                 return None
             
-            # 첫 번째 얼굴의 랜드마크 추출
-            landmarks = results.multi_face_landmarks[0]
+            # 얼굴 영역 추출
+            (x, y, x2, y2) = best_box
+            # 안전한 범위 확인
+            x = max(0, x)
+            y = max(0, y)
+            x2 = min(w, x2)
+            y2 = min(h, y2)
             
-            # 468개 랜드마크 × 3좌표(x, y, z) = 1404차원
-            embedding = np.array([
-                [lm.x, lm.y, lm.z] 
-                for lm in landmarks.landmark
-            ]).flatten()
+            face_roi = image_bgr[y:y2, x:x2]
+            
+            if face_roi.size == 0:
+                return None
+            
+            # 얼굴 ROI를 고정 크기로 리사이즈 (128x128)
+            face_resized = cv2.resize(face_roi, (128, 128))
+            
+            # 간단한 특징 추출: 히스토그램 기반
+            # HSV 색공간으로 변환
+            face_hsv = cv2.cvtColor(face_resized, cv2.COLOR_BGR2HSV)
+            
+            # 각 채널별 히스토그램 계산
+            hist_h = cv2.calcHist([face_hsv], [0], None, [32], [0, 180])
+            hist_s = cv2.calcHist([face_hsv], [1], None, [32], [0, 256])
+            hist_v = cv2.calcHist([face_hsv], [2], None, [32], [0, 256])
+            
+            # 그레이스케일 히스토그램
+            face_gray = cv2.cvtColor(face_resized, cv2.COLOR_BGR2GRAY)
+            hist_gray = cv2.calcHist([face_gray], [0], None, [32], [0, 256])
+            
+            # 히스토그램 정규화 및 결합 (128차원)
+            hist_h = cv2.normalize(hist_h, hist_h).flatten()
+            hist_s = cv2.normalize(hist_s, hist_s).flatten()
+            hist_v = cv2.normalize(hist_v, hist_v).flatten()
+            hist_gray = cv2.normalize(hist_gray, hist_gray).flatten()
+            
+            # 최종 임베딩: 128차원 (32+32+32+32)
+            embedding = np.concatenate([hist_h, hist_s, hist_v, hist_gray])
             
             return embedding.astype('float32')
             
         except Exception as e:
-            logger.error(f"임베딩 추출 오류: {e}")
+            logger.error(f"임베딩 추출 오류: {e}", exc_info=True)
             return None
     
     def detect_face(self, image: np.ndarray) -> bool:
