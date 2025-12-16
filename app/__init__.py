@@ -61,7 +61,14 @@ def create_app(config_name='default'):
     setup_logging(app)
     
     # SocketIO 초기화
-    socketio.init_app(app, cors_allowed_origins="*", async_mode='eventlet')
+    #
+    # NOTE:
+    # - 기존 eventlet 모드는 MJPEG 스트림(OpenCV 인코딩)이 같은 이벤트루프를 오래 점유하면
+    #   다른 HTTP API(/api/auth/face, /api/face/register 등)까지 응답이 멈추는 현상이 발생할 수 있음.
+    # - 키오스크는 폴링 기반이므로 기본값을 threading으로 두고, 필요 시 환경변수로 변경.
+    async_mode = os.environ.get("SOCKETIO_ASYNC_MODE", "threading")
+    socketio.init_app(app, cors_allowed_origins="*", async_mode=async_mode)
+    app.logger.info(f"🧵 SocketIO async_mode={async_mode}")
     
     # 블루프린트 등록
     register_blueprints(app)
