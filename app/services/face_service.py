@@ -398,7 +398,7 @@ class FaceService:
             }
     
     def authenticate_by_face(self, image: np.ndarray, 
-                             threshold: float = 0.85) -> Optional[Tuple[str, float]]:
+                             threshold: float = 0.5) -> Optional[Tuple[str, float]]:
         """얼굴로 회원 인증 (1:N 검색)
         
         Args:
