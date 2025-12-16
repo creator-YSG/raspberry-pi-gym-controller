@@ -31,8 +31,11 @@ psutil>=5.9.0
 opencv-python>=4.8.0
 numpy>=1.24.0
 
-# 얼굴인식 - MediaPipe (Apache 2.0 라이선스)
-mediapipe>=0.10.0
+# 얼굴인식 - TFLite MobileFaceNet (라즈베리파이)
+# tflite-runtime>=2.14.0  # pip install tflite-runtime (라즈베리파이에서만)
+
+# 얼굴인식 - MediaPipe (로컬 개발용, 선택적)
+# mediapipe>=0.10.0
 
 # 라즈베리파이 카메라 (Pi에서만 설치)
 # picamera2>=0.3.12  # pip install picamera2 (라즈베리파이에서만)
