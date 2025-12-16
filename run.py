@@ -10,11 +10,23 @@ import sys
 import argparse
 from pathlib import Path
 
+# 런타임 스택 덤프 (라즈베리파이 현장 디버깅용)
+# - 서버가 특정 요청에서 멈추는 경우: `kill -USR1 <PID>` 하면 모든 스레드 스택이 stderr로 출력됨
+import faulthandler
+import signal
+
 # 프로젝트 루트를 Python 경로에 추가
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
 from app import create_app, socketio
+
+# SIGUSR1로 스택 덤프 활성화 (stderr → /tmp/kiosk.log에 기록됨)
+try:
+    faulthandler.register(signal.SIGUSR1, all_threads=True)
+except Exception:
+    # 일부 환경에서 시그널 등록이 실패할 수 있으나, 서버 실행에는 영향 없음
+    pass
 
 
 def main():
