@@ -80,7 +80,11 @@ def main():
             port=args.port,
             debug=args.debug,
             use_reloader=args.debug,
-            log_output=True
+            log_output=True,
+            # threading 모드(또는 eventlet 미사용)에서는 Flask/Werkzeug 서버로 구동되며
+            # 최신 Flask-SocketIO는 프로덕션 환경에서 Werkzeug 사용을 기본 차단함.
+            # 키오스크는 로컬 단일 디바이스 구동이므로 예외를 허용한다.
+            allow_unsafe_werkzeug=True
         )
     except KeyboardInterrupt:
         print("\n👋 애플리케이션 종료")
