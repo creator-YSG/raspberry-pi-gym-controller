@@ -75,9 +75,44 @@ def create_app(config_name='default'):
     # ESP32 자동 연결 (백그라운드)
     setup_esp32_connection(app)
     
+    # 카메라 자동 시작 (모션 감지용)
+    setup_camera_service(app)
+    
     app.logger.info("🚀 락카키 대여기 웹 애플리케이션 초기화 완료")
     
     return app
+
+
+def setup_camera_service(app):
+    """카메라 서비스 자동 시작 (모션 감지용)"""
+    import threading
+    
+    def camera_init_worker():
+        """카메라 초기화 워커 스레드"""
+        try:
+            # 잠시 대기 (앱 완전 초기화 후)
+            import time
+            time.sleep(2)
+            
+            from app.services.camera_service import get_camera_service
+            camera_service = get_camera_service(use_picamera=True)
+            
+            if camera_service.start():
+                app.camera_service = camera_service
+                app.logger.info("📷 카메라 서비스 자동 시작 완료 (모션 감지 대기)")
+            else:
+                app.logger.warning("⚠️ 카메라 시작 실패 - 모션 감지 비활성화")
+                app.camera_service = None
+                
+        except Exception as e:
+            app.logger.error(f"❌ 카메라 초기화 실패: {e}")
+            app.camera_service = None
+    
+    # 테스트 모드가 아닐 때만 카메라 시작
+    if not app.config.get('TESTING', False):
+        camera_thread = threading.Thread(target=camera_init_worker, daemon=True)
+        camera_thread.start()
+        app.logger.info("🚀 카메라 초기화 스레드 시작")
 
 
 def setup_esp32_connection(app):
