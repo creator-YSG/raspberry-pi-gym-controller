@@ -33,9 +33,9 @@ class CameraService:
         
         self._prev_frame = None
         self._motion_detected = False
-        self._motion_threshold = 5000
+        self._motion_threshold = 25000  # 민감도 낮춤 (5000 → 25000)
         self._last_motion_time = 0
-        self._motion_cooldown = 1.0
+        self._motion_cooldown = 2.0  # 쿨다운 늘림 (1초 → 2초)
         
         self._current_frame = None
         self._frame_lock = threading.Lock()
