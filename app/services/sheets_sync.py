@@ -316,6 +316,51 @@ class SheetsSync:
             logger.error(f"[SheetsSync] 대여 기록 업로드 오류: {e}")
             return 0
     
+    def update_rental_photo(self, rental_id: int, photo_path: str, photo_url: str) -> bool:
+        """대여 기록의 사진 정보만 단건 업데이트
+        
+        Args:
+            rental_id: 대여 ID
+            photo_path: 로컬 사진 경로
+            photo_url: 드라이브 URL
+            
+        Returns:
+            성공 여부
+        """
+        try:
+            worksheet = self._get_worksheet("rentals")
+            if not worksheet:
+                return False
+            
+            self._rate_limit()
+            
+            # rental_id로 행 찾기 (A열 = rental_id)
+            cell = worksheet.find(str(rental_id), in_column=1)
+            if not cell:
+                logger.warning(f"[SheetsSync] rental_id {rental_id} 행을 찾을 수 없음")
+                return False
+            
+            row_num = cell.row
+            
+            # 컬럼 인덱스 (1-based)
+            # 14: rental_photo_path, 15: rental_photo_url
+            COL_PHOTO_PATH = 14
+            COL_PHOTO_URL = 15
+            
+            # 셀 업데이트 (batch로 효율적)
+            self._rate_limit()
+            worksheet.update_cell(row_num, COL_PHOTO_PATH, photo_path or '')
+            
+            self._rate_limit()
+            worksheet.update_cell(row_num, COL_PHOTO_URL, photo_url or '')
+            
+            logger.info(f"[SheetsSync] rental {rental_id} 사진 정보 업데이트 완료")
+            return True
+            
+        except Exception as e:
+            logger.error(f"[SheetsSync] 사진 정보 업데이트 오류: {e}")
+            return False
+    
     def upload_locker_status(self, db_manager) -> int:
         """락카 현황 업로드 (전체 업데이트)"""
         try:

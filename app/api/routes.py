@@ -672,7 +672,7 @@ def _capture_auth_photo(member_id: str, auth_method: str):
             saved_path = camera_service.capture_snapshot(photo_path)
             
             if saved_path:
-                # DB에 로컬 경로 먼저 업데이트
+                # DB에 로컬 경로 먼저 업데이트 + rental_id 가져오기
                 db = DatabaseManager('instance/gym_system.db')
                 db.connect()
                 
@@ -684,31 +684,58 @@ def _capture_auth_photo(member_id: str, auth_method: str):
                     LIMIT 1
                 """, (saved_path, auth_method, member_id))
                 
+                # 업데이트된 rental_id 가져오기
+                cursor = db.execute_query("""
+                    SELECT rental_id FROM rentals 
+                    WHERE rental_photo_path = ?
+                """, (saved_path,))
+                rental_id_row = cursor.fetchone() if cursor else None
+                rental_id = rental_id_row[0] if rental_id_row else None
+                
                 db.close()
                 
-                current_app.logger.info(f'📸 인증 사진 촬영: {saved_path} (method: {auth_method})')
+                current_app.logger.info(f'📸 인증 사진 촬영: {saved_path} (rental_id: {rental_id})')
                 
                 # 구글 드라이브 업로드 (백그라운드)
-                def upload_callback(drive_url):
-                    if drive_url:
-                        try:
-                            db2 = DatabaseManager('instance/gym_system.db')
-                            db2.connect()
-                            db2.execute_query("""
-                                UPDATE rentals 
-                                SET rental_photo_url = ?
-                                WHERE rental_photo_path = ?
-                            """, (drive_url, saved_path))
-                            db2.close()
-                            import logging
-                            logging.getLogger(__name__).info(f'☁️ 드라이브 업로드 완료: {drive_url}')
-                        except Exception as e:
-                            import logging
-                            logging.getLogger(__name__).warning(f'드라이브 URL 저장 오류: {e}')
+                def make_callback(r_id, s_path):
+                    def upload_callback(drive_url):
+                        if drive_url:
+                            try:
+                                import logging
+                                logger = logging.getLogger(__name__)
+                                
+                                # 1. DB에 URL 저장
+                                db2 = DatabaseManager('instance/gym_system.db')
+                                db2.connect()
+                                db2.execute_query("""
+                                    UPDATE rentals 
+                                    SET rental_photo_url = ?
+                                    WHERE rental_photo_path = ?
+                                """, (drive_url, s_path))
+                                db2.close()
+                                
+                                logger.info(f'☁️ 드라이브 업로드 완료: {drive_url}')
+                                
+                                # 2. 구글 시트 단건 업데이트
+                                if r_id:
+                                    try:
+                                        from app.services.sheets_sync import SheetsSync
+                                        sheets = SheetsSync()
+                                        if sheets.connect():
+                                            sheets.update_rental_photo(r_id, s_path, drive_url)
+                                            logger.info(f'📊 구글시트 업데이트 완료 (rental_id: {r_id})')
+                                    except Exception as sync_error:
+                                        logger.warning(f'구글시트 업데이트 오류 (무시): {sync_error}')
+                                        
+                            except Exception as e:
+                                import logging
+                                logging.getLogger(__name__).warning(f'드라이브 URL 저장 오류: {e}')
+                    return upload_callback
                 
                 drive_service = get_drive_service()
                 drive_folder = f"rentals/{now.year}/{now.month:02d}"
-                drive_service.upload_async(saved_path, drive_folder, upload_callback)
+                callback = make_callback(rental_id, saved_path)
+                drive_service.upload_async(saved_path, drive_folder, callback)
                 
         except Exception as e:
             # 사진 촬영 실패는 치명적이지 않음 - 로그만 남김
