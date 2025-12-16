@@ -300,7 +300,12 @@ function attemptFaceAuth() {
         } else {
             // 인증 실패 - 계속 시도
             if (data.error_type === 'face_not_detected') {
-                updateStatus('waiting', '얼굴을 인식할 수 없습니다');
+                updateStatus('waiting', '카메라를 바라봐주세요');
+                // 얼굴 없으면 1.5초 후 재시도 (API 부하 감소)
+                setTimeout(function() {
+                    isProcessingAuth = false;
+                }, 1500);
+                return;
             } else if (data.error_type === 'face_not_found') {
                 updateStatus('error', '등록된 얼굴이 아닙니다');
             } else if (data.error_type === 'member_invalid') {
