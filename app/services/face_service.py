@@ -169,7 +169,7 @@ class FaceService:
         """이미지에서 얼굴 임베딩 추출 (Haar + TFLite MobileFaceNet)
         
         Args:
-            image: RGB 이미지 배열
+            image: BGR 이미지 배열 (CameraService에서 반환하는 형식)
             
         Returns:
             128차원 임베딩 벡터 또는 None (얼굴 없음)
@@ -183,11 +183,8 @@ class FaceService:
             return None
         
         try:
-            # RGB -> BGR 변환
-            if len(image.shape) == 3 and image.shape[2] == 3:
-                image_bgr = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-            else:
-                image_bgr = image
+            # 입력은 이미 BGR (CameraService에서 반환)
+            image_bgr = image
             
             h, w = image_bgr.shape[:2]
             
@@ -251,7 +248,7 @@ class FaceService:
         """이미지에 얼굴이 있는지 확인
         
         Args:
-            image: RGB 이미지 배열
+            image: BGR 이미지 배열
             
         Returns:
             얼굴 존재 여부
@@ -265,7 +262,7 @@ class FaceService:
         
         Args:
             member_id: 회원 ID
-            image: RGB 이미지 배열
+            image: BGR 이미지 배열 (CameraService에서 반환하는 형식)
             save_photo: 사진 저장 여부
             
         Returns:
@@ -302,8 +299,8 @@ class FaceService:
             photo_url = None
             if save_photo:
                 photo_path = str(self.photos_dir / f"{member_id}.jpg")
-                image_bgr = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-                cv2.imwrite(photo_path, image_bgr)
+                # 입력이 이미 BGR이므로 그대로 저장
+                cv2.imwrite(photo_path, image)
                 
                 # 구글 드라이브 업로드 (백그라운드)
                 self._upload_member_photo_async(member_id, photo_path)
@@ -402,8 +399,8 @@ class FaceService:
         """얼굴로 회원 인증 (1:N 검색)
         
         Args:
-            image: RGB 이미지 배열
-            threshold: 유사도 임계값 (0.85 = 85%)
+            image: BGR 이미지 배열
+            threshold: 유사도 임계값 (0.5 = 50%)
             
         Returns:
             (member_id, similarity) 튜플 또는 None
@@ -441,7 +438,7 @@ class FaceService:
         """얼굴 인증 처리 (전체 플로우)
         
         Args:
-            image: RGB 이미지 배열
+            image: BGR 이미지 배열
             
         Returns:
             인증 결과 딕셔너리
