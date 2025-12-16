@@ -426,8 +426,8 @@ class FaceService:
         best_idx = np.argmax(similarities)
         best_similarity = float(similarities[best_idx])
         
-        logger.debug(f"얼굴 인식 결과: 최고 유사도 {best_similarity:.3f}, "
-                    f"회원 {self.member_ids[best_idx]}")
+        logger.info(f"얼굴 인식 결과: 최고 유사도 {best_similarity:.3f}, "
+                    f"회원 {self.member_ids[best_idx]}, threshold {threshold}")
         
         if best_similarity >= threshold:
             return (self.member_ids[best_idx], best_similarity)
