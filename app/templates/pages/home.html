@@ -176,9 +176,13 @@ document.addEventListener('DOMContentLoaded', function() {
             });
     }, 200);
     
-    // 카메라 프레임 변화 감지 폴링 (300ms마다)
+    // 카메라 프레임 변화 감지 폴링 (5초 후 시작)
     if (cameraEnabled) {
-        startMotionPolling();
+        console.log('📷 모션 감지 5초 후 시작...');
+        setTimeout(function() {
+            console.log('📷 모션 감지 시작');
+            startMotionPolling();
+        }, 5000);
     }
     
     // 키오스크 최적화
