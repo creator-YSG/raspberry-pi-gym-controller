@@ -15,7 +15,7 @@
     <!-- 중앙: 카메라 영상 -->
     <div class="camera-container">
         <div class="camera-frame">
-            <img id="cameraFeed" src="/api/video_feed" alt="카메라 영상" />
+            <img id="cameraFeed" src="" alt="카메라 영상" />
             <div class="face-guide"></div>
         </div>
         <div class="camera-status" id="cameraStatus">
@@ -185,16 +185,22 @@ let remainingSeconds = TIMEOUT_SECONDS;
 document.addEventListener('DOMContentLoaded', function() {
     console.log('📷 얼굴 인증 화면 시작');
     
+    // 카메라 스트림 시작 (1초 후 - 블로킹 방지)
+    setTimeout(function() {
+        document.getElementById('cameraFeed').src = '/api/video_feed';
+        console.log('📷 카메라 스트림 시작');
+    }, 1000);
+    
     // 바코드 스캐너 리스닝
     setupBarcodeScanner();
     
     // 바코드 폴링 시작 (200ms)
     startBarcodePolling();
     
-    // 얼굴 인증 시작 (0.5초 후)
+    // 얼굴 인증 시작 (1.5초 후 - 스트림 로드 대기)
     setTimeout(function() {
         startFaceAuthPolling();
-    }, 500);
+    }, 1500);
     
     // 타임아웃 카운터 시작
     startTimeoutCounter();
