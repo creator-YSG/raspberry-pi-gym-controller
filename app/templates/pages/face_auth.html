@@ -200,6 +200,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // 얼굴 인증 시작 (1.5초 후 - 스트림 로드 대기)
     setTimeout(function() {
+        document.getElementById('authSubtitle').textContent = '얼굴인증 폴링 시작';
         startFaceAuthPolling();
     }, 1500);
     
