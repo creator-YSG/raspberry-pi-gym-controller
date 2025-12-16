@@ -316,13 +316,15 @@ class SheetsSync:
             logger.error(f"[SheetsSync] 대여 기록 업로드 오류: {e}")
             return 0
     
-    def update_rental_photo(self, rental_id: int, photo_path: str, photo_url: str) -> bool:
+    def update_rental_photo(self, rental_id: int, photo_path: str, photo_url: str, 
+                            db_manager=None) -> bool:
         """대여 기록의 사진 정보만 단건 업데이트
         
         Args:
             rental_id: 대여 ID
             photo_path: 로컬 사진 경로
             photo_url: 드라이브 URL
+            db_manager: DatabaseManager (행이 없을 때 추가용, 선택적)
             
         Returns:
             성공 여부
@@ -336,9 +338,20 @@ class SheetsSync:
             
             # rental_id로 행 찾기 (A열 = rental_id)
             cell = worksheet.find(str(rental_id), in_column=1)
+            
             if not cell:
-                logger.warning(f"[SheetsSync] rental_id {rental_id} 행을 찾을 수 없음")
-                return False
+                # 행이 없으면 먼저 새 레코드 추가 시도
+                if db_manager:
+                    logger.info(f"[SheetsSync] rental_id {rental_id} 행 없음, 새 레코드 추가 시도")
+                    added = self.upload_rentals(db_manager)
+                    if added > 0:
+                        # 다시 찾기
+                        self._rate_limit()
+                        cell = worksheet.find(str(rental_id), in_column=1)
+                
+                if not cell:
+                    logger.warning(f"[SheetsSync] rental_id {rental_id} 행을 찾을 수 없음")
+                    return False
             
             row_num = cell.row
             
@@ -516,107 +529,11 @@ class SheetsSync:
             'rentals': self.upload_rentals(db_manager),
             'lockers': self.upload_locker_status(db_manager),
             'sensor_events': self.upload_sensor_events(db_manager),
-            'rental_photos': self.upload_rental_photos(db_manager),
         }
         
         if any(result.values()):
             logger.info(f"[SheetsSync] 업로드 완료: {result}")
         return result
-    
-    def upload_rental_photos(self, db_manager) -> int:
-        """대여 사진 정보 업로드
-        
-        rental_photos 시트에 인증 시 촬영된 사진 경로 정보 업로드
-        
-        Args:
-            db_manager: DatabaseManager 인스턴스
-            
-        Returns:
-            업로드된 행 수
-        """
-        try:
-            sheet_name = self.sheet_names.get('rental_photos', 'rental_photos')
-            
-            # 시트 가져오기 또는 생성
-            try:
-                self._rate_limit()
-                worksheet = self.spreadsheet.worksheet(sheet_name)
-            except gspread.WorksheetNotFound:
-                logger.info(f"[SheetsSync] rental_photos 시트 생성")
-                self._rate_limit()
-                worksheet = self.spreadsheet.add_worksheet(
-                    title=sheet_name, rows=1000, cols=10
-                )
-            
-            # 사진이 있는 대여 기록 조회 (최근 100건)
-            cursor = db_manager.execute_query("""
-                SELECT 
-                    r.rental_id,
-                    r.transaction_id,
-                    r.member_id,
-                    r.locker_number,
-                    r.auth_method,
-                    r.rental_photo_path,
-                    r.rental_photo_url,
-                    r.rental_barcode_time,
-                    r.status
-                FROM rentals r
-                WHERE r.rental_photo_path IS NOT NULL
-                   OR r.rental_photo_url IS NOT NULL
-                ORDER BY r.created_at DESC
-                LIMIT 100
-            """)
-            
-            if not cursor:
-                return 0
-            
-            rows_data = cursor.fetchall()
-            
-            if not rows_data:
-                return 0
-            
-            rows = []
-            for row in rows_data:
-                record = self._row_to_dict(row)
-                rows.append([
-                    record.get('rental_id', ''),
-                    record.get('transaction_id', ''),
-                    record.get('member_id', ''),
-                    record.get('locker_number', ''),
-                    record.get('auth_method', ''),
-                    record.get('rental_photo_url', '') or '',  # 드라이브 URL 우선
-                    record.get('rental_photo_path', ''),
-                    record.get('rental_barcode_time', ''),
-                    record.get('status', '')
-                ])
-            
-            # 헤더 포함 전체 데이터 구성
-            headers = [
-                "rental_id", "transaction_id", "member_id", "locker_number",
-                "auth_method", "photo_url", "photo_path", "auth_time", "status"
-            ]
-            
-            all_rows = [headers] + rows
-            
-            # 시트 업데이트
-            self._rate_limit()
-            worksheet.clear()
-            self._rate_limit()
-            worksheet.update(values=all_rows, range_name='A1')
-            
-            # 헤더 스타일 (9 컬럼)
-            self._rate_limit()
-            worksheet.format('A1:I1', {
-                'textFormat': {'bold': True},
-                'backgroundColor': {'red': 0.9, 'green': 0.9, 'blue': 0.9}
-            })
-            
-            logger.info(f"[SheetsSync] 대여 사진 정보 업로드 완료: {len(rows)}건")
-            return len(rows)
-            
-        except Exception as e:
-            logger.error(f"[SheetsSync] 대여 사진 정보 업로드 오류: {e}")
-            return 0
     
     def get_status(self) -> Dict:
         """동기화 상태 정보"""

@@ -718,13 +718,17 @@ def _capture_auth_photo(member_id: str, auth_method: str):
                                 
                                 logger.info(f'☁️ 드라이브 업로드 완료: {drive_url}')
                                 
-                                # 2. 구글 시트 단건 업데이트
+                                # 2. 구글 시트 단건 업데이트 (행 없으면 자동 추가)
                                 if r_id:
                                     try:
                                         from app.services.sheets_sync import SheetsSync
                                         sheets = SheetsSync()
                                         if sheets.connect():
-                                            sheets.update_rental_photo(r_id, s_path, drive_url)
+                                            # db_manager 전달하여 행 없으면 추가
+                                            db3 = DatabaseManager('instance/gym_system.db')
+                                            db3.connect()
+                                            sheets.update_rental_photo(r_id, s_path, drive_url, db3)
+                                            db3.close()
                                             logger.info(f'📊 구글시트 업데이트 완료 (rental_id: {r_id})')
                                     except Exception as sync_error:
                                         logger.warning(f'구글시트 업데이트 오류 (무시): {sync_error}')
