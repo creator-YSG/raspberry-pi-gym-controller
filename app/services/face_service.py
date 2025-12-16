@@ -1,7 +1,8 @@
 """
-얼굴인식 서비스 (OpenCV DNN + NumPy)
+얼굴인식 서비스 (TFLite MobileFaceNet + OpenCV DNN)
 
-- OpenCV DNN: 얼굴 검출 (SSD) + 특징 추출 (FaceNet)
+- OpenCV DNN: 얼굴 검출 (SSD)
+- TFLite MobileFaceNet: 128D 임베딩 추출
 - NumPy: 코사인 유사도 1:N 검색
 - SQLite: 임베딩 저장/로드
 """
@@ -16,6 +17,18 @@ from typing import Optional, Dict, Tuple, List
 
 logger = logging.getLogger(__name__)
 
+# TFLite 런타임 (라즈베리파이)
+try:
+    import tflite_runtime.interpreter as tflite
+    TFLITE_AVAILABLE = True
+except ImportError:
+    try:
+        import tensorflow.lite as tflite
+        TFLITE_AVAILABLE = True
+    except ImportError:
+        TFLITE_AVAILABLE = False
+        logger.warning("TFLite 런타임이 설치되지 않았습니다")
+
 
 class FaceService:
     """얼굴인식 비즈니스 로직"""
@@ -27,8 +40,8 @@ class FaceService:
         """
         self.db_path = db_path
         
-        # OpenCV DNN 모델 초기화
-        self._init_opencv_dnn()
+        # 모델 초기화
+        self._init_models()
         
         # 임베딩 DB (메모리 캐시)
         self.db_embeddings: Optional[np.ndarray] = None
@@ -41,36 +54,58 @@ class FaceService:
         # DB에서 임베딩 로드
         self._load_embeddings_from_db()
         
-    def _init_opencv_dnn(self):
-        """OpenCV DNN 모델 초기화"""
+    def _init_models(self):
+        """얼굴 검출(Haar) + 임베딩(TFLite) 모델 초기화"""
+        models_dir = Path('models')
+        models_dir.mkdir(parents=True, exist_ok=True)
+        
+        # 1. 얼굴 검출 모델 (Haar Cascade - 빠름)
+        self.face_cascade = None
         try:
-            models_dir = Path('models')
-            models_dir.mkdir(parents=True, exist_ok=True)
+            haar_path = models_dir / 'haarcascade_frontalface_default.xml'
             
-            # 얼굴 검출 모델 (SSD)
-            detector_prototxt = models_dir / 'deploy.prototxt'
-            detector_model = models_dir / 'res10_300x300_ssd_iter_140000.caffemodel'
-            
-            if not detector_prototxt.exists() or not detector_model.exists():
-                logger.error("얼굴 검출 모델이 없습니다. models/ 폴더를 확인하세요.")
-                self.detector_net = None
-                self.embedding_net = None
-                return
-            
-            self.detector_net = cv2.dnn.readNetFromCaffe(
-                str(detector_prototxt),
-                str(detector_model)
-            )
-            logger.info("OpenCV DNN 얼굴 검출 모델 로드 완료")
-            
-            # 특징 추출 모델은 간단한 Haar Cascade 기반으로 대체
-            # (추후 FaceNet 모델로 업그레이드 가능)
-            self.embedding_net = None
-            
+            if haar_path.exists():
+                self.face_cascade = cv2.CascadeClassifier(str(haar_path))
+                logger.info("✅ 얼굴 검출 모델(Haar Cascade) 로드 완료")
+            else:
+                # OpenCV 기본 경로에서 시도
+                default_haar = cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
+                self.face_cascade = cv2.CascadeClassifier(default_haar)
+                if self.face_cascade.empty():
+                    logger.error("❌ Haar Cascade 모델을 찾을 수 없습니다")
+                    self.face_cascade = None
+                else:
+                    logger.info("✅ 얼굴 검출 모델(Haar Cascade) 로드 완료 (기본 경로)")
         except Exception as e:
-            logger.error(f"OpenCV DNN 초기화 실패: {e}")
-            self.detector_net = None
-            self.embedding_net = None
+            logger.error(f"❌ Haar Cascade 로드 실패: {e}")
+        
+        # 2. 임베딩 모델 (TFLite MobileFaceNet)
+        self.embedding_interpreter = None
+        self.embedding_input_details = None
+        self.embedding_output_details = None
+        
+        if not TFLITE_AVAILABLE:
+            logger.warning("⚠️ TFLite 런타임 없음 - 임베딩 추출 불가")
+            return
+            
+        try:
+            embedding_model = models_dir / 'mobilefacenet.tflite'
+            
+            if embedding_model.exists():
+                self.embedding_interpreter = tflite.Interpreter(
+                    model_path=str(embedding_model)
+                )
+                self.embedding_interpreter.allocate_tensors()
+                self.embedding_input_details = self.embedding_interpreter.get_input_details()
+                self.embedding_output_details = self.embedding_interpreter.get_output_details()
+                
+                input_shape = self.embedding_input_details[0]['shape']
+                output_shape = self.embedding_output_details[0]['shape']
+                logger.info(f"✅ MobileFaceNet TFLite 로드 완료: 입력{input_shape} → 출력{output_shape}")
+            else:
+                logger.error("❌ MobileFaceNet 모델 파일이 없습니다: models/mobilefacenet.tflite")
+        except Exception as e:
+            logger.error(f"❌ MobileFaceNet 로드 실패: {e}")
     
     def _get_db_connection(self):
         """데이터베이스 연결 획득"""
@@ -131,7 +166,7 @@ class FaceService:
         self._load_embeddings_from_db()
     
     def extract_embedding(self, image: np.ndarray) -> Optional[np.ndarray]:
-        """이미지에서 얼굴 임베딩 추출
+        """이미지에서 얼굴 임베딩 추출 (Haar + TFLite MobileFaceNet)
         
         Args:
             image: RGB 이미지 배열
@@ -139,8 +174,12 @@ class FaceService:
         Returns:
             128차원 임베딩 벡터 또는 None (얼굴 없음)
         """
-        if self.detector_net is None:
-            logger.error("OpenCV DNN이 초기화되지 않았습니다")
+        if self.face_cascade is None:
+            logger.error("얼굴 검출 모델이 초기화되지 않았습니다")
+            return None
+        
+        if self.embedding_interpreter is None:
+            logger.error("MobileFaceNet 모델이 초기화되지 않았습니다")
             return None
         
         try:
@@ -152,67 +191,55 @@ class FaceService:
             
             h, w = image_bgr.shape[:2]
             
-            # 얼굴 검출
-            blob = cv2.dnn.blobFromImage(
-                cv2.resize(image_bgr, (300, 300)),
-                1.0,
-                (300, 300),
-                (104.0, 177.0, 123.0)
+            # 1. 얼굴 검출 (Haar Cascade - 빠름)
+            gray = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
+            faces = self.face_cascade.detectMultiScale(
+                gray,
+                scaleFactor=1.1,
+                minNeighbors=5,
+                minSize=(60, 60),
+                flags=cv2.CASCADE_SCALE_IMAGE
             )
-            self.detector_net.setInput(blob)
-            detections = self.detector_net.forward()
             
-            # 가장 높은 신뢰도의 얼굴 선택
-            best_confidence = 0
-            best_box = None
-            
-            for i in range(detections.shape[2]):
-                confidence = detections[0, 0, i, 2]
-                if confidence > best_confidence and confidence > 0.5:
-                    best_confidence = confidence
-                    box = detections[0, 0, i, 3:7] * np.array([w, h, w, h])
-                    best_box = box.astype("int")
-            
-            if best_box is None:
+            if len(faces) == 0:
                 return None
             
-            # 얼굴 영역 추출
-            (x, y, x2, y2) = best_box
-            # 안전한 범위 확인
-            x = max(0, x)
-            y = max(0, y)
-            x2 = min(w, x2)
-            y2 = min(h, y2)
+            # 가장 큰 얼굴 선택
+            largest_face = max(faces, key=lambda f: f[2] * f[3])
+            (x, y, fw, fh) = largest_face
             
-            face_roi = image_bgr[y:y2, x:x2]
+            # 2. 얼굴 영역 추출 (마진 추가 15%)
+            margin_x = int(fw * 0.15)
+            margin_y = int(fh * 0.15)
+            x1 = max(0, x - margin_x)
+            y1 = max(0, y - margin_y)
+            x2 = min(w, x + fw + margin_x)
+            y2 = min(h, y + fh + margin_y)
+            
+            face_roi = image_bgr[y1:y2, x1:x2]
             
             if face_roi.size == 0:
                 return None
             
-            # 얼굴 ROI를 고정 크기로 리사이즈 (128x128)
-            face_resized = cv2.resize(face_roi, (128, 128))
+            # 3. MobileFaceNet 전처리
+            # - 크기: 112x112
+            # - 색공간: RGB
+            # - 정규화: [-1, 1] (sirius-ai/MobileFaceNet_TF 기준)
+            face_rgb = cv2.cvtColor(face_roi, cv2.COLOR_BGR2RGB)
+            face_resized = cv2.resize(face_rgb, (112, 112))
+            face_normalized = (face_resized.astype('float32') - 127.5) / 128.0
+            face_input = np.expand_dims(face_normalized, axis=0)  # [1, 112, 112, 3]
             
-            # 간단한 특징 추출: 히스토그램 기반
-            # HSV 색공간으로 변환
-            face_hsv = cv2.cvtColor(face_resized, cv2.COLOR_BGR2HSV)
+            # 4. TFLite 추론
+            self.embedding_interpreter.set_tensor(
+                self.embedding_input_details[0]['index'], 
+                face_input
+            )
+            self.embedding_interpreter.invoke()
             
-            # 각 채널별 히스토그램 계산
-            hist_h = cv2.calcHist([face_hsv], [0], None, [32], [0, 180])
-            hist_s = cv2.calcHist([face_hsv], [1], None, [32], [0, 256])
-            hist_v = cv2.calcHist([face_hsv], [2], None, [32], [0, 256])
-            
-            # 그레이스케일 히스토그램
-            face_gray = cv2.cvtColor(face_resized, cv2.COLOR_BGR2GRAY)
-            hist_gray = cv2.calcHist([face_gray], [0], None, [32], [0, 256])
-            
-            # 히스토그램 정규화 및 결합 (128차원)
-            hist_h = cv2.normalize(hist_h, hist_h).flatten()
-            hist_s = cv2.normalize(hist_s, hist_s).flatten()
-            hist_v = cv2.normalize(hist_v, hist_v).flatten()
-            hist_gray = cv2.normalize(hist_gray, hist_gray).flatten()
-            
-            # 최종 임베딩: 128차원 (32+32+32+32)
-            embedding = np.concatenate([hist_h, hist_s, hist_v, hist_gray])
+            embedding = self.embedding_interpreter.get_tensor(
+                self.embedding_output_details[0]['index']
+            )[0]  # [128]
             
             return embedding.astype('float32')
             
@@ -576,9 +603,11 @@ class FaceService:
     def get_status(self) -> Dict:
         """서비스 상태 반환"""
         return {
-            'mediapipe_initialized': self.face_mesh is not None,
+            'detector_initialized': self.face_cascade is not None,
+            'embedding_initialized': self.embedding_interpreter is not None,
+            'tflite_available': TFLITE_AVAILABLE,
             'registered_faces': self.get_registered_count(),
-            'member_ids': self.member_ids[:10] if self.member_ids else [],  # 처음 10명만
+            'member_ids': self.member_ids[:10] if self.member_ids else [],
             'db_path': self.db_path
         }
 
