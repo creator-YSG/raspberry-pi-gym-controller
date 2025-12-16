@@ -262,8 +262,29 @@ function startFaceAuthPolling() {
     authPollingInterval = setInterval(function() {
         if (isProcessingAuth || isProcessingBarcode) return;
         
-        attemptFaceAuth();
-    }, 800);  // 0.8초마다 시도
+        checkAndAuthenticate();
+    }, 500);  // 0.5초마다 검출 체크
+}
+
+// 얼굴 검출 후 인증 (2단계)
+function checkAndAuthenticate() {
+    if (isProcessingAuth || isProcessingBarcode) return;
+    
+    // 1단계: Haar Cascade로 빠르게 검출
+    fetch('/api/face/detect')
+    .then(response => response.json())
+    .then(data => {
+        if (data.detected) {
+            // 얼굴 있음 → 인증 시도
+            attemptFaceAuth();
+        } else {
+            // 얼굴 없음 → 대기 메시지
+            updateStatus('waiting', '카메라를 바라봐주세요');
+        }
+    })
+    .catch(error => {
+        console.error('검출 오류:', error);
+    });
 }
 
 // 얼굴 인증 시도

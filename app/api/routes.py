@@ -2391,6 +2391,53 @@ def video_feed():
 # 얼굴인식 API
 # =====================================================
 
+@bp.route('/face/detect', methods=['GET'])
+def detect_face():
+    """얼굴 검출 (Haar Cascade - 빠름)
+    
+    카메라 프레임에서 얼굴 유무만 빠르게 확인
+    임베딩 추출 없이 Haar Cascade만 사용하므로 ~10ms
+    
+    Returns:
+        {detected: true/false, face_count: N}
+    """
+    try:
+        from app.services.camera_service import get_camera_service
+        from app.services.face_service import get_face_service
+        import cv2
+        
+        camera_service = get_camera_service()
+        face_service = get_face_service()
+        
+        frame = camera_service.capture_frame()
+        
+        if frame is None:
+            return jsonify({'detected': False, 'face_count': 0, 'error': 'no_frame'})
+        
+        if face_service.face_cascade is None:
+            return jsonify({'detected': False, 'face_count': 0, 'error': 'no_detector'})
+        
+        # Haar Cascade로 빠르게 검출만
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        faces = face_service.face_cascade.detectMultiScale(
+            gray,
+            scaleFactor=1.1,
+            minNeighbors=4,
+            minSize=(60, 60)
+        )
+        
+        detected = len(faces) > 0
+        
+        return jsonify({
+            'detected': detected,
+            'face_count': len(faces)
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"얼굴 검출 오류: {e}")
+        return jsonify({'detected': False, 'face_count': 0, 'error': str(e)})
+
+
 @bp.route('/auth/face', methods=['POST'])
 def authenticate_face():
     """얼굴 인증 (서버에서 스냅샷 촬영)
