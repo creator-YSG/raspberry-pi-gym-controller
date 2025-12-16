@@ -694,7 +694,9 @@ def _capture_auth_photo(member_id: str, auth_method: str):
                 
                 db.close()
                 
-                current_app.logger.info(f'📸 인증 사진 촬영: {saved_path} (rental_id: {rental_id})')
+                import logging
+                bg_logger = logging.getLogger(__name__)
+                bg_logger.info(f'📸 인증 사진 촬영: {saved_path} (rental_id: {rental_id})')
                 
                 # 구글 드라이브 업로드 (백그라운드)
                 def make_callback(r_id, s_path):
