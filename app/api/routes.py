@@ -2417,13 +2417,14 @@ def detect_face():
         if face_service.face_cascade is None:
             return jsonify({'detected': False, 'face_count': 0, 'error': 'no_detector'})
         
-        # Haar Cascade로 빠르게 검출만
+        # Haar Cascade로 빠르게 검출만 (face_service와 동일 설정)
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         faces = face_service.face_cascade.detectMultiScale(
             gray,
-            scaleFactor=1.1,
-            minNeighbors=4,
-            minSize=(60, 60)
+            scaleFactor=1.05,
+            minNeighbors=3,
+            minSize=(40, 40),
+            flags=cv2.CASCADE_SCALE_IMAGE
         )
         
         detected = len(faces) > 0
