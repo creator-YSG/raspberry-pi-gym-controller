@@ -195,9 +195,9 @@ class FaceService:
             gray = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
             faces = self.face_cascade.detectMultiScale(
                 gray,
-                scaleFactor=1.1,
-                minNeighbors=5,
-                minSize=(60, 60),
+                scaleFactor=1.05,
+                minNeighbors=3,
+                minSize=(40, 40),
                 flags=cv2.CASCADE_SCALE_IMAGE
             )
             
