@@ -258,8 +258,9 @@ function startBarcodePolling() {
 }
 
 // 얼굴 검출 상태
-let faceDetectedAt = null;  // 첫 검출 시간
-const DETECTION_CONFIRM_DELAY = 800;  // 0.8초간 연속 검출 시 인증
+let consecutiveDetections = 0;
+let firstDetectionTime = null;
+const REQUIRED_DETECTIONS = 5;  // 5회 연속 검출 (~250ms)
 
 // 얼굴 인증 폴링 시작
 function startFaceAuthPolling() {
@@ -267,46 +268,143 @@ function startFaceAuthPolling() {
         if (isProcessingAuth || isProcessingBarcode) return;
         
         checkAndAuthenticate();
-    }, 300);  // 0.3초마다 검출 체크 (가벼우니까 빠르게)
+    }, 50);  // 50ms마다 검출 (Haar가 빠르니까)
 }
 
-// 얼굴 검출 후 인증 (2단계 - 연속 검출 확인)
+// 얼굴 검출 후 인증 (연속 검출 + 2회 인증)
 function checkAndAuthenticate() {
     if (isProcessingAuth || isProcessingBarcode) return;
     
-    // 1단계: Haar Cascade로 빠르게 검출
+    // Haar Cascade로 빠르게 검출
     fetch('/api/face/detect')
     .then(response => response.json())
     .then(data => {
         if (data.detected) {
-            // 얼굴 검출됨
-            if (faceDetectedAt === null) {
-                // 첫 검출 → 시간 기록
-                faceDetectedAt = Date.now();
-                updateStatus('waiting', '얼굴 확인 중...');
-                console.log('👤 얼굴 첫 검출');
-            } else if (Date.now() - faceDetectedAt >= DETECTION_CONFIRM_DELAY) {
-                // 0.8초 이상 연속 검출 → 인증 진행!
-                console.log('✅ 연속 검출 확인, 인증 시작');
-                faceDetectedAt = null;  // 초기화
-                attemptFaceAuth();
+            if (consecutiveDetections === 0) {
+                firstDetectionTime = Date.now();
+                console.log('👤 [TIME] 첫 검출');
+            }
+            consecutiveDetections++;
+            
+            if (consecutiveDetections >= REQUIRED_DETECTIONS) {
+                // 연속 5회 검출 → 2회 인증 시작!
+                const detectTime = Date.now() - firstDetectionTime;
+                console.log(`✅ [TIME] 연속 ${REQUIRED_DETECTIONS}회 검출 완료: ${detectTime}ms`);
+                consecutiveDetections = 0;
+                firstDetectionTime = null;
+                updateStatus('processing', '인증 중...');
+                attemptDoubleAuth();
             } else {
-                // 아직 확인 중
-                updateStatus('waiting', '얼굴 확인 중...');
+                updateStatus('waiting', `얼굴 확인 중... (${consecutiveDetections}/${REQUIRED_DETECTIONS})`);
             }
         } else {
-            // 얼굴 없음 → 초기화
-            if (faceDetectedAt !== null) {
-                console.log('👻 얼굴 사라짐, 초기화');
+            // 검출 실패 → 리셋
+            if (consecutiveDetections > 0) {
+                console.log(`👻 [TIME] 검출 끊김 (${consecutiveDetections}회에서 리셋)`);
             }
-            faceDetectedAt = null;
+            consecutiveDetections = 0;
+            firstDetectionTime = null;
             updateStatus('waiting', '카메라를 바라봐주세요');
         }
     })
     .catch(error => {
         console.error('검출 오류:', error);
-        faceDetectedAt = null;
+        consecutiveDetections = 0;
+        firstDetectionTime = null;
     });
+}
+
+// 2회 연속 인증 (같은 사람인지 확인)
+async function attemptDoubleAuth() {
+    if (isProcessingAuth) return;
+    isProcessingAuth = true;
+    
+    const startTime = Date.now();
+    console.log('⏱️ [TIME] 인증 시작:', new Date().toISOString());
+    
+    try {
+        // 1차 인증
+        const t1Start = Date.now();
+        const result1 = await fetch('/api/auth/face', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        }).then(r => r.json());
+        const t1End = Date.now();
+        
+        console.log(`⏱️ [TIME] 1차 인증: ${t1End - t1Start}ms`, result1.success ? `✓ ${result1.member_id}` : '✗');
+        
+        if (!result1.success) {
+            console.log(`⏱️ [TIME] 총 소요: ${Date.now() - startTime}ms (1차 실패)`);
+            handleAuthFailure(result1);
+            return;
+        }
+        
+        updateStatus('processing', '재확인 중...');
+        
+        // 2차 인증 (바로 연속)
+        const t2Start = Date.now();
+        const result2 = await fetch('/api/auth/face', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        }).then(r => r.json());
+        const t2End = Date.now();
+        
+        console.log(`⏱️ [TIME] 2차 인증: ${t2End - t2Start}ms`, result2.success ? `✓ ${result2.member_id}` : '✗');
+        
+        if (!result2.success) {
+            console.log(`⏱️ [TIME] 총 소요: ${Date.now() - startTime}ms (2차 실패)`);
+            handleAuthFailure(result2);
+            return;
+        }
+        
+        // 같은 사람인지 확인
+        if (result1.member_id === result2.member_id) {
+            // 2회 연속 같은 사람 → 성공!
+            const totalTime = Date.now() - startTime;
+            console.log(`🎉 [TIME] 2회 인증 성공! 총 ${totalTime}ms (${result2.member_id})`);
+            handleAuthSuccess(result2);
+        } else {
+            // 다른 사람 → 실패
+            console.log(`❌ [TIME] 1차/2차 불일치: ${result1.member_id} ≠ ${result2.member_id}`);
+            updateStatus('error', '다시 시도해주세요');
+            isProcessingAuth = false;
+        }
+        
+    } catch (error) {
+        console.error('인증 오류:', error);
+        updateStatus('error', '인증 오류');
+        isProcessingAuth = false;
+    }
+}
+
+// 인증 성공 처리
+function handleAuthSuccess(data) {
+    updateStatus('success', `${data.member_name}님 확인!`);
+    document.querySelector('.camera-frame').classList.add('success');
+    stopAllPolling();
+    
+    setTimeout(function() {
+        if (data.action === 'rental') {
+            navigateTo('member-check', { member_id: data.member_id, action: 'rental' });
+        } else if (data.action === 'return') {
+            navigateTo('member-check', { member_id: data.member_id, action: 'return' });
+        }
+    }, 500);
+}
+
+// 인증 실패 처리
+function handleAuthFailure(data) {
+    if (data.error_type === 'face_not_detected') {
+        updateStatus('waiting', '카메라를 바라봐주세요');
+    } else if (data.error_type === 'face_not_found') {
+        updateStatus('error', '등록된 얼굴이 아닙니다');
+    } else if (data.error_type === 'member_invalid') {
+        updateStatus('error', data.error);
+        stopAllPolling();
+        setTimeout(() => navigateTo('error', { type: 'member_error', message: data.error }), 2000);
+        return;
+    }
+    isProcessingAuth = false;
 }
 
 // 얼굴 인증 시도
