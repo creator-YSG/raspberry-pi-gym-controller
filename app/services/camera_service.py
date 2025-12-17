@@ -117,14 +117,21 @@ class CameraService:
                 logger.error(f"카메라 정지 오류: {e}")
     
     def _capture_loop(self):
+        """프레임 캡처 루프 (모션 감지용 10fps)"""
+        frame_count = 0
         while self.is_running:
             try:
                 frame = self._capture_frame_internal()
                 if frame is not None:
                     with self._frame_lock:
                         self._current_frame = frame.copy()
-                    self._update_motion_detection(frame)
-                time.sleep(0.033)
+                    
+                    # 모션 감지는 3프레임마다 (CPU 절약)
+                    frame_count += 1
+                    if frame_count % 3 == 0:
+                        self._update_motion_detection(frame)
+                
+                time.sleep(0.1)  # 10fps (30fps → 10fps로 변경)
             except Exception as e:
                 logger.error(f"프레임 캡처 오류: {e}")
                 time.sleep(0.1)
@@ -180,6 +187,7 @@ class CameraService:
         return self.capture_snapshot(save_path)
     
     def _update_motion_detection(self, frame: np.ndarray):
+        """모션 감지 (저해상도로 CPU 절약)"""
         try:
             current_time = time.time()
             
@@ -187,9 +195,12 @@ class CameraService:
             if current_time - self._camera_start_time < self._motion_warmup:
                 return
             
+            # 저해상도로 리사이즈 (640x480 → 160x120) - CPU 절약
+            small = cv2.resize(frame, (160, 120))
+            
             # BGR → GRAY
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            gray = cv2.GaussianBlur(gray, (21, 21), 0)
+            gray = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY)
+            gray = cv2.GaussianBlur(gray, (11, 11), 0)  # 작은 이미지에 맞게 커널도 줄임
             
             if self._prev_frame is None:
                 self._prev_frame = gray
@@ -200,11 +211,14 @@ class CameraService:
             thresh = cv2.dilate(thresh, None, iterations=2)
             motion_pixels = cv2.countNonZero(thresh)
             
-            if motion_pixels > self._motion_threshold:
+            # 해상도가 1/16이므로 threshold도 조정 (50000 → 3000)
+            adjusted_threshold = 3000
+            
+            if motion_pixels > adjusted_threshold:
                 if current_time - self._last_motion_time > self._motion_cooldown:
                     self._motion_detected = True
                     self._last_motion_time = current_time
-                    logger.info(f"모션 감지: {motion_pixels} 픽셀 (threshold: {self._motion_threshold})")
+                    logger.info(f"모션 감지: {motion_pixels} 픽셀 (threshold: {adjusted_threshold})")
             
             self._prev_frame = gray
         except Exception as e:
