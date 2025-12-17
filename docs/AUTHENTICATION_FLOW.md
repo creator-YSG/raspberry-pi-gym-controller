@@ -355,6 +355,66 @@ DB 업데이트 (rentals 테이블)
 | 2025-12-16 | 2회 연속 인증 로직 추가 (정확도 향상) |
 | 2025-12-16 | 검출 API 분리 (/api/face/detect) |
 | 2025-12-16 | 모션 감지 개선 (warmup 5초, threshold 50K) |
+| 2025-12-17 | 모션 감지 최적화 (10fps, 160x120 저해상도) - CPU 100% → 18% |
+| 2025-12-17 | auth_method 명시적 전달 (프론트→백엔드) |
+| 2025-12-17 | 인증 사진 촬영 시점 변경 (/member-check에서 rental 생성 후) |
+
+---
+
+## 🔧 기술 부채: 인증 사진 촬영 로직
+
+### 현재 상황 (2025-12-17)
+
+**문제:**
+- 기존에 `/api/barcode/process`, `/api/auth/face`에서 `_capture_auth_photo()` 호출
+- 이 시점에는 rental이 아직 생성되지 않음
+- 결과: 사진이 이전 rental에 연결되거나 누락됨
+
+**임시 해결책 (옵션 B 적용):**
+```
+1. /api/barcode/process, /api/auth/face → 사진 촬영 제거
+2. /member-check 라우트에서 pending rental 생성 직후 _capture_auth_photo() 호출
+3. 이제 rental이 존재하므로 사진이 올바르게 연결됨
+```
+
+**장점:**
+- 최소한의 변경 (1개 파일)
+- 기존 로직 영향 적음
+- 바코드/얼굴/NFC 모두 동일하게 처리
+
+**단점:**
+- 사진 촬영이 페이지 렌더링 시점에 의존
+- API와 페이지 로직이 결합됨
+
+### 향후 통일 방안 (옵션 A)
+
+**목표:** 사진 경로를 명시적으로 전달하여 rental과 함께 저장
+
+```
+1. /api/barcode/process, /api/auth/face
+   → 사진 촬영 + photo_path 반환
+
+2. 프론트엔드 navigateTo()
+   → photo_path를 파라미터로 전달
+
+3. /member-check 라우트
+   → photo_path 받아서 템플릿에 전달
+
+4. /api/rentals/process
+   → rental 생성/업데이트 시 photo_path 함께 INSERT/UPDATE
+```
+
+**변경 필요 파일:**
+| 파일 | 변경 내용 |
+|------|----------|
+| `app/api/routes.py` | 사진 촬영 후 photo_path 반환 |
+| `app/templates/pages/face_auth.html` | navigateTo에 photo_path 추가 |
+| `app/templates/pages/home.html` | navigateTo에 photo_path 추가 |
+| `app/main/routes.py` | photo_path 파라미터 처리 |
+| `app/templates/pages/member_check.html` | photo_path 전달 |
+| `app/api/routes.py` | /api/rentals/process에서 photo_path 저장 |
+
+**우선순위:** 중간 (현재 동작에 문제 없음, 리팩토링 시 적용)
 
 ---
 

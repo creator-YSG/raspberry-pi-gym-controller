@@ -618,12 +618,8 @@ def process_barcode():
         
         current_app.logger.info(f'⏱️ [PERF] 바코드 처리 완료: {t_service:.2f}ms | 전체: {t_total:.2f}ms')
         
-        # 인증 성공 시 사진 촬영 (백그라운드)
-        if result.get('success'):
-            try:
-                _capture_auth_photo(result.get('member_id'), 'barcode')
-            except Exception as photo_error:
-                current_app.logger.warning(f'인증 사진 촬영 실패 (무시): {photo_error}')
+        # NOTE: 사진 촬영은 /member-check 라우트에서 pending rental 생성 후 수행
+        # (여기서는 rental이 아직 없으므로 촬영하지 않음)
         
         if result['success']:
             return jsonify(result)
@@ -2508,12 +2504,8 @@ def authenticate_face():
         current_app.logger.info(f"얼굴 인증: {'성공' if result.get('success') else '실패'} "
                                f"- {result.get('member_id', 'N/A')}")
         
-        # 얼굴 인증 성공 시 사진 촬영 (백그라운드)
-        if result.get('success'):
-            try:
-                _capture_auth_photo(result.get('member_id'), 'face')
-            except Exception as photo_error:
-                current_app.logger.warning(f'얼굴 인증 사진 촬영 실패 (무시): {photo_error}')
+        # NOTE: 사진 촬영은 /member-check 라우트에서 pending rental 생성 후 수행
+        # (여기서는 rental이 아직 없으므로 촬영하지 않음)
         
         if result.get('success'):
             return jsonify(result)

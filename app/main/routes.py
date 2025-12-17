@@ -89,6 +89,15 @@ def member_check():
                     locker_service.db.conn.commit()
                     
                     current_app.logger.info(f'📝 Pending 대여 레코드 생성: member={member_id}, transaction={transaction_id}')
+                    
+                    # 🆕 인증 사진 촬영 (pending rental 생성 직후)
+                    try:
+                        from app.api.routes import _capture_auth_photo
+                        _capture_auth_photo(member_id, auth_method)
+                        current_app.logger.info(f'📸 인증 사진 촬영 요청: member={member_id}, method={auth_method}')
+                    except Exception as photo_error:
+                        current_app.logger.warning(f'📸 인증 사진 촬영 실패 (무시): {photo_error}')
+                        
                 except Exception as e:
                     current_app.logger.error(f'❌ Pending 레코드 생성 오류: {e}', exc_info=True)
             
@@ -127,6 +136,15 @@ def member_check():
                     locker_service.db.conn.commit()
                     
                     current_app.logger.info(f'📝 반납 바코드 시간 기록: member={member_id}, time={return_barcode_time}')
+                    
+                    # 🆕 인증 사진 촬영 (반납 시에도)
+                    try:
+                        from app.api.routes import _capture_auth_photo
+                        _capture_auth_photo(member_id, auth_method)
+                        current_app.logger.info(f'📸 반납 인증 사진 촬영 요청: member={member_id}, method={auth_method}')
+                    except Exception as photo_error:
+                        current_app.logger.warning(f'📸 반납 인증 사진 촬영 실패 (무시): {photo_error}')
+                        
                 except Exception as e:
                     current_app.logger.error(f'❌ 반납 바코드 시간 기록 오류: {e}', exc_info=True)
             
