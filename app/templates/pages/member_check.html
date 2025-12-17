@@ -104,10 +104,12 @@
 <script>
     const memberData = {{ member | tojson | safe }};
     const actionType = '{{ action }}';
+    const authMethod = '{{ auth_method }}';
     
     console.log('[MEMBER_CHECK] 페이지 로드:', {
         member_id: memberData.member_id,
-        action: actionType
+        action: actionType,
+        auth_method: authMethod
     });
     
     // 성능 측정
@@ -371,7 +373,8 @@
             body: JSON.stringify({
                 member_id: memberData.member_id,
                 locker_id: lockerNumber,
-                action: 'rental'
+                action: 'rental',
+                auth_method: authMethod
             })
         })
         .then(response => response.json())
@@ -408,7 +411,8 @@
             body: JSON.stringify({
                 member_id: memberData.member_id,
                 locker_id: lockerNumber,
-                action: 'return'
+                action: 'return',
+                auth_method: authMethod
             })
         })
         .then(response => response.json())

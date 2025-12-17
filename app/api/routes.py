@@ -761,6 +761,7 @@ def process_rental():
         member_id = data.get('member_id')
         locker_id = data.get('locker_id')
         action = data.get('action')  # 'rental' or 'return'
+        auth_method = data.get('auth_method', 'barcode')  # 인증 방법
         
         if not all([member_id, locker_id, action]):
             return jsonify({
@@ -793,11 +794,12 @@ def process_rental():
                         UPDATE rentals 
                         SET locker_number = ?, status = 'active',
                             rental_sensor_time = ?, rental_verified = 1,
+                            auth_method = ?,
                             updated_at = ?
                         WHERE rental_id = ?
-                    """, (locker_id, rental_time, rental_time, rental_id_to_update))
+                    """, (locker_id, rental_time, auth_method, rental_time, rental_id_to_update))
                     
-                    current_app.logger.info(f'📝 Pending 레코드 업데이트: rental_id={rental_id_to_update}, locker={locker_id}')
+                    current_app.logger.info(f'📝 Pending 레코드 업데이트: rental_id={rental_id_to_update}, locker={locker_id}, auth_method={auth_method}')
                 else:
                     # Pending 없으면 새로 생성 (하위 호환성)
                     import uuid
@@ -805,9 +807,10 @@ def process_rental():
                     
                     locker_service.db.execute_query("""
                         INSERT INTO rentals (transaction_id, member_id, locker_number, status, 
-                                            rental_barcode_time, rental_sensor_time, rental_verified, created_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                    """, (transaction_id, member_id, locker_id, 'active', rental_time, rental_time, 1, rental_time))
+                                            rental_barcode_time, rental_sensor_time, rental_verified, 
+                                            auth_method, created_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (transaction_id, member_id, locker_id, 'active', rental_time, rental_time, 1, auth_method, rental_time))
                     
                     current_app.logger.warning(f'⚠️ Pending 레코드 없음, 새로 생성: member={member_id}, locker={locker_id}')
                 

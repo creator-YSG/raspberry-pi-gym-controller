@@ -385,9 +385,9 @@ function handleAuthSuccess(data) {
     
     setTimeout(function() {
         if (data.action === 'rental') {
-            navigateTo('member-check', { member_id: data.member_id, action: 'rental' });
+            navigateTo('member-check', { member_id: data.member_id, action: 'rental', auth_method: 'face' });
         } else if (data.action === 'return') {
-            navigateTo('member-check', { member_id: data.member_id, action: 'return' });
+            navigateTo('member-check', { member_id: data.member_id, action: 'return', auth_method: 'face' });
         }
     }, 500);
 }
@@ -433,9 +433,9 @@ function attemptFaceAuth() {
             // 화면 전환
             setTimeout(function() {
                 if (data.action === 'rental') {
-                    navigateTo('member-check', { member_id: data.member_id, action: 'rental' });
+                    navigateTo('member-check', { member_id: data.member_id, action: 'rental', auth_method: 'face' });
                 } else if (data.action === 'return') {
-                    navigateTo('member-check', { member_id: data.member_id, action: 'return' });
+                    navigateTo('member-check', { member_id: data.member_id, action: 'return', auth_method: 'face' });
                 }
             }, 800);
         } else {
@@ -499,9 +499,9 @@ function handleBarcodeScanned(barcode) {
         
         if (data.success) {
             if (data.action === 'rental') {
-                navigateTo('member-check', { member_id: data.member_id, action: 'rental' });
+                navigateTo('member-check', { member_id: data.member_id, action: 'rental', auth_method: 'barcode' });
             } else if (data.action === 'return') {
-                navigateTo('member-check', { member_id: data.member_id, action: 'return' });
+                navigateTo('member-check', { member_id: data.member_id, action: 'return', auth_method: 'barcode' });
             }
         } else {
             navigateTo('error', { 

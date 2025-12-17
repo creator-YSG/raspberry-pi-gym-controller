@@ -356,9 +356,9 @@ function handleBarcodeScanned(barcode) {
         if (data.success) {
             const t_navigate_start = performance.now();
             if (data.action === 'rental') {
-                navigateTo('member-check', { member_id: data.member_id, action: 'rental' });
+                navigateTo('member-check', { member_id: data.member_id, action: 'rental', auth_method: 'barcode' });
             } else if (data.action === 'return') {
-                navigateTo('member-check', { member_id: data.member_id, action: 'return' });
+                navigateTo('member-check', { member_id: data.member_id, action: 'return', auth_method: 'barcode' });
             }
             console.log(`⏱️ [PERF-UI] 화면 전환 시작: ${(performance.now() - t_navigate_start).toFixed(2)}ms`);
             console.log(`⏱️ [PERF-UI] === 전체 프로세스: ${(performance.now() - t_start).toFixed(2)}ms ===`);
@@ -518,7 +518,8 @@ function handleNFCScanned(nfcUid) {
                 locker_id: data.locker_info.locker_number,
                 zone: data.locker_info.zone,
                 method: 'nfc',
-                nfc_uid: nfcUid
+                nfc_uid: nfcUid,
+                auth_method: 'nfc'
             });
         } else {
             isProcessingBarcode = false;

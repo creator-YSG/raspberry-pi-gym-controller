@@ -22,6 +22,7 @@ def member_check():
     """회원 확인 화면"""
     member_id = request.args.get('member_id', '')
     action = request.args.get('action', 'rental')  # 'rental' or 'return'
+    auth_method = request.args.get('auth_method', 'barcode')  # 인증 방법
     
     if member_id:
         member_service = MemberService()
@@ -133,6 +134,7 @@ def member_check():
                                  title='회원 확인',
                                  member=member_dict,
                                  action=action,
+                                 auth_method=auth_method,
                                  page_class='member-check-page')
     
     # 회원 정보 없음
