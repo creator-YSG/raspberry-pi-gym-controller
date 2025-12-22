@@ -2651,3 +2651,52 @@ def reload_face_embeddings():
             'success': False,
             'error': str(e)
         }), 500
+
+
+# ==========================================
+# 동기화 관련 API
+# ==========================================
+
+@bp.route('/sync/status')
+def get_sync_status():
+    """동기화 스케줄러 상태 조회"""
+    scheduler = getattr(current_app, 'sync_scheduler', None)
+    
+    if scheduler:
+        return jsonify({
+            'success': True,
+            'running': scheduler._running,
+            'stats': scheduler.stats
+        })
+    else:
+        return jsonify({
+            'success': False,
+            'running': False,
+            'error': '스케줄러가 초기화되지 않음'
+        })
+
+
+@bp.route('/sync/now', methods=['POST'])
+def sync_now():
+    """즉시 동기화 실행"""
+    scheduler = getattr(current_app, 'sync_scheduler', None)
+    
+    if not scheduler:
+        return jsonify({
+            'success': False,
+            'error': '스케줄러가 초기화되지 않음'
+        }), 500
+    
+    try:
+        scheduler.sync_now()
+        return jsonify({
+            'success': True,
+            'message': '동기화 완료',
+            'stats': scheduler.stats
+        })
+    except Exception as e:
+        current_app.logger.error(f'동기화 오류: {e}')
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
