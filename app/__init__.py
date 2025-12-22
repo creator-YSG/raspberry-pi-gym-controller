@@ -139,8 +139,12 @@ def setup_sync_scheduler(app):
             time.sleep(3)
             
             with app.app_context():
-                # DatabaseManager 초기화
+                # DatabaseManager 초기화 및 연결
                 db_manager = DatabaseManager()
+                if not db_manager.connect():
+                    app.logger.error("❌ DatabaseManager 연결 실패 - 스케줄러 시작 불가")
+                    app.sync_scheduler = None
+                    return
                 
                 # 스케줄러 초기화 및 시작
                 scheduler = init_scheduler(db_manager, auto_start=True)
