@@ -172,8 +172,7 @@
         });
         
         // zone에 따라 device_id 선택
-        // ESP32는 자동 감지되어 esp32_auto_0, esp32_auto_1로 등록됨
-        const deviceId = 'esp32_auto_0';  // 모든 구역 통합
+        const deviceId = memberData.zone === 'STAFF' ? 'esp32_staff' : 'esp32_male_female';
         
         // 문 닫기 명령
         fetch('/api/hardware/motor_move', {
@@ -383,8 +382,34 @@
             console.log('[RENTAL] 대여 처리 완료:', data);
             
             if (data.success) {
-                // 대여 완료 페이지로 이동
-                window.location.href = `/rental-complete?member_id=${memberData.member_id}&locker=${lockerNumber}`;
+                // 대여 완료 - 문 닫기
+                // lockerNumber로 zone 판단: S로 시작하면 STAFF, 아니면 MALE/FEMALE
+                const zone = lockerNumber.startsWith('S') ? 'STAFF' : 'MALE_FEMALE';
+                const deviceId = zone === 'STAFF' ? 'esp32_staff' : 'esp32_male_female';
+                console.log('[DOOR] 대여 완료 - 문 닫기 시작:', { locker: lockerNumber, zone, deviceId });
+                
+                fetch('/api/hardware/motor_move', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        revs: -0.917,
+                        rpm: 30,
+                        device_id: deviceId
+                    })
+                })
+                .then(() => {
+                    console.log('[DOOR] 문 닫기 명령 전송 완료');
+                })
+                .catch(error => {
+                    console.error('[DOOR] 문 닫기 오류:', error);
+                });
+                
+                // 1초 후 대여 완료 페이지로 이동
+                setTimeout(() => {
+                    window.location.href = `/rental-complete?member_id=${memberData.member_id}&locker=${lockerNumber}`;
+                }, 1000);
             } else {
                 alert(data.error || '대여 처리 중 오류가 발생했습니다.');
                 window.location.href = '/error?message=' + encodeURIComponent(data.error);
@@ -430,8 +455,34 @@
                     clearInterval(timerInterval);
                 }
                 
-                // 반납 완료 페이지로 이동
-                window.location.href = `/return-complete?member_id=${memberData.member_id}&locker=${lockerNumber}`;
+                // 반납 완료 - 문 닫기
+                // lockerNumber로 zone 판단: S로 시작하면 STAFF, 아니면 MALE/FEMALE
+                const zone = lockerNumber.startsWith('S') ? 'STAFF' : 'MALE_FEMALE';
+                const deviceId = zone === 'STAFF' ? 'esp32_staff' : 'esp32_male_female';
+                console.log('[DOOR] 반납 완료 - 문 닫기 시작:', { locker: lockerNumber, zone, deviceId });
+                
+                fetch('/api/hardware/motor_move', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        revs: -0.917,
+                        rpm: 30,
+                        device_id: deviceId
+                    })
+                })
+                .then(() => {
+                    console.log('[DOOR] 문 닫기 명령 전송 완료');
+                })
+                .catch(error => {
+                    console.error('[DOOR] 문 닫기 오류:', error);
+                });
+                
+                // 1초 후 반납 완료 페이지로 이동
+                setTimeout(() => {
+                    window.location.href = `/return-complete?member_id=${memberData.member_id}&locker=${lockerNumber}`;
+                }, 1000);
             } else if (data.error_code === 'WRONG_LOCKER') {
                 // 잘못된 락커: 경고만 표시, 센서는 계속 감지, 타이머는 계속 진행
                 console.warn('[RETURN] 잘못된 락커:', data.message);
