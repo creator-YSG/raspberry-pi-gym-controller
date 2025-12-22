@@ -984,11 +984,10 @@ def process_rental():
                             time.sleep(3)
                             
                             # target_locker에서 zone 판단하여 device_id 선택
-                            # ESP32는 자동 감지되어 esp32_auto_0, esp32_auto_1로 등록됨
                             if target_locker.startswith('S'):
-                                device_id = 'esp32_auto_0'  # 교직원
+                                device_id = 'esp32_staff'
                             else:  # M or F
-                                device_id = 'esp32_auto_0'  # 남성/여성
+                                device_id = 'esp32_male_female'
                             
                             # ESP32로 문 닫기 명령
                             esp32_manager = getattr(current_app, 'esp32_manager', None)
