@@ -261,7 +261,7 @@ class SensorEventHandler:
                     # 반납 기록 업데이트 (센서 검증 완료)
                     self.db.execute_query("""
                         UPDATE rentals 
-                        SET return_sensor_time = ?, return_verified = 1, status = 'returned'
+                        SET return_sensor_time = ?, return_verified = 1, status = 'returned', sync_status = 0
                         WHERE transaction_id = ?
                     """, (datetime.fromtimestamp(timestamp).isoformat(), tx_id))
                     
