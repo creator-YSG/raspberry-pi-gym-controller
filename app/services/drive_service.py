@@ -347,5 +347,6 @@ def get_drive_service() -> DriveService:
     
     if _drive_service is None:
         _drive_service = DriveService()
+        _drive_service.connect()  # 자동 연결
         
     return _drive_service

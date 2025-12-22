@@ -55,3 +55,4 @@ instance/embeddings/
 instance/photos/faces/
 instance/photos/rentals/
 
+instance/sheets_token.pickle
