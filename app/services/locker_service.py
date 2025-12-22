@@ -505,12 +505,12 @@ class LockerService:
                 return True
             
             # 락카 ID에 따라 적절한 ESP32 디바이스 선택
-            # M01~M40, F01~F10 → esp32_male_female (남녀 혼성), S01~S10 → esp32_staff
+            # ESP32는 자동 감지되어 esp32_auto_0, esp32_auto_1로 등록됨
             if locker_id.startswith('M') or locker_id.startswith('F'):
                 # 남녀 혼성 구역 (하나의 ESP32로 관리)
-                device_id = 'esp32_male_female'
+                device_id = 'esp32_auto_0'
             elif locker_id.startswith('S'):
-                device_id = 'esp32_staff'
+                device_id = 'esp32_auto_0'
             else:
                 # 구 시스템 호환 (A, B)
                 if locker_id.startswith('A'):

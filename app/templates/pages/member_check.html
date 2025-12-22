@@ -172,7 +172,8 @@
         });
         
         // zone에 따라 device_id 선택
-        const deviceId = memberData.zone === 'STAFF' ? 'esp32_staff' : 'esp32_male_female';
+        // ESP32는 자동 감지되어 esp32_auto_0, esp32_auto_1로 등록됨
+        const deviceId = 'esp32_auto_0';  // 모든 구역 통합
         
         // 문 닫기 명령
         fetch('/api/hardware/motor_move', {
