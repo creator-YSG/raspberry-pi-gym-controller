@@ -1,0 +1,18 @@
+{
+  "devices": {
+    "/dev/ttyUSB1": {
+      "device_id": "esp32_staff",
+      "zones": ["STAFF"],
+      "description": "교직원 구역 문 제어"
+    },
+    "/dev/ttyUSB0": {
+      "device_id": "esp32_male_female",
+      "zones": ["MALE", "FEMALE"],
+      "description": "남성/여성 구역 통합 문 제어"
+    }
+  },
+  "fallback": {
+    "auto_0": "esp32_male_female",
+    "auto_1": "esp32_staff"
+  }
+}
