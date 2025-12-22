@@ -85,6 +85,9 @@ def create_app(config_name='default'):
     # 카메라 자동 시작 (모션 감지용)
     setup_camera_service(app)
     
+    # Google Sheets 동기화 스케줄러 시작
+    setup_sync_scheduler(app)
+    
     app.logger.info("🚀 락카키 대여기 웹 애플리케이션 초기화 완료")
     
     return app
@@ -120,6 +123,44 @@ def setup_camera_service(app):
         camera_thread = threading.Thread(target=camera_init_worker, daemon=True)
         camera_thread.start()
         app.logger.info("🚀 카메라 초기화 스레드 시작")
+
+
+def setup_sync_scheduler(app):
+    """Google Sheets 동기화 스케줄러 설정"""
+    import threading
+    from database.database_manager import DatabaseManager
+    from app.services.sync_scheduler import init_scheduler
+    
+    def scheduler_init_worker():
+        """스케줄러 초기화 워커 스레드"""
+        try:
+            # 잠시 대기 (앱 완전 초기화 후)
+            import time
+            time.sleep(3)
+            
+            with app.app_context():
+                # DatabaseManager 초기화
+                db_manager = DatabaseManager()
+                
+                # 스케줄러 초기화 및 시작
+                scheduler = init_scheduler(db_manager, auto_start=True)
+                
+                if scheduler:
+                    app.sync_scheduler = scheduler
+                    app.logger.info("✅ Google Sheets 동기화 스케줄러 시작됨")
+                else:
+                    app.logger.warning("⚠️ Google Sheets 동기화 스케줄러 시작 실패 (오프라인 모드)")
+                    app.sync_scheduler = None
+                    
+        except Exception as e:
+            app.logger.error(f"❌ 동기화 스케줄러 초기화 실패: {e}")
+            app.sync_scheduler = None
+    
+    # 테스트 모드가 아닐 때만 스케줄러 시작
+    if not app.config.get('TESTING', False):
+        scheduler_thread = threading.Thread(target=scheduler_init_worker, daemon=True)
+        scheduler_thread.start()
+        app.logger.info("🚀 동기화 스케줄러 초기화 스레드 시작")
 
 
 def setup_esp32_connection(app):
