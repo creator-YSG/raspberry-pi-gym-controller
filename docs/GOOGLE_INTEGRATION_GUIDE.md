@@ -682,6 +682,73 @@ cp ~/backup/drive_token.pickle instance/
 
 ---
 
+## OAuth 토큰 관리 및 모니터링
+
+### 토큰 만료 문제
+
+**문제:** OAuth 토큰이 만료되면 Google Drive 업로드가 실패합니다.
+
+**해결 방안:**
+
+1. **자동 갱신 (구현됨)**
+   - `DriveService.connect()` 메서드가 토큰 만료 시 자동으로 `refresh_token`을 사용해 갱신
+   - 갱신 성공 시 새 토큰을 `instance/drive_token.pickle`에 저장
+   - 갱신 실패 시 토큰 파일 삭제 및 로그에 경고 메시지 출력
+
+2. **재시도 로직 (구현됨)**
+   - 업로드 실패 시 최대 3회 재시도 (지수 백오프: 2초, 4초, 8초)
+   - 토큰 만료 감지 시 자동 재연결 시도
+   - 모든 재시도 실패 시 로컬 저장만 유지
+
+3. **헬스체크 스크립트**
+   ```bash
+   # 수동 실행
+   python3 scripts/maintenance/check_drive_health.py
+   
+   # 크론탭 등록 (매일 오전 9시)
+   crontab -e
+   # 다음 줄 추가:
+   0 9 * * * cd /home/pi/raspberry-pi-gym-controller && python3 scripts/maintenance/check_drive_health.py >> logs/drive_health.log 2>&1
+   ```
+
+4. **수동 재인증**
+   - 자동 갱신이 실패한 경우 (refresh_token 만료)
+   - 로컬 PC에서 실행:
+     ```bash
+     cd /path/to/raspberry-pi-gym-controller
+     rm -f instance/drive_token.pickle
+     python3 scripts/setup/oauth_setup.py
+     ```
+   - 생성된 토큰을 라즈베리파이로 복사:
+     ```bash
+     scp instance/drive_token.pickle pi@192.168.0.23:/home/pi/raspberry-pi-gym-controller/instance/
+     ```
+
+### 토큰 만료 징후
+
+다음 로그 메시지가 보이면 토큰 문제입니다:
+
+```
+[DriveService] ✗ 토큰 갱신 실패: invalid_grant: Token has been expired or revoked.
+[DriveService] 토큰이 만료되었습니다. 수동 재인증이 필요합니다.
+[DriveService] 재인증 방법: python3 scripts/setup/oauth_setup.py 실행
+```
+
+### 예방 조치
+
+1. **프로덕션 모드 유지**
+   - OAuth 앱을 "프로덕션" 모드로 설정 (테스트 모드는 7일마다 만료)
+   - Google Cloud Console → OAuth 동의 화면 → "앱 게시" 클릭
+
+2. **정기 모니터링**
+   - 헬스체크 스크립트를 크론탭에 등록
+   - 로그 파일 주기적 확인: `logs/drive_health.log`
+
+3. **백업 전략**
+   - 로컬 사진 파일은 항상 보존 (`instance/photos/`)
+   - Drive 업로드 실패 시에도 로컬 DB에 경로 기록
+   - 나중에 수동으로 업로드 가능
+
 ## 트러블슈팅
 
 ### 1. Google Sheets 연동 오류

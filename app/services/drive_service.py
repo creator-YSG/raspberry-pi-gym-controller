@@ -66,7 +66,13 @@ class DriveService:
         self._upload_lock = threading.Lock()
         
     def connect(self) -> bool:
-        """Google Drive API 연결 (OAuth 2.0)"""
+        """Google Drive API 연결 (OAuth 2.0)
+        
+        토큰 만료 시 자동 갱신 처리:
+        1. 저장된 토큰 로드
+        2. 만료 시 refresh_token으로 자동 갱신
+        3. 갱신 실패 시 토큰 삭제 (수동 재인증 필요)
+        """
         if not DRIVE_AVAILABLE:
             logger.warning("[DriveService] google-api-python-client 없음")
             return False
@@ -76,32 +82,43 @@ class DriveService:
             
             # 저장된 토큰이 있으면 로드
             if self.token_path.exists():
-                with open(self.token_path, 'rb') as token:
-                    credentials = pickle.load(token)
-                    logger.info("[DriveService] 저장된 토큰 로드")
+                try:
+                    with open(self.token_path, 'rb') as token:
+                        credentials = pickle.load(token)
+                        logger.info("[DriveService] 저장된 토큰 로드")
+                except Exception as e:
+                    logger.error(f"[DriveService] 토큰 로드 실패: {e}")
+                    # 손상된 토큰 파일 삭제
+                    self.token_path.unlink(missing_ok=True)
+                    credentials = None
             
-            # 토큰이 없거나 만료되었으면 새로 인증
+            # 토큰이 없거나 만료되었으면 갱신/재인증
             if not credentials or not credentials.valid:
                 if credentials and credentials.expired and credentials.refresh_token:
-                    logger.info("[DriveService] 토큰 갱신 중...")
-                    credentials.refresh(Request())
-                else:
-                    logger.info("[DriveService] 최초 OAuth 인증 필요")
-                    if not self.oauth_credentials_path.exists():
-                        logger.error(f"[DriveService] OAuth 인증 파일을 찾을 수 없습니다: {self.oauth_credentials_path}")
+                    try:
+                        logger.info("[DriveService] 토큰 갱신 시도...")
+                        credentials.refresh(Request())
+                        logger.info("[DriveService] ✓ 토큰 갱신 성공")
+                        
+                        # 갱신된 토큰 저장
+                        self.token_path.parent.mkdir(parents=True, exist_ok=True)
+                        with open(self.token_path, 'wb') as token:
+                            pickle.dump(credentials, token)
+                            logger.info(f"[DriveService] 갱신된 토큰 저장: {self.token_path}")
+                            
+                    except Exception as refresh_error:
+                        logger.error(f"[DriveService] ✗ 토큰 갱신 실패: {refresh_error}")
+                        # 갱신 실패 시 토큰 삭제 (재인증 필요)
+                        self.token_path.unlink(missing_ok=True)
+                        logger.warning("[DriveService] 토큰이 만료되었습니다. 수동 재인증이 필요합니다.")
+                        logger.warning(f"[DriveService] 재인증 방법: python3 scripts/setup/oauth_setup.py 실행")
+                        self.connected = False
                         return False
-                    
-                    flow = InstalledAppFlow.from_client_secrets_file(
-                        str(self.oauth_credentials_path), self.SCOPES
-                    )
-                    credentials = flow.run_local_server(port=0)
-                    logger.info("[DriveService] OAuth 인증 완료")
-                
-                # 토큰 저장
-                self.token_path.parent.mkdir(parents=True, exist_ok=True)
-                with open(self.token_path, 'wb') as token:
-                    pickle.dump(credentials, token)
-                    logger.info(f"[DriveService] 토큰 저장: {self.token_path}")
+                else:
+                    logger.warning("[DriveService] OAuth 토큰이 없습니다. 최초 인증이 필요합니다.")
+                    logger.warning(f"[DriveService] 인증 방법: python3 scripts/setup/oauth_setup.py 실행")
+                    self.connected = False
+                    return False
             
             # Drive API 서비스 생성
             self.service = build('drive', 'v3', credentials=credentials)
@@ -190,19 +207,21 @@ class DriveService:
             return None
     
     def upload_file(self, local_path: str, drive_folder: str = "", 
-                    filename: str = None) -> Optional[str]:
-        """파일 업로드 (동기)
+                    filename: str = None, max_retries: int = 3) -> Optional[str]:
+        """파일 업로드 (동기, 재시도 지원)
         
         Args:
             local_path: 로컬 파일 경로
             drive_folder: 드라이브 폴더 경로 (예: "rentals/2025/12")
             filename: 드라이브에 저장할 파일명 (None이면 원본 이름)
+            max_retries: 최대 재시도 횟수 (기본 3회)
             
         Returns:
             공유 URL 또는 None
         """
         if not self.connected:
             if not self.connect():
+                logger.warning("[DriveService] 연결 실패. 로컬 저장만 수행됩니다.")
                 return None
         
         local_path = Path(local_path)
@@ -211,49 +230,70 @@ class DriveService:
             logger.error(f"[DriveService] 파일 없음: {local_path}")
             return None
         
-        try:
-            # 폴더 ID 가져오기
-            if drive_folder:
-                folder_id = self._get_or_create_folder(drive_folder)
-            else:
-                folder_id = self._root_folder_id
-            
-            if not folder_id:
-                logger.error(f"[DriveService] 폴더 ID 없음: {drive_folder}")
-                return None
-            
-            # 파일 메타데이터
-            file_name = filename or local_path.name
-            file_metadata = {
-                'name': file_name,
-                'parents': [folder_id]
-            }
-            
-            # 파일 업로드
-            media = MediaFileUpload(str(local_path), mimetype='image/jpeg')
-            file = self.service.files().create(
-                body=file_metadata,
-                media_body=media,
-                fields='id, webViewLink'
-            ).execute()
-            
-            file_id = file.get('id')
-            
-            # 공유 설정 (링크가 있는 사람은 누구나 볼 수 있음)
-            self.service.permissions().create(
-                fileId=file_id,
-                body={'type': 'anyone', 'role': 'reader'}
-            ).execute()
-            
-            # 공유 URL
-            web_view_link = file.get('webViewLink')
-            
-            logger.info(f"[DriveService] 업로드 완료: {file_name} → {web_view_link}")
-            return web_view_link
-            
-        except Exception as e:
-            logger.error(f"[DriveService] 업로드 실패: {local_path}, {e}")
-            return None
+        # 재시도 로직
+        for attempt in range(1, max_retries + 1):
+            try:
+                # 폴더 ID 가져오기
+                if drive_folder:
+                    folder_id = self._get_or_create_folder(drive_folder)
+                else:
+                    folder_id = self._root_folder_id
+                
+                if not folder_id:
+                    logger.error(f"[DriveService] 폴더 ID 없음: {drive_folder}")
+                    return None
+                
+                # 파일 메타데이터
+                file_name = filename or local_path.name
+                file_metadata = {
+                    'name': file_name,
+                    'parents': [folder_id]
+                }
+                
+                # 파일 업로드
+                media = MediaFileUpload(str(local_path), mimetype='image/jpeg')
+                file = self.service.files().create(
+                    body=file_metadata,
+                    media_body=media,
+                    fields='id, webViewLink'
+                ).execute()
+                
+                file_id = file.get('id')
+                
+                # 공유 설정 (링크가 있는 사람은 누구나 볼 수 있음)
+                self.service.permissions().create(
+                    fileId=file_id,
+                    body={'type': 'anyone', 'role': 'reader'}
+                ).execute()
+                
+                # 공유 URL
+                web_view_link = file.get('webViewLink')
+                
+                logger.info(f"[DriveService] ✓ 업로드 성공 ({attempt}/{max_retries}): {file_name}")
+                return web_view_link
+                
+            except Exception as e:
+                logger.error(f"[DriveService] ✗ 업로드 실패 ({attempt}/{max_retries}): {local_path}, {e}")
+                
+                # 토큰 만료 에러인 경우 재연결 시도
+                if 'invalid_grant' in str(e) or 'Token has been expired' in str(e):
+                    logger.warning("[DriveService] 토큰 만료 감지. 재연결 시도...")
+                    self.connected = False
+                    if not self.connect():
+                        logger.error("[DriveService] 재연결 실패. 수동 재인증 필요.")
+                        return None
+                
+                # 마지막 시도가 아니면 재시도
+                if attempt < max_retries:
+                    import time
+                    wait_time = 2 ** attempt  # 지수 백오프 (2초, 4초, 8초)
+                    logger.info(f"[DriveService] {wait_time}초 후 재시도...")
+                    time.sleep(wait_time)
+                else:
+                    logger.error(f"[DriveService] 최대 재시도 횟수 초과. 업로드 포기: {local_path}")
+                    return None
+        
+        return None
     
     def upload_rental_photo(self, local_path: str, rental_id: str = None) -> Optional[str]:
         """인증 사진 업로드
