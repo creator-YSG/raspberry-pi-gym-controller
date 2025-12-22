@@ -187,12 +187,13 @@ class MemberService:
                 }
             
             # 대여하지 않은 회원인 경우
-            if not member.can_rent_more:
-                return {
-                    'valid': False,
-                    'error': f'오늘 대여 횟수를 초과했습니다. ({member.daily_rental_count}/3)',
-                    'member': member
-                }
+            # 대여 횟수 제한 비활성화
+            # if not member.can_rent_more:
+            #     return {
+            #         'valid': False,
+            #         'error': f'오늘 대여 횟수를 초과했습니다. ({member.daily_rental_count}/3)',
+            #         'member': member
+            #     }
             
             # 새로운 대여 가능한 회원
             return {
