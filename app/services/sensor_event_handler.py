@@ -293,6 +293,40 @@ class SensorEventHandler:
                     
                     logger.info(f"✅ 반납 완료: {locker_id} (트랜잭션: {tx_id})")
                     
+                    # Google Sheets 즉시 업데이트 (백그라운드)
+                    import threading
+                    
+                    def update_sheets_return():
+                        try:
+                            from app.services.sheets_sync import SheetsSync
+                            from database.database_manager import DatabaseManager
+                            
+                            # rental_id 조회
+                            cursor = self.db.execute_query("""
+                                SELECT rental_id, return_sensor_time 
+                                FROM rentals 
+                                WHERE transaction_id = ?
+                            """, (tx_id,))
+                            
+                            if cursor:
+                                row = cursor.fetchone()
+                                if row:
+                                    rental_id = row['rental_id']
+                                    return_time = row['return_sensor_time']
+                                    
+                                    # Google Sheets 업데이트
+                                    sheets = SheetsSync()
+                                    if sheets.connect():
+                                        db_mgr = DatabaseManager('instance/gym_system.db')
+                                        db_mgr.connect()
+                                        sheets.update_rental_return(rental_id, return_time, 'returned', db_mgr)
+                                        db_mgr.close()
+                                        logger.info(f'📊 구글시트 반납 정보 업데이트 완료 (rental_id: {rental_id})')
+                        except Exception as e:
+                            logger.warning(f'구글시트 반납 정보 업데이트 오류 (무시): {e}')
+                    
+                    threading.Thread(target=update_sheets_return, daemon=True).start()
+                    
                     return {
                         'success': True,
                         'completed': True,

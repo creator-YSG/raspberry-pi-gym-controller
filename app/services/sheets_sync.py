@@ -374,6 +374,99 @@ class SheetsSync:
             logger.error(f"[SheetsSync] 사진 정보 업데이트 오류: {e}")
             return False
     
+    def update_rental_return(self, rental_id: int, return_time: str, status: str = 'returned', db_manager=None) -> bool:
+        """반납 정보 업데이트 (단일 항목)
+        
+        Args:
+            rental_id: 대여 ID
+            return_time: 반납 시간 (ISO format)
+            status: 대여 상태 (기본값: 'returned')
+            db_manager: DatabaseManager 인스턴스 (행 추가 필요 시)
+        
+        Returns:
+            성공 여부
+        """
+        try:
+            worksheet = self._get_worksheet("rentals")
+            if not worksheet:
+                return False
+            
+            # rental_id로 행 찾기
+            self._rate_limit()
+            rentals_column = worksheet.col_values(1)  # rental_id 컬럼 (A열)
+            
+            row_num = None
+            for idx, value in enumerate(rentals_column[1:], start=2):  # 헤더 제외, 2행부터
+                if value and str(value) == str(rental_id):
+                    row_num = idx
+                    break
+            
+            # 행이 없으면 DB에서 전체 데이터 가져와서 추가
+            if row_num is None:
+                if db_manager:
+                    logger.info(f"[SheetsSync] rental {rental_id} 행 없음, 전체 데이터 추가")
+                    cursor = db_manager.execute_query("""
+                        SELECT * FROM rentals WHERE rental_id = ?
+                    """, (rental_id,))
+                    rental = cursor.fetchone() if cursor else None
+                    
+                    if rental:
+                        # 전체 데이터 추가
+                        record = self._row_to_dict(rental)
+                        row_data = [
+                            record.get('rental_id', ''),
+                            record.get('transaction_id', '') or '',
+                            record.get('member_id', '') or '',
+                            record.get('member_name', '') or '',
+                            record.get('locker_number', '') or '',
+                            record.get('rental_barcode_time', '') or '',
+                            record.get('return_barcode_time', '') or '',
+                            record.get('rental_sensor_time', '') or '',
+                            record.get('return_sensor_time', '') or '',
+                            record.get('status', ''),
+                            record.get('created_at', ''),
+                            record.get('updated_at', ''),
+                            record.get('auth_method', '') or '',
+                            record.get('rental_photo_path', '') or '',
+                            record.get('rental_photo_url', '') or ''
+                        ]
+                        
+                        self._rate_limit()
+                        worksheet.append_row(row_data)
+                        row_num = len(rentals_column) + 1
+                        logger.info(f"[SheetsSync] rental {rental_id} 행 추가됨: {row_num}")
+                    else:
+                        logger.error(f"[SheetsSync] rental {rental_id} DB에서 찾을 수 없음")
+                        return False
+                else:
+                    logger.warning(f"[SheetsSync] rental {rental_id} 행 없음, db_manager 없어서 추가 불가")
+                    return False
+            
+            # 컬럼 인덱스 (1-based)
+            # 7: return_barcode_time, 10: status, 12: updated_at
+            COL_RETURN_TIME = 7
+            COL_STATUS = 10
+            COL_UPDATED_AT = 12
+            
+            # 셀 업데이트
+            from datetime import datetime
+            
+            self._rate_limit()
+            worksheet.update_cell(row_num, COL_RETURN_TIME, return_time or '')
+            
+            self._rate_limit()
+            worksheet.update_cell(row_num, COL_STATUS, status)
+            
+            self._rate_limit()
+            worksheet.update_cell(row_num, COL_UPDATED_AT, datetime.now().isoformat())
+            
+            logger.info(f"[SheetsSync] rental {rental_id} 반납 정보 업데이트 완료")
+            return True
+            
+        except Exception as e:
+            logger.error(f"[SheetsSync] 반납 정보 업데이트 오류: {e}")
+            return False
+    
     def upload_locker_status(self, db_manager) -> int:
         """락카 현황 업로드 (전체 업데이트)"""
         try:
