@@ -270,6 +270,15 @@ def poll_sensor():
         import queue
         sensor_queue = getattr(current_app, 'sensor_queue', None)
         
+        # 🔥 디버깅: 큐 상태 로깅 (10초마다 한 번씩만)
+        import time
+        poll_time = getattr(current_app, '_last_sensor_poll_log', 0)
+        if time.time() - poll_time > 10:
+            current_app._last_sensor_poll_log = time.time()
+            queue_size = sensor_queue.qsize() if sensor_queue else -1
+            current_app.logger.info(f"🔍 [SENSOR_POLL] 센서큐 상태: size={queue_size}, "
+                                   f"queue_id={id(sensor_queue) if sensor_queue else 'None'}")
+        
         if sensor_queue:
             # 큐에 있는 모든 센서 이벤트 가져오기 (최대 10개)
             events = []
@@ -281,6 +290,8 @@ def poll_sensor():
                 pass
             
             if events:
+                current_app.logger.info(f"📡 [SENSOR_POLL] 이벤트 반환: {len(events)}개 - "
+                                       f"{[e.get('sensor_num') for e in events]}")
                 return jsonify({
                     'has_events': True,
                     'events': events,
@@ -289,7 +300,8 @@ def poll_sensor():
             else:
                 return jsonify({'has_events': False})
         else:
-            return jsonify({'has_events': False})
+            current_app.logger.warning("⚠️ [SENSOR_POLL] sensor_queue가 None!")
+            return jsonify({'has_events': False, 'error': 'sensor_queue_not_initialized'})
             
     except Exception as e:
         current_app.logger.error(f'센서 폴링 오류: {e}')
@@ -826,6 +838,33 @@ def process_rental():
                 
                 current_app.logger.info(f'✅ 대여 완료: {locker_id} → {member_id}')
                 
+                # 🆕 구글 시트 동기화 (active 전환 시)
+                if pending_rental:
+                    rental_id_for_sync = rental_id_to_update
+                    try:
+                        from app.services.sheets_sync import SheetsSync
+                        sheets_sync = SheetsSync()
+                        
+                        # 시트에서 해당 행 찾아서 락커번호/상태 업데이트
+                        worksheet = sheets_sync._get_worksheet("rentals")
+                        if worksheet:
+                            sheets_sync._rate_limit()
+                            cell = worksheet.find(str(rental_id_for_sync), in_column=1)
+                            if cell:
+                                row_num = cell.row
+                                # 컬럼: 5=locker_number, 8=rental_sensor_time, 10=status
+                                sheets_sync._rate_limit()
+                                worksheet.update_cell(row_num, 5, locker_id)  # locker_number
+                                sheets_sync._rate_limit()
+                                worksheet.update_cell(row_num, 8, rental_time)  # rental_sensor_time
+                                sheets_sync._rate_limit()
+                                worksheet.update_cell(row_num, 10, 'active')  # status
+                                current_app.logger.info(f'📊 구글시트 업데이트 (active): rental_id={rental_id_for_sync}, locker={locker_id}')
+                            else:
+                                current_app.logger.warning(f'⚠️ 시트에서 rental_id={rental_id_for_sync} 행을 찾지 못함')
+                    except Exception as sheet_error:
+                        current_app.logger.warning(f'⚠️ 시트 동기화 실패 (무시): {sheet_error}')
+                
                 # 🆕 문 닫기 로직 추가 (백그라운드 스레드)
                 import threading
                 from flask import copy_current_request_context
@@ -969,6 +1008,23 @@ def process_rental():
                         locker_service.db.conn.commit()
                         
                         current_app.logger.info(f'✅ 반납 완료: {target_locker} ← {member_id}')
+                        
+                        # 🆕 구글 시트 동기화 (반납 완료 시)
+                        try:
+                            rental_id_for_sync = rental[0]  # rental_id
+                            from app.services.sheets_sync import SheetsSync
+                            sheets_sync = SheetsSync()
+                            
+                            # 기존 함수 사용
+                            sheets_sync.update_rental_return(
+                                rental_id=rental_id_for_sync,
+                                return_time=return_time,
+                                status='returned',
+                                db_manager=locker_service.db
+                            )
+                            current_app.logger.info(f'📊 구글시트 업데이트 (returned): rental_id={rental_id_for_sync}')
+                        except Exception as sheet_error:
+                            current_app.logger.warning(f'⚠️ 시트 동기화 실패 (무시): {sheet_error}')
                         
                         # 🆕 문 닫기 로직 추가 (백그라운드 스레드)
                         import threading

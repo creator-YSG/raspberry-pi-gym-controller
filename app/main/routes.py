@@ -78,7 +78,7 @@ def member_check():
                     rental_time = datetime.now().isoformat()
                     
                     # pending 상태로 대여 레코드 INSERT (락커 번호는 아직 모름)
-                    locker_service.db.execute_query("""
+                    cursor = locker_service.db.execute_query("""
                         INSERT INTO rentals (
                             transaction_id, member_id, locker_number, status,
                             rental_barcode_time, created_at, updated_at
@@ -86,9 +86,23 @@ def member_check():
                     """, (transaction_id, member_id, 'PENDING', 'pending', 
                           rental_time, rental_time, rental_time))
                     
+                    if cursor is None:
+                        current_app.logger.error(f'❌ Pending 레코드 INSERT 실패: member={member_id}, cursor=None')
+                        raise Exception("INSERT 쿼리 실패 (cursor=None)")
+                    
+                    rental_id = cursor.lastrowid
                     locker_service.db.conn.commit()
                     
-                    current_app.logger.info(f'📝 Pending 대여 레코드 생성: member={member_id}, transaction={transaction_id}')
+                    # INSERT 성공 확인 (실제로 저장되었는지 검증)
+                    verify_cursor = locker_service.db.execute_query(
+                        "SELECT rental_id FROM rentals WHERE transaction_id = ?",
+                        (transaction_id,)
+                    )
+                    verified = verify_cursor.fetchone() if verify_cursor else None
+                    if verified:
+                        current_app.logger.info(f'✅ Pending 대여 레코드 생성 완료: member={member_id}, rental_id={rental_id}, verified={verified[0]}')
+                    else:
+                        current_app.logger.error(f'⚠️ Pending 레코드 생성됨 but 검증 실패: member={member_id}, rental_id={rental_id}')
                     
                     # 🆕 인증 사진 촬영 (pending rental 생성 직후)
                     try:

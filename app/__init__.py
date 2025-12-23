@@ -353,14 +353,19 @@ def setup_esp32_event_handlers(app, esp32_manager):
                 'timestamp': event_data.get('timestamp')
             }
             try:
+                queue_before = app.sensor_queue.qsize() if app.sensor_queue else -1
                 app.sensor_queue.put_nowait(sensor_data)
-                print(f"📦 센서 큐에 저장: 센서{sensor_num}, 상태{raw_state}")  # Flask 컨텍스트 밖이므로 print 사용
+                queue_after = app.sensor_queue.qsize() if app.sensor_queue else -1
+                print(f"📦 [QUEUE] 센서 큐에 저장: 센서{sensor_num}, 상태{raw_state} | "
+                      f"큐사이즈: {queue_before} → {queue_after} | queue_id={id(app.sensor_queue)}")
+                app.logger.info(f"📦 [QUEUE] 센서 큐에 저장: 센서{sensor_num}, 상태{raw_state} | "
+                               f"큐사이즈: {queue_before} → {queue_after}")
             except queue.Full:
                 # 큐가 꽉 찼으면 가장 오래된 것 제거하고 새로운 것 추가
                 try:
                     app.sensor_queue.get_nowait()
                     app.sensor_queue.put_nowait(sensor_data)
-                    print(f"⚠️ 센서 큐가 가득 차서 오래된 데이터 제거")
+                    print(f"⚠️ 센서 큐가 가득 차서 오래된 데이터 제거 (센서{sensor_num})")
                 except Exception as e:
                     print(f"❌ 센서 큐 오류 (Full 처리): {e}")
             except Exception as e:
