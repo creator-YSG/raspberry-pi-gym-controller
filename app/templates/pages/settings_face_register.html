@@ -4,6 +4,11 @@
 
 {% block body_class %}settings-page{% endblock %}
 
+{% block head %}
+<!-- Simple Keyboard CSS -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/simple-keyboard@latest/build/css/index.css">
+{% endblock %}
+
 {% block content %}
 <div class="face-register-container">
     <!-- 좌측 상단: 뒤로가기 버튼 -->
@@ -22,99 +27,12 @@
     <div class="search-section">
         <h2>1단계: 회원 검색</h2>
         <div class="search-box">
-            <input type="text" id="searchInput" placeholder="회원 이름 입력" autocomplete="off" readonly>
+            <input type="text" id="searchInput" placeholder="회원 이름 입력" autocomplete="off">
             <button onclick="searchMembers()" id="searchBtn">🔍 검색</button>
         </div>
         
-        <!-- 가상 키보드 -->
-        <div class="virtual-keyboard" id="virtualKeyboard" style="display:none;">
-            <div class="keyboard-lang-switch">
-                <button class="lang-btn active" data-lang="ko" onclick="switchLanguage('ko')">한글</button>
-                <button class="lang-btn" data-lang="en" onclick="switchLanguage('en')">English</button>
-            </div>
-            
-            <!-- 한글 키보드 -->
-            <div class="keyboard-layout" id="keyboardKo">
-                <div class="keyboard-row">
-                    <button class="key" onclick="insertText('ㅂ')">ㅂ</button>
-                    <button class="key" onclick="insertText('ㅈ')">ㅈ</button>
-                    <button class="key" onclick="insertText('ㄷ')">ㄷ</button>
-                    <button class="key" onclick="insertText('ㄱ')">ㄱ</button>
-                    <button class="key" onclick="insertText('ㅅ')">ㅅ</button>
-                    <button class="key" onclick="insertText('ㅛ')">ㅛ</button>
-                    <button class="key" onclick="insertText('ㅕ')">ㅕ</button>
-                    <button class="key" onclick="insertText('ㅑ')">ㅑ</button>
-                    <button class="key" onclick="insertText('ㅐ')">ㅐ</button>
-                    <button class="key" onclick="insertText('ㅔ')">ㅔ</button>
-                </div>
-                <div class="keyboard-row">
-                    <button class="key" onclick="insertText('ㅁ')">ㅁ</button>
-                    <button class="key" onclick="insertText('ㄴ')">ㄴ</button>
-                    <button class="key" onclick="insertText('ㅇ')">ㅇ</button>
-                    <button class="key" onclick="insertText('ㄹ')">ㄹ</button>
-                    <button class="key" onclick="insertText('ㅎ')">ㅎ</button>
-                    <button class="key" onclick="insertText('ㅗ')">ㅗ</button>
-                    <button class="key" onclick="insertText('ㅓ')">ㅓ</button>
-                    <button class="key" onclick="insertText('ㅏ')">ㅏ</button>
-                    <button class="key" onclick="insertText('ㅣ')">ㅣ</button>
-                </div>
-                <div class="keyboard-row">
-                    <button class="key" onclick="insertText('ㅋ')">ㅋ</button>
-                    <button class="key" onclick="insertText('ㅌ')">ㅌ</button>
-                    <button class="key" onclick="insertText('ㅊ')">ㅊ</button>
-                    <button class="key" onclick="insertText('ㅍ')">ㅍ</button>
-                    <button class="key" onclick="insertText('ㅠ')">ㅠ</button>
-                    <button class="key" onclick="insertText('ㅜ')">ㅜ</button>
-                    <button class="key" onclick="insertText('ㅡ')">ㅡ</button>
-                </div>
-                <div class="keyboard-row">
-                    <button class="key key-wide" onclick="backspace()">← 지우기</button>
-                    <button class="key key-wide" onclick="insertText(' ')">스페이스</button>
-                    <button class="key key-wide" onclick="hideKeyboard()">닫기</button>
-                </div>
-            </div>
-            
-            <!-- 영어 키보드 -->
-            <div class="keyboard-layout" id="keyboardEn" style="display:none;">
-                <div class="keyboard-row">
-                    <button class="key" onclick="insertText('Q')">Q</button>
-                    <button class="key" onclick="insertText('W')">W</button>
-                    <button class="key" onclick="insertText('E')">E</button>
-                    <button class="key" onclick="insertText('R')">R</button>
-                    <button class="key" onclick="insertText('T')">T</button>
-                    <button class="key" onclick="insertText('Y')">Y</button>
-                    <button class="key" onclick="insertText('U')">U</button>
-                    <button class="key" onclick="insertText('I')">I</button>
-                    <button class="key" onclick="insertText('O')">O</button>
-                    <button class="key" onclick="insertText('P')">P</button>
-                </div>
-                <div class="keyboard-row">
-                    <button class="key" onclick="insertText('A')">A</button>
-                    <button class="key" onclick="insertText('S')">S</button>
-                    <button class="key" onclick="insertText('D')">D</button>
-                    <button class="key" onclick="insertText('F')">F</button>
-                    <button class="key" onclick="insertText('G')">G</button>
-                    <button class="key" onclick="insertText('H')">H</button>
-                    <button class="key" onclick="insertText('J')">J</button>
-                    <button class="key" onclick="insertText('K')">K</button>
-                    <button class="key" onclick="insertText('L')">L</button>
-                </div>
-                <div class="keyboard-row">
-                    <button class="key" onclick="insertText('Z')">Z</button>
-                    <button class="key" onclick="insertText('X')">X</button>
-                    <button class="key" onclick="insertText('C')">C</button>
-                    <button class="key" onclick="insertText('V')">V</button>
-                    <button class="key" onclick="insertText('B')">B</button>
-                    <button class="key" onclick="insertText('N')">N</button>
-                    <button class="key" onclick="insertText('M')">M</button>
-                </div>
-                <div class="keyboard-row">
-                    <button class="key key-wide" onclick="backspace()">← Delete</button>
-                    <button class="key key-wide" onclick="insertText(' ')">Space</button>
-                    <button class="key key-wide" onclick="hideKeyboard()">Close</button>
-                </div>
-            </div>
-        </div>
+        <!-- Simple Keyboard -->
+        <div class="simple-keyboard" id="keyboard"></div>
     </div>
 
     <!-- 2단계: 검색 결과 -->
@@ -250,83 +168,15 @@
     color: rgba(255, 255, 255, 0.6);
 }
 
-.search-box input {
-    cursor: pointer;
-}
-
-/* 가상 키보드 */
-.virtual-keyboard {
+/* Simple Keyboard 커스텀 스타일 */
+.simple-keyboard {
     margin-top: 20px;
-    background: rgba(0, 0, 0, 0.3);
-    border-radius: 12px;
-    padding: 15px;
-    backdrop-filter: blur(10px);
+    max-width: 100%;
 }
 
-.keyboard-lang-switch {
-    display: flex;
-    gap: 10px;
-    margin-bottom: 15px;
-    justify-content: center;
-}
-
-.lang-btn {
-    padding: 10px 30px;
-    font-size: 16px;
-    border: 2px solid rgba(255, 255, 255, 0.3);
-    border-radius: 8px;
-    background: rgba(255, 255, 255, 0.1);
-    color: white;
-    cursor: pointer;
-    transition: all 0.3s ease;
-}
-
-.lang-btn.active {
-    background: rgba(76, 175, 80, 0.6);
-    border-color: rgba(76, 175, 80, 0.8);
-}
-
-.lang-btn:active {
-    transform: scale(0.95);
-}
-
-.keyboard-layout {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
-.keyboard-row {
-    display: flex;
-    gap: 6px;
-    justify-content: center;
-}
-
-.key {
-    min-width: 45px;
+.simple-keyboard .hg-button {
     height: 50px;
-    padding: 10px;
     font-size: 18px;
-    font-weight: 600;
-    border: 2px solid rgba(255, 255, 255, 0.3);
-    border-radius: 8px;
-    background: rgba(255, 255, 255, 0.15);
-    color: white;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    user-select: none;
-    -webkit-tap-highlight-color: transparent;
-}
-
-.key:active {
-    background: rgba(76, 175, 80, 0.6);
-    transform: scale(0.95);
-}
-
-.key-wide {
-    flex: 1;
-    min-width: 100px;
-    font-size: 16px;
 }
 
 .search-box button {
@@ -657,66 +507,103 @@
 {% endblock %}
 
 {% block scripts %}
+<!-- Simple Keyboard JS -->
+<script src="https://cdn.jsdelivr.net/npm/simple-keyboard@latest/build/index.min.js"></script>
+
 <script>
 let selectedMemberId = null;
 let selectedMemberName = null;
-let currentLanguage = 'ko'; // 현재 키보드 언어
+let keyboard = null;
 
 // 페이지 로드 시 초기화
 document.addEventListener('DOMContentLoaded', function() {
-    // 검색 입력창 클릭 시 키보드 표시
-    document.getElementById('searchInput').addEventListener('click', function() {
-        showKeyboard();
+    // Simple Keyboard 초기화
+    keyboard = new window.SimpleKeyboard.default({
+        onChange: input => onChange(input),
+        onKeyPress: button => onKeyPress(button),
+        layout: {
+            default: [
+                "q w e r t y u i o p",
+                "a s d f g h j k l",
+                "{shift} z x c v b n m {backspace}",
+                "{lang} {space} {search}"
+            ],
+            shift: [
+                "Q W E R T Y U I O P",
+                "A S D F G H J K L",
+                "{shift} Z X C V B N M {backspace}",
+                "{lang} {space} {search}"
+            ],
+            korean: [
+                "ㅂ ㅈ ㄷ ㄱ ㅅ ㅛ ㅕ ㅑ ㅐ ㅔ",
+                "ㅁ ㄴ ㅇ ㄹ ㅎ ㅗ ㅓ ㅏ ㅣ",
+                "{shift} ㅋ ㅌ ㅊ ㅍ ㅠ ㅜ ㅡ {backspace}",
+                "{lang} {space} {search}"
+            ]
+        },
+        display: {
+            "{lang}": "한/영",
+            "{space}": "스페이스",
+            "{search}": "🔍 검색",
+            "{backspace}": "⌫",
+            "{shift}": "⇧"
+        },
+        buttonTheme: [
+            {
+                class: "hg-blue",
+                buttons: "{search}"
+            },
+            {
+                class: "hg-grey",
+                buttons: "{lang} {space} {backspace} {shift}"
+            }
+        ],
+        theme: "hg-theme-default hg-layout-default",
+        physicalKeyboardHighlight: false,
+        syncInstanceInputs: true,
+        mergeDisplay: true,
+        useButtonTag: true
     });
 
-    // 가상 키보드가 표시되면 엔터키 비활성화
-    document.getElementById('searchInput').addEventListener('keypress', function(e) {
-        e.preventDefault(); // 물리 키보드 입력 방지
+    // 입력창 클릭 시 키보드 포커스
+    document.getElementById('searchInput').addEventListener('focus', function() {
+        keyboard.setInput(this.value);
     });
 });
 
-// 가상 키보드 표시
-function showKeyboard() {
-    document.getElementById('virtualKeyboard').style.display = 'block';
+function onChange(input) {
+    document.getElementById('searchInput').value = input;
 }
 
-// 가상 키보드 숨기기
-function hideKeyboard() {
-    document.getElementById('virtualKeyboard').style.display = 'none';
-}
-
-// 언어 전환
-function switchLanguage(lang) {
-    currentLanguage = lang;
-    
-    // 버튼 활성화 상태 변경
-    document.querySelectorAll('.lang-btn').forEach(btn => {
-        btn.classList.remove('active');
-    });
-    document.querySelector(`.lang-btn[data-lang="${lang}"]`).classList.add('active');
-    
-    // 키보드 레이아웃 전환
-    if (lang === 'ko') {
-        document.getElementById('keyboardKo').style.display = 'flex';
-        document.getElementById('keyboardEn').style.display = 'none';
-    } else {
-        document.getElementById('keyboardKo').style.display = 'none';
-        document.getElementById('keyboardEn').style.display = 'flex';
+function onKeyPress(button) {
+    if (button === "{search}") {
+        searchMembers();
+    } else if (button === "{lang}") {
+        toggleLanguage();
+    } else if (button === "{shift}") {
+        handleShift();
     }
 }
 
-// 텍스트 입력
-function insertText(char) {
-    const input = document.getElementById('searchInput');
-    input.value += char;
-    input.focus();
+function toggleLanguage() {
+    const currentLayout = keyboard.options.layoutName;
+    if (currentLayout === "korean") {
+        keyboard.setOptions({
+            layoutName: "default"
+        });
+    } else {
+        keyboard.setOptions({
+            layoutName: "korean"
+        });
+    }
 }
 
-// 백스페이스
-function backspace() {
-    const input = document.getElementById('searchInput');
-    input.value = input.value.slice(0, -1);
-    input.focus();
+function handleShift() {
+    const currentLayout = keyboard.options.layoutName;
+    const shiftToggle = currentLayout === "default" ? "shift" : "default";
+    keyboard.setOptions({
+        layoutName: shiftToggle
+    });
 }
 
 // 회원 검색
