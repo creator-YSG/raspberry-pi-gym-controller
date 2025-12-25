@@ -7,6 +7,7 @@
 {% block head %}
 <!-- Simple Keyboard CSS -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/simple-keyboard@latest/build/css/index.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/simple-keyboard-layouts@latest/build/css/index.css">
 {% endblock %}
 
 {% block content %}
@@ -509,11 +510,13 @@
 {% block scripts %}
 <!-- Simple Keyboard JS -->
 <script src="https://cdn.jsdelivr.net/npm/simple-keyboard@latest/build/index.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/simple-keyboard-layouts@latest/build/index.min.js"></script>
 
 <script>
 let selectedMemberId = null;
 let selectedMemberName = null;
 let keyboard = null;
+let currentLayout = 'default';
 
 // 페이지 로드 시 초기화
 document.addEventListener('DOMContentLoaded', function() {
@@ -532,12 +535,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 "Q W E R T Y U I O P",
                 "A S D F G H J K L",
                 "{shift} Z X C V B N M {backspace}",
-                "{lang} {space} {search}"
-            ],
-            korean: [
-                "ㅂ ㅈ ㄷ ㄱ ㅅ ㅛ ㅕ ㅑ ㅐ ㅔ",
-                "ㅁ ㄴ ㅇ ㄹ ㅎ ㅗ ㅓ ㅏ ㅣ",
-                "{shift} ㅋ ㅌ ㅊ ㅍ ㅠ ㅜ ㅡ {backspace}",
                 "{lang} {space} {search}"
             ]
         },
@@ -558,16 +555,22 @@ document.addEventListener('DOMContentLoaded', function() {
                 buttons: "{lang} {space} {backspace} {shift}"
             }
         ],
-        theme: "hg-theme-default hg-layout-default",
+        theme: "hg-theme-default hg-layout-default myTheme",
         physicalKeyboardHighlight: false,
         syncInstanceInputs: true,
         mergeDisplay: true,
-        useButtonTag: true
+        useButtonTag: true,
+        useTouchEvents: true
     });
 
     // 입력창 클릭 시 키보드 포커스
     document.getElementById('searchInput').addEventListener('focus', function() {
         keyboard.setInput(this.value);
+    });
+    
+    // 입력창 직접 입력 시 키보드 동기화
+    document.getElementById('searchInput').addEventListener('input', function(e) {
+        keyboard.setInput(e.target.value);
     });
 });
 
@@ -586,23 +589,40 @@ function onKeyPress(button) {
 }
 
 function toggleLanguage() {
-    const currentLayout = keyboard.options.layoutName;
-    if (currentLayout === "korean") {
+    if (currentLayout === 'korean') {
+        // 영어로 전환
+        currentLayout = 'default';
         keyboard.setOptions({
-            layoutName: "default"
+            layout: {
+                default: [
+                    "q w e r t y u i o p",
+                    "a s d f g h j k l",
+                    "{shift} z x c v b n m {backspace}",
+                    "{lang} {space} {search}"
+                ],
+                shift: [
+                    "Q W E R T Y U I O P",
+                    "A S D F G H J K L",
+                    "{shift} Z X C V B N M {backspace}",
+                    "{lang} {space} {search}"
+                ]
+            },
+            layoutName: 'default'
         });
     } else {
+        // 한글로 전환
+        currentLayout = 'korean';
         keyboard.setOptions({
-            layoutName: "korean"
+            layout: window.SimpleKeyboardLayouts.default.layout.korean,
+            layoutName: 'default'
         });
     }
 }
 
 function handleShift() {
-    const currentLayout = keyboard.options.layoutName;
-    const shiftToggle = currentLayout === "default" ? "shift" : "default";
+    const layoutName = keyboard.options.layoutName;
     keyboard.setOptions({
-        layoutName: shiftToggle
+        layoutName: layoutName === "default" ? "shift" : "default"
     });
 }
 
