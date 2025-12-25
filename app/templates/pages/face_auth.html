@@ -6,6 +6,20 @@
 
 {% block content %}
 <div class="face-auth-container">
+    <!-- 우측 상단: 설정 버튼 -->
+    <div class="settings-button-container">
+        <button class="settings-button" onclick="goToSettings()">
+            ⚙️
+        </button>
+    </div>
+
+    <!-- 좌측 상단: 뒤로가기 버튼 -->
+    <div class="back-button-container">
+        <button class="back-button" onclick="goHome()">
+            ← 홈으로
+        </button>
+    </div>
+
     <!-- 상단: 안내 메시지 -->
     <div class="auth-header">
         <h1 class="auth-title" id="authTitle">카메라를 바라봐주세요</h1>
@@ -45,6 +59,64 @@
     padding: 40px 20px;
     background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
     color: white;
+    position: relative;
+}
+
+/* 설정 버튼 */
+.settings-button-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 1000;
+}
+
+.settings-button {
+    background: rgba(255, 255, 255, 0.15);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 12px;
+    padding: 12px 16px;
+    cursor: pointer;
+    font-size: 28px;
+    transition: all 0.3s ease;
+    color: white;
+}
+
+.settings-button:hover {
+    background: rgba(255, 255, 255, 0.25);
+    transform: scale(1.05);
+    border-color: rgba(255, 255, 255, 0.5);
+}
+
+.settings-button:active {
+    transform: scale(0.95);
+}
+
+/* 뒤로가기 버튼 */
+.back-button-container {
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    z-index: 1000;
+}
+
+.back-button {
+    background: rgba(255, 255, 255, 0.15);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 12px;
+    padding: 12px 20px;
+    cursor: pointer;
+    font-size: 18px;
+    color: white;
+    transition: all 0.3s ease;
+}
+
+.back-button:hover {
+    background: rgba(255, 255, 255, 0.25);
+    transform: scale(1.05);
+}
+
+.back-button:active {
+    transform: scale(0.95);
 }
 
 .auth-header {
@@ -624,6 +696,18 @@ function navigateTo(page, params) {
     const url = `/${page}${queryString ? '?' + queryString : ''}`;
     console.log('🔄 이동:', url);
     window.location.href = url;
+}
+
+// 설정 화면으로 이동
+function goToSettings() {
+    stopAllPolling();
+    window.location.href = '/settings';
+}
+
+// 홈으로 이동
+function goHome() {
+    stopAllPolling();
+    window.location.href = '/';
 }
 
 // 페이지 떠날 때 정리
