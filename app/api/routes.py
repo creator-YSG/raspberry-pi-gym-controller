@@ -2666,13 +2666,122 @@ def unregister_face(member_id):
         }), 500
 
 
+@bp.route('/members/search', methods=['GET'])
+def search_members():
+    """회원 검색 (이름 또는 ID로)
+
+    Query Parameters:
+        q: 검색어 (이름 또는 ID 일부)
+        limit: 최대 결과 수 (기본 20)
+
+    Returns:
+        {
+            success: true,
+            members: [
+                {
+                    member_id: "2024001",
+                    member_name: "홍길동",
+                    member_category: "staff",
+                    face_registered: true/false,
+                    face_registered_at: "2025-01-01T12:00:00" or null
+                },
+                ...
+            ],
+            count: 5
+        }
+    """
+    try:
+        from app.services.member_service import MemberService
+
+        # 쿼리 파라미터 가져오기
+        query = request.args.get('q', '').strip()
+        limit = int(request.args.get('limit', 20))
+
+        if not query:
+            return jsonify({
+                'success': False,
+                'error': '검색어를 입력해주세요.',
+                'error_type': 'missing_query'
+            }), 400
+
+        if len(query) < 1:
+            return jsonify({
+                'success': False,
+                'error': '검색어는 최소 1자 이상이어야 합니다.',
+                'error_type': 'query_too_short'
+            }), 400
+
+        # 회원 검색
+        member_service = MemberService()
+
+        # LIKE 검색을 위한 쿼리 생성
+        search_pattern = f'%{query}%'
+
+        # DB 연결
+        db = member_service.db
+        cursor = db.execute_query("""
+            SELECT
+                member_id,
+                member_name,
+                member_category,
+                face_embedding IS NOT NULL as face_registered,
+                face_registered_at
+            FROM members
+            WHERE member_id LIKE ? OR member_name LIKE ?
+            ORDER BY
+                CASE
+                    WHEN member_id = ? THEN 1
+                    WHEN member_name = ? THEN 2
+                    ELSE 3
+                END,
+                member_id
+            LIMIT ?
+        """, (search_pattern, search_pattern, query, query, limit))
+
+        if not cursor:
+            current_app.logger.warning("회원 검색 쿼리 실패")
+            return jsonify({
+                'success': False,
+                'error': '데이터베이스 조회 오류',
+                'error_type': 'db_error'
+            }), 500
+
+        members = []
+        for row in cursor.fetchall():
+            member = {
+                'member_id': row['member_id'],
+                'member_name': row['member_name'],
+                'member_category': row['member_category'],
+                'face_registered': bool(row['face_registered']),
+                'face_registered_at': row['face_registered_at']
+            }
+            members.append(member)
+
+        current_app.logger.info(f"회원 검색: '{query}' → {len(members)}개 결과")
+
+        return jsonify({
+            'success': True,
+            'members': members,
+            'count': len(members),
+            'query': query
+        })
+
+    except Exception as e:
+        current_app.logger.error(f'회원 검색 오류: {e}', exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': '회원 검색 중 오류가 발생했습니다.',
+            'error_type': 'system_error'
+        }), 500
+
+
 @bp.route('/face/status')
 def face_service_status():
     """얼굴인식 서비스 상태 조회"""
     try:
         from app.services.face_service import get_face_service
         face_service = get_face_service()
-        
+
         return jsonify({
             'success': True,
             'status': face_service.get_status()

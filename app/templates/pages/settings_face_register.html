@@ -5,7 +5,7 @@
 {% block body_class %}settings-page{% endblock %}
 
 {% block content %}
-<div class="settings-container">
+<div class="face-register-container">
     <!-- 좌측 상단: 뒤로가기 버튼 -->
     <div class="back-button-container">
         <button class="back-button" onclick="window.location.href='/'">
@@ -14,29 +14,70 @@
     </div>
 
     <!-- 페이지 제목 -->
-    <div class="settings-header">
+    <div class="page-header">
         <h1>👤 얼굴인식 등록</h1>
     </div>
 
-    <!-- 컨텐츠 영역 -->
-    <div class="settings-content">
-        <div class="placeholder-message">
-            <p>이 화면은 아직 구현 중입니다.</p>
-            <p>회원의 얼굴을 카메라로 촬영하여 등록하는 기능이 추가될 예정입니다.</p>
+    <!-- 1단계: 회원 검색 -->
+    <div class="search-section">
+        <h2>1단계: 회원 검색</h2>
+        <div class="search-box">
+            <input type="text" id="searchInput" placeholder="회원 ID 또는 이름 입력" autocomplete="off">
+            <button onclick="searchMembers()" id="searchBtn">🔍 검색</button>
         </div>
+    </div>
+
+    <!-- 2단계: 검색 결과 -->
+    <div class="results-section" id="resultsSection" style="display:none;">
+        <h2>검색 결과</h2>
+        <div id="membersList" class="members-list">
+            <!-- 동적으로 생성 -->
+        </div>
+    </div>
+
+    <!-- 3단계: 카메라 촬영 -->
+    <div class="camera-section" id="cameraSection" style="display:none;">
+        <h2>2단계: 얼굴 촬영</h2>
+
+        <div class="selected-member-info" id="selectedMemberInfo">
+            <!-- 동적으로 표시 -->
+        </div>
+
+        <div class="camera-preview">
+            <img id="cameraFeed" src="" alt="카메라" style="display:none;">
+            <div class="face-guide-overlay"></div>
+            <div class="camera-loading" id="cameraLoading">
+                <div class="loading-spinner"></div>
+                <p>카메라 준비 중...</p>
+            </div>
+        </div>
+
+        <div class="camera-controls">
+            <button class="btn-register" onclick="registerFace()" id="registerBtn">
+                📷 촬영 및 등록
+            </button>
+            <button class="btn-cancel" onclick="cancelRegistration()">
+                ← 다시 선택
+            </button>
+        </div>
+
+        <div class="registration-status" id="statusMessage"></div>
     </div>
 </div>
 
 <style>
-.settings-container {
+.face-register-container {
     min-height: 100vh;
     background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
     padding: 20px;
     display: flex;
     flex-direction: column;
-    align-items: center;
+    align-items: stretch;
+    max-width: 600px;
+    margin: 0 auto;
 }
 
+/* 뒤로가기 버튼 */
 .back-button-container {
     position: fixed;
     top: 20px;
@@ -64,44 +105,591 @@
     transform: scale(0.95);
 }
 
-.settings-header {
+/* 페이지 헤더 */
+.page-header {
     margin-top: 60px;
-    margin-bottom: 40px;
+    margin-bottom: 30px;
     text-align: center;
 }
 
-.settings-header h1 {
+.page-header h1 {
     color: white;
-    font-size: 32px;
+    font-size: 28px;
     font-weight: bold;
     text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+    margin: 0;
 }
 
-.settings-content {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    max-width: 500px;
-    width: 100%;
-    padding: 20px;
+/* 검색 섹션 */
+.search-section {
+    margin-bottom: 30px;
 }
 
-.placeholder-message {
-    background: rgba(255, 255, 255, 0.1);
-    border: 2px solid rgba(255, 255, 255, 0.2);
-    border-radius: 16px;
-    padding: 40px;
+.search-section h2 {
+    color: white;
+    font-size: 20px;
+    font-weight: 600;
+    margin-bottom: 15px;
     text-align: center;
 }
 
-.placeholder-message p {
-    color: rgba(255, 255, 255, 0.8);
+.search-box {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.search-box input {
+    flex: 1;
+    padding: 15px 20px;
     font-size: 18px;
-    line-height: 1.6;
-    margin: 10px 0;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    outline: none;
+    transition: all 0.3s ease;
+}
+
+.search-box input:focus {
+    border-color: rgba(76, 175, 80, 0.6);
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.search-box input::placeholder {
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.search-box button {
+    padding: 15px 20px;
+    font-size: 18px;
+    background: rgba(76, 175, 80, 0.4);
+    border: 2px solid #4caf50;
+    border-radius: 12px;
+    color: white;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.search-box button:hover {
+    background: rgba(76, 175, 80, 0.6);
+    transform: scale(1.05);
+}
+
+.search-box button:active {
+    transform: scale(0.95);
+}
+
+/* 검색 결과 섹션 */
+.results-section {
+    margin-bottom: 30px;
+}
+
+.results-section h2 {
+    color: white;
+    font-size: 20px;
+    font-weight: 600;
+    margin-bottom: 15px;
+    text-align: center;
+}
+
+.members-list {
+    max-height: 300px;
+    overflow-y: auto;
+    margin-bottom: 20px;
+}
+
+.member-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    margin: 8px 0;
+    background: rgba(255, 255, 255, 0.1);
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.member-item:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: translateX(5px);
+    border-color: rgba(76, 175, 80, 0.4);
+}
+
+.member-item:active {
+    transform: translateX(0);
+}
+
+.member-info {
+    flex: 1;
+}
+
+.member-name {
+    font-size: 18px;
+    font-weight: bold;
+    color: white;
+    margin-bottom: 4px;
+}
+
+.member-id {
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.7);
+    margin-bottom: 2px;
+}
+
+.member-category {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.face-status {
+    margin-left: 15px;
+}
+
+.badge {
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+.badge-success {
+    background: rgba(76, 175, 80, 0.3);
+    color: #4caf50;
+    border: 1px solid rgba(76, 175, 80, 0.5);
+}
+
+.badge-danger {
+    background: rgba(244, 67, 54, 0.3);
+    color: #f44336;
+    border: 1px solid rgba(244, 67, 54, 0.5);
+}
+
+.no-results {
+    text-align: center;
+    color: rgba(255, 255, 255, 0.6);
+    font-style: italic;
+    padding: 40px 20px;
+}
+
+/* 카메라 섹션 */
+.camera-section {
+    text-align: center;
+}
+
+.camera-section h2 {
+    color: white;
+    font-size: 20px;
+    font-weight: 600;
+    margin-bottom: 20px;
+}
+
+.selected-member-info {
+    background: rgba(76, 175, 80, 0.2);
+    border: 2px solid rgba(76, 175, 80, 0.4);
+    border-radius: 12px;
+    padding: 15px 20px;
+    margin-bottom: 20px;
+    color: white;
+    font-weight: bold;
+}
+
+.camera-preview {
+    position: relative;
+    width: 100%;
+    max-width: 400px;
+    margin: 0 auto 20px;
+    border: 3px solid rgba(76, 175, 80, 0.5);
+    border-radius: 20px;
+    overflow: hidden;
+    background: rgba(0, 0, 0, 0.3);
+    aspect-ratio: 4/3;
+}
+
+.camera-preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.face-guide-overlay {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 180px;
+    height: 240px;
+    border: 3px dashed rgba(76, 175, 80, 0.7);
+    border-radius: 50% 50% 45% 45%;
+    pointer-events: none;
+}
+
+.camera-loading {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    color: white;
+}
+
+.loading-spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid rgba(255, 255, 255, 0.3);
+    border-top: 4px solid #4caf50;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 10px;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.camera-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.btn-register {
+    padding: 18px 30px;
+    font-size: 18px;
+    font-weight: bold;
+    background: rgba(76, 175, 80, 0.4);
+    border: 2px solid #4caf50;
+    border-radius: 12px;
+    color: white;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.btn-register:hover {
+    background: rgba(76, 175, 80, 0.6);
+    transform: scale(1.02);
+}
+
+.btn-register:active {
+    transform: scale(0.98);
+}
+
+.btn-register:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.btn-cancel {
+    padding: 12px 20px;
+    font-size: 16px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 10px;
+    color: white;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.btn-cancel:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.btn-cancel:active {
+    transform: scale(0.95);
+}
+
+.registration-status {
+    min-height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.status-processing {
+    color: #4caf50;
+    font-size: 16px;
+    font-weight: bold;
+    text-align: center;
+}
+
+.status-success {
+    color: #4caf50;
+    font-size: 18px;
+    font-weight: bold;
+    text-align: center;
+    background: rgba(76, 175, 80, 0.1);
+    border: 2px solid rgba(76, 175, 80, 0.3);
+    border-radius: 12px;
+    padding: 15px 20px;
+}
+
+.status-error {
+    color: #f44336;
+    font-size: 16px;
+    font-weight: bold;
+    text-align: center;
+}
+
+.status-help {
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 14px;
+    margin-top: 8px;
+}
+
+/* 반응형 디자인 */
+@media (max-width: 480px) {
+    .face-register-container {
+        padding: 15px;
+    }
+
+    .search-box {
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .search-box input {
+        font-size: 16px; /* iOS 확대 방지 */
+        padding: 12px 16px;
+    }
+
+    .search-box button {
+        width: 100%;
+        padding: 12px;
+    }
+
+    .member-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+
+    .face-status {
+        margin-left: 0;
+        align-self: flex-end;
+    }
+
+    .camera-preview {
+        max-width: 100%;
+    }
+
+    .btn-register {
+        padding: 15px 25px;
+        font-size: 16px;
+    }
 }
 </style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let selectedMemberId = null;
+let selectedMemberName = null;
+
+// 페이지 로드 시 초기화
+document.addEventListener('DOMContentLoaded', function() {
+    // 검색 입력창에 포커스
+    document.getElementById('searchInput').focus();
+
+    // 엔터키로 검색
+    document.getElementById('searchInput').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            searchMembers();
+        }
+    });
+});
+
+// 회원 검색
+function searchMembers() {
+    const query = document.getElementById('searchInput').value.trim();
+
+    if (query.length === 0) {
+        alert('검색어를 입력해주세요');
+        return;
+    }
+
+    // 검색 버튼 비활성화
+    const searchBtn = document.getElementById('searchBtn');
+    const originalText = searchBtn.textContent;
+    searchBtn.disabled = true;
+    searchBtn.textContent = '🔍 검색 중...';
+
+    fetch(`/api/members/search?q=${encodeURIComponent(query)}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                displaySearchResults(data.members);
+            } else {
+                alert('검색 실패: ' + data.error);
+                document.getElementById('resultsSection').style.display = 'none';
+            }
+        })
+        .catch(error => {
+            console.error('검색 오류:', error);
+            alert('검색 중 오류가 발생했습니다.');
+            document.getElementById('resultsSection').style.display = 'none';
+        })
+        .finally(() => {
+            // 버튼 복구
+            searchBtn.disabled = false;
+            searchBtn.textContent = originalText;
+        });
+}
+
+// 검색 결과 표시
+function displaySearchResults(members) {
+    const resultsSection = document.getElementById('resultsSection');
+    const membersList = document.getElementById('membersList');
+
+    if (members.length === 0) {
+        membersList.innerHTML = '<p class="no-results">검색 결과가 없습니다.</p>';
+    } else {
+        membersList.innerHTML = members.map(m => `
+            <div class="member-item" onclick="selectMember('${m.member_id}', '${m.member_name}', '${m.member_category}')">
+                <div class="member-info">
+                    <div class="member-name">${m.member_name}</div>
+                    <div class="member-id">${m.member_id}</div>
+                    <div class="member-category">${getCategoryLabel(m.member_category)}</div>
+                </div>
+                <div class="face-status">
+                    ${m.face_registered
+                        ? '<span class="badge badge-success">✅ 등록됨</span>'
+                        : '<span class="badge badge-danger">❌ 미등록</span>'}
+                </div>
+            </div>
+        `).join('');
+    }
+
+    resultsSection.style.display = 'block';
+    document.getElementById('cameraSection').style.display = 'none';
+}
+
+// 카테고리 라벨 변환
+function getCategoryLabel(category) {
+    const labels = {
+        'staff': '교직원',
+        'male': '남성',
+        'female': '여성'
+    };
+    return labels[category] || category;
+}
+
+// 회원 선택
+function selectMember(memberId, memberName, memberCategory) {
+    selectedMemberId = memberId;
+    selectedMemberName = memberName;
+
+    // 선택된 회원 정보 표시
+    const infoEl = document.getElementById('selectedMemberInfo');
+    const categoryLabel = getCategoryLabel(memberCategory);
+    infoEl.innerHTML = `<strong>선택된 회원:</strong> ${memberName} (${memberId}) - ${categoryLabel}`;
+
+    // 카메라 섹션 표시
+    document.getElementById('cameraSection').style.display = 'block';
+
+    // 카메라 피드 시작
+    const cameraFeed = document.getElementById('cameraFeed');
+    const cameraLoading = document.getElementById('cameraLoading');
+
+    cameraLoading.style.display = 'block';
+    cameraFeed.style.display = 'none';
+
+    // 카메라 스트림 시작
+    cameraFeed.src = '/api/video_feed?' + Date.now();
+
+    cameraFeed.onload = function() {
+        cameraLoading.style.display = 'none';
+        cameraFeed.style.display = 'block';
+    };
+
+    // 스크롤
+    document.getElementById('cameraSection').scrollIntoView({ behavior: 'smooth' });
+}
+
+// 얼굴 등록
+function registerFace() {
+    if (!selectedMemberId) {
+        alert('회원을 먼저 선택해주세요');
+        return;
+    }
+
+    const registerBtn = document.getElementById('registerBtn');
+    const statusMessage = document.getElementById('statusMessage');
+
+    // 버튼 비활성화
+    registerBtn.disabled = true;
+    registerBtn.textContent = '⏳ 등록 중...';
+
+    statusMessage.innerHTML = '<p class="status-processing">📷 얼굴을 인식하고 있습니다...</p>';
+
+    fetch(`/api/face/register/${selectedMemberId}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            statusMessage.innerHTML = `
+                <p class="status-success">
+                    ✅ ${selectedMemberName}님의 얼굴이 성공적으로 등록되었습니다!
+                </p>
+            `;
+
+            // 카메라 피드 중지
+            document.getElementById('cameraFeed').src = '';
+
+            // 3초 후 초기화
+            setTimeout(() => {
+                resetForm();
+            }, 3000);
+        } else {
+            statusMessage.innerHTML = `
+                <p class="status-error">
+                    ❌ 등록 실패: ${data.error}
+                </p>
+                <p class="status-help">다시 시도해주세요.</p>
+            `;
+            registerBtn.disabled = false;
+            registerBtn.textContent = '📷 촬영 및 등록';
+        }
+    })
+    .catch(error => {
+        console.error('등록 오류:', error);
+        statusMessage.innerHTML = `
+            <p class="status-error">❌ 등록 중 오류가 발생했습니다.</p>
+        `;
+        registerBtn.disabled = false;
+        registerBtn.textContent = '📷 촬영 및 등록';
+    });
+}
+
+// 등록 취소
+function cancelRegistration() {
+    // 카메라 피드 중지
+    document.getElementById('cameraFeed').src = '';
+
+    document.getElementById('cameraSection').style.display = 'none';
+    selectedMemberId = null;
+    selectedMemberName = null;
+}
+
+// 폼 초기화
+function resetForm() {
+    document.getElementById('searchInput').value = '';
+    document.getElementById('resultsSection').style.display = 'none';
+    document.getElementById('cameraSection').style.display = 'none';
+    document.getElementById('statusMessage').innerHTML = '';
+    selectedMemberId = null;
+    selectedMemberName = null;
+}
+</script>
 {% endblock %}
 
