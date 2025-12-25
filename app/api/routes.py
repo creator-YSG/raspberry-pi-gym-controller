@@ -2848,6 +2848,136 @@ def reload_face_embeddings():
 
 
 # ==========================================
+# NFC 관련 API
+# ==========================================
+
+@bp.route('/nfc/mappings')
+def get_nfc_mappings():
+    """전체 NFC-락커 매핑 조회"""
+    try:
+        from app.services.nfc_service import NFCService
+        nfc_service = NFCService()
+
+        mappings = nfc_service.get_all_nfc_mappings()
+
+        # 구역별로 그룹핑
+        grouped = {
+            'STAFF': [],
+            'MALE': [],
+            'FEMALE': []
+        }
+
+        for mapping in mappings:
+            zone = mapping.get('zone', 'UNKNOWN')
+            grouped[zone].append(mapping)
+
+        return jsonify({
+            'success': True,
+            'mappings': mappings,
+            'grouped': grouped,
+            'count': len(mappings)
+        })
+
+    except Exception as e:
+        current_app.logger.error(f'NFC 매핑 조회 오류: {e}')
+        return jsonify({
+            'success': False,
+            'error': 'NFC 매핑 조회 중 오류가 발생했습니다.'
+        }), 500
+
+
+@bp.route('/nfc/register', methods=['POST'])
+def register_nfc():
+    """NFC UID 등록"""
+    try:
+        data = request.get_json()
+        locker_number = data.get('locker_number')
+        nfc_uid = data.get('nfc_uid')
+
+        if not locker_number or not nfc_uid:
+            return jsonify({
+                'success': False,
+                'error': '락커 번호와 NFC UID가 모두 필요합니다.'
+            }), 400
+
+        from app.services.nfc_service import NFCService
+        from app.services.sheets_sync import SheetsSync
+
+        nfc_service = NFCService()
+        result = nfc_service.register_nfc_tag(locker_number, nfc_uid)
+
+        if result['success']:
+            # 구글 시트 동기화
+            try:
+                sheets_sync = SheetsSync()
+                if sheets_sync.connect():
+                    sheets_sync.upload_locker_status(nfc_service.db)
+                    current_app.logger.info(f'구글 시트 동기화 완료 (NFC 등록): {locker_number}')
+            except Exception as sync_error:
+                current_app.logger.warning(f'구글 시트 동기화 실패 (무시): {sync_error}')
+
+            return jsonify({
+                'success': True,
+                'message': result.get('message'),
+                'locker_number': result.get('locker_number'),
+                'nfc_uid': result.get('nfc_uid')
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': result.get('error'),
+                'locker_number': result.get('locker_number'),
+                'nfc_uid': result.get('nfc_uid')
+            }), 400
+
+    except Exception as e:
+        current_app.logger.error(f'NFC 등록 API 오류: {e}')
+        return jsonify({
+            'success': False,
+            'error': 'NFC 등록 중 오류가 발생했습니다.'
+        }), 500
+
+
+@bp.route('/nfc/unregister/<locker_number>', methods=['DELETE'])
+def unregister_nfc(locker_number):
+    """NFC 등록 해제"""
+    try:
+        from app.services.nfc_service import NFCService
+        from app.services.sheets_sync import SheetsSync
+
+        nfc_service = NFCService()
+        result = nfc_service.unregister_nfc_tag(locker_number)
+
+        if result['success']:
+            # 구글 시트 동기화
+            try:
+                sheets_sync = SheetsSync()
+                if sheets_sync.connect():
+                    sheets_sync.upload_locker_status(nfc_service.db)
+                    current_app.logger.info(f'구글 시트 동기화 완료 (NFC 해제): {locker_number}')
+            except Exception as sync_error:
+                current_app.logger.warning(f'구글 시트 동기화 실패 (무시): {sync_error}')
+
+            return jsonify({
+                'success': True,
+                'message': result.get('message'),
+                'locker_number': locker_number
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': result.get('error')
+            }), 400
+
+    except Exception as e:
+        current_app.logger.error(f'NFC 해제 API 오류: {e}')
+        return jsonify({
+            'success': False,
+            'error': 'NFC 해제 중 오류가 발생했습니다.'
+        }), 500
+
+
+# ==========================================
 # 동기화 관련 API
 # ==========================================
 

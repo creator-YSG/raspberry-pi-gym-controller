@@ -8,21 +8,63 @@
 <div class="settings-container">
     <!-- 좌측 상단: 뒤로가기 버튼 -->
     <div class="back-button-container">
-        <button class="back-button" onclick="window.location.href='/'">
-            ← 홈으로
+        <button class="back-button" onclick="window.location.href='/settings'">
+            ← 설정으로
         </button>
     </div>
 
     <!-- 페이지 제목 -->
     <div class="settings-header">
         <h1>🔖 NFC 태그 등록</h1>
+        <p class="settings-subtitle">60개 락커에 NFC 태그를 등록하세요</p>
     </div>
 
-    <!-- 컨텐츠 영역 -->
-    <div class="settings-content">
-        <div class="placeholder-message">
-            <p>이 화면은 아직 구현 중입니다.</p>
-            <p>락커에 NFC 태그를 등록하고 관리하는 기능이 추가될 예정입니다.</p>
+    <!-- NFC 읽기 상태 표시 -->
+    <div class="nfc-status" id="nfcStatus">
+        <div class="nfc-indicator">
+            <div class="nfc-light" id="nfcLight"></div>
+            <span id="nfcStatusText">NFC 리더기를 준비하세요</span>
+        </div>
+        <div class="nfc-uid-display">
+            <label>NFC UID:</label>
+            <span id="currentNfcUid">---</span>
+        </div>
+    </div>
+
+    <!-- 액션 버튼들 -->
+    <div class="action-buttons">
+        <button class="action-btn action-btn-save" id="saveBtn" disabled>
+            💾 저장
+        </button>
+        <button class="action-btn action-btn-unregister" id="unregisterBtn" disabled>
+            🗑️ 해제
+        </button>
+    </div>
+
+    <!-- 락커 그리드 -->
+    <div class="locker-grid-container">
+        <!-- STAFF 구역 -->
+        <div class="zone-section">
+            <h2 class="zone-title">교직원 구역 (S01-S10)</h2>
+            <div class="locker-grid" id="staffGrid">
+                <!-- JavaScript로 동적 생성 -->
+            </div>
+        </div>
+
+        <!-- MALE 구역 -->
+        <div class="zone-section">
+            <h2 class="zone-title">남성 구역 (M01-M40)</h2>
+            <div class="locker-grid" id="maleGrid">
+                <!-- JavaScript로 동적 생성 -->
+            </div>
+        </div>
+
+        <!-- FEMALE 구역 -->
+        <div class="zone-section">
+            <h2 class="zone-title">여성 구역 (F01-F10)</h2>
+            <div class="locker-grid" id="femaleGrid">
+                <!-- JavaScript로 동적 생성 -->
+            </div>
         </div>
     </div>
 </div>
@@ -37,6 +79,7 @@
     align-items: center;
 }
 
+/* 뒤로가기 버튼 */
 .back-button-container {
     position: fixed;
     top: 20px;
@@ -64,9 +107,10 @@
     transform: scale(0.95);
 }
 
+/* 헤더 */
 .settings-header {
     margin-top: 60px;
-    margin-bottom: 40px;
+    margin-bottom: 20px;
     text-align: center;
 }
 
@@ -75,33 +119,497 @@
     font-size: 32px;
     font-weight: bold;
     text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+    margin: 0;
 }
 
-.settings-content {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    max-width: 500px;
-    width: 100%;
-    padding: 20px;
+.settings-subtitle {
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 16px;
+    margin: 8px 0 0 0;
 }
 
-.placeholder-message {
+/* NFC 상태 표시 */
+.nfc-status {
     background: rgba(255, 255, 255, 0.1);
     border: 2px solid rgba(255, 255, 255, 0.2);
     border-radius: 16px;
-    padding: 40px;
+    padding: 20px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-width: 400px;
+}
+
+.nfc-indicator {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.nfc-light {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #666;
+    transition: all 0.3s ease;
+}
+
+.nfc-light.active {
+    background: #4CAF50;
+    box-shadow: 0 0 10px rgba(76, 175, 80, 0.5);
+}
+
+.nfc-light.waiting {
+    background: #FF9800;
+    box-shadow: 0 0 10px rgba(255, 152, 0, 0.5);
+}
+
+.nfc-status-text {
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 16px;
+    font-weight: 500;
+}
+
+.nfc-uid-display {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.nfc-uid-display label {
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 14px;
+}
+
+.nfc-uid-display span {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 6px;
+    padding: 6px 12px;
+    color: rgba(255, 255, 255, 0.9);
+    font-family: monospace;
+    font-size: 14px;
+    min-width: 120px;
     text-align: center;
 }
 
-.placeholder-message p {
-    color: rgba(255, 255, 255, 0.8);
+/* 액션 버튼들 */
+.action-buttons {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 30px;
+}
+
+.action-btn {
+    background: rgba(255, 255, 255, 0.15);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 12px;
+    padding: 14px 24px;
+    cursor: pointer;
+    font-size: 16px;
+    color: white;
+    transition: all 0.3s ease;
+    font-weight: 600;
+}
+
+.action-btn:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.25);
+    transform: translateY(-2px);
+}
+
+.action-btn:active:not(:disabled) {
+    transform: translateY(0);
+}
+
+.action-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.action-btn-save {
+    background: rgba(76, 175, 80, 0.3);
+    border-color: rgba(76, 175, 80, 0.5);
+}
+
+.action-btn-save:hover:not(:disabled) {
+    background: rgba(76, 175, 80, 0.5);
+}
+
+.action-btn-unregister {
+    background: rgba(244, 67, 54, 0.3);
+    border-color: rgba(244, 67, 54, 0.5);
+}
+
+.action-btn-unregister:hover:not(:disabled) {
+    background: rgba(244, 67, 54, 0.5);
+}
+
+/* 락커 그리드 컨테이너 */
+.locker-grid-container {
+    max-width: 1200px;
+    width: 100%;
+}
+
+/* 구역 섹션 */
+.zone-section {
+    margin-bottom: 40px;
+}
+
+.zone-title {
+    color: white;
+    font-size: 20px;
+    font-weight: bold;
+    margin-bottom: 16px;
+    text-align: center;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+/* 락커 그리드 */
+.locker-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+/* 락커 카드 */
+.locker-card {
+    background: rgba(255, 255, 255, 0.1);
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-radius: 12px;
+    padding: 16px 12px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-align: center;
+    min-height: 80px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+.locker-card:hover {
+    background: rgba(255, 255, 255, 0.15);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+}
+
+.locker-card.selected {
+    background: rgba(255, 215, 0, 0.2);
+    border-color: #FFD700;
+    box-shadow: 0 0 20px rgba(255, 215, 0, 0.3);
+}
+
+.locker-card.registered {
+    background: rgba(76, 175, 80, 0.15);
+    border-color: rgba(76, 175, 80, 0.4);
+}
+
+.locker-number {
     font-size: 18px;
-    line-height: 1.6;
-    margin: 10px 0;
+    font-weight: bold;
+    color: white;
+    margin-bottom: 4px;
+}
+
+.nfc-uid {
+    font-size: 12px;
+    font-family: monospace;
+    color: rgba(255, 255, 255, 0.7);
+    word-break: break-all;
+}
+
+/* 반응형 디자인 */
+@media (max-width: 768px) {
+    .locker-grid {
+        grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+        gap: 8px;
+    }
+
+    .locker-card {
+        padding: 12px 8px;
+        min-height: 70px;
+    }
+
+    .nfc-status {
+        flex-direction: column;
+        gap: 12px;
+        min-width: auto;
+    }
+
+    .action-buttons {
+        flex-direction: column;
+        width: 100%;
+        max-width: 300px;
+    }
+
+    .action-btn {
+        width: 100%;
+    }
 }
 </style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// 전역 상태
+let selectedLocker = null;
+let currentNfcUid = null;
+let lockerMappings = {};
+let barcodePollingInterval = null;
+
+// 초기화
+document.addEventListener('DOMContentLoaded', function() {
+    loadLockerMappings();
+    startBarcodePolling();
+});
+
+// 락커 매핑 데이터 로드
+async function loadLockerMappings() {
+    try {
+        const response = await fetch('/api/nfc/mappings');
+        const data = await response.json();
+
+        if (data.success) {
+            lockerMappings = {};
+
+            // 매핑 데이터를 객체로 변환 (빠른 조회용)
+            data.mappings.forEach(mapping => {
+                lockerMappings[mapping.locker_number] = mapping.nfc_uid || null;
+            });
+
+            renderLockerGrids(data.grouped);
+        } else {
+            showAlert('데이터 로드 실패: ' + (data.error || '알 수 없는 오류'));
+        }
+    } catch (error) {
+        console.error('매핑 로드 오류:', error);
+        showAlert('데이터 로드 중 오류가 발생했습니다.');
+    }
+}
+
+// 락커 그리드 렌더링
+function renderLockerGrids(grouped) {
+    renderZoneGrid('staffGrid', grouped.STAFF || [], 'S', 10);
+    renderZoneGrid('maleGrid', grouped.MALE || [], 'M', 40);
+    renderZoneGrid('femaleGrid', grouped.FEMALE || [], 'F', 10);
+}
+
+// 구역별 그리드 렌더링
+function renderZoneGrid(gridId, mappings, prefix, count) {
+    const grid = document.getElementById(gridId);
+    grid.innerHTML = '';
+
+    for (let i = 1; i <= count; i++) {
+        const lockerNumber = `${prefix}${i.toString().padStart(2, '0')}`;
+        const nfcUid = mappings.find(m => m.locker_number === lockerNumber)?.nfc_uid || null;
+
+        const card = createLockerCard(lockerNumber, nfcUid);
+        grid.appendChild(card);
+    }
+}
+
+// 락커 카드 생성
+function createLockerCard(lockerNumber, nfcUid) {
+    const card = document.createElement('div');
+    card.className = `locker-card ${nfcUid ? 'registered' : ''}`;
+    card.dataset.lockerNumber = lockerNumber;
+
+    card.innerHTML = `
+        <div class="locker-number">${lockerNumber}</div>
+        <div class="nfc-uid">${nfcUid ? nfcUid.substring(0, 6) + '...' : '---'}</div>
+    `;
+
+    card.addEventListener('click', () => selectLocker(lockerNumber));
+    return card;
+}
+
+// 락커 선택
+function selectLocker(lockerNumber) {
+    // 이전 선택 해제
+    if (selectedLocker) {
+        const prevCard = document.querySelector(`[data-locker-number="${selectedLocker}"]`);
+        if (prevCard) {
+            prevCard.classList.remove('selected');
+        }
+    }
+
+    // 새 선택
+    selectedLocker = lockerNumber;
+    const card = document.querySelector(`[data-locker-number="${lockerNumber}"]`);
+    if (card) {
+        card.classList.add('selected');
+    }
+
+    // 버튼 상태 업데이트
+    updateButtonStates();
+}
+
+// 버튼 상태 업데이트
+function updateButtonStates() {
+    const saveBtn = document.getElementById('saveBtn');
+    const unregisterBtn = document.getElementById('unregisterBtn');
+
+    if (selectedLocker && currentNfcUid) {
+        saveBtn.disabled = false;
+    } else {
+        saveBtn.disabled = true;
+    }
+
+    if (selectedLocker && lockerMappings[selectedLocker]) {
+        unregisterBtn.disabled = false;
+    } else {
+        unregisterBtn.disabled = true;
+    }
+}
+
+// 바코드 폴링 시작
+function startBarcodePolling() {
+    barcodePollingInterval = setInterval(async () => {
+        try {
+            const response = await fetch('/api/barcode/poll');
+            const data = await response.json();
+
+            if (data.has_barcode && data.barcode) {
+                onNfcDetected(data.barcode);
+            }
+        } catch (error) {
+            console.error('바코드 폴링 오류:', error);
+        }
+    }, 1000); // 1초마다 폴링
+}
+
+// NFC 감지 처리
+function onNfcDetected(nfcUid) {
+    currentNfcUid = nfcUid.toUpperCase();
+
+    // UI 업데이트
+    document.getElementById('currentNfcUid').textContent = currentNfcUid;
+    document.getElementById('nfcLight').className = 'nfc-light active';
+    document.getElementById('nfcStatusText').textContent = 'NFC 태그 감지됨';
+
+    // 버튼 상태 업데이트
+    updateButtonStates();
+
+    // 3초 후 상태 리셋 (새 태그 감지 준비)
+    setTimeout(() => {
+        if (currentNfcUid === nfcUid.toUpperCase()) {
+            document.getElementById('nfcLight').className = 'nfc-light';
+            document.getElementById('nfcStatusText').textContent = 'NFC 리더기를 준비하세요';
+        }
+    }, 3000);
+}
+
+// 저장 버튼 클릭
+async function saveNfc() {
+    if (!selectedLocker || !currentNfcUid) {
+        showAlert('락커와 NFC 태그를 모두 선택해주세요.');
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/nfc/register', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                locker_number: selectedLocker,
+                nfc_uid: currentNfcUid
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            showAlert(`✅ ${data.message}`);
+
+            // UI 업데이트
+            lockerMappings[selectedLocker] = currentNfcUid;
+            updateLockerCard(selectedLocker, currentNfcUid);
+
+            // 상태 초기화
+            currentNfcUid = null;
+            document.getElementById('currentNfcUid').textContent = '---';
+            updateButtonStates();
+        } else {
+            showAlert(`❌ 등록 실패: ${data.error}`);
+        }
+    } catch (error) {
+        console.error('NFC 등록 오류:', error);
+        showAlert('등록 중 오류가 발생했습니다.');
+    }
+}
+
+// 해제 버튼 클릭
+async function unregisterNfc() {
+    if (!selectedLocker) {
+        showAlert('락커를 선택해주세요.');
+        return;
+    }
+
+    if (!confirm(`${selectedLocker}의 NFC 등록을 해제하시겠습니까?`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/nfc/unregister/${selectedLocker}`, {
+            method: 'DELETE'
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            showAlert(`✅ ${data.message}`);
+
+            // UI 업데이트
+            lockerMappings[selectedLocker] = null;
+            updateLockerCard(selectedLocker, null);
+
+            // 상태 초기화
+            updateButtonStates();
+        } else {
+            showAlert(`❌ 해제 실패: ${data.error}`);
+        }
+    } catch (error) {
+        console.error('NFC 해제 오류:', error);
+        showAlert('해제 중 오류가 발생했습니다.');
+    }
+}
+
+// 락커 카드 업데이트
+function updateLockerCard(lockerNumber, nfcUid) {
+    const card = document.querySelector(`[data-locker-number="${lockerNumber}"]`);
+    if (card) {
+        const nfcUidElement = card.querySelector('.nfc-uid');
+
+        if (nfcUid) {
+            card.classList.add('registered');
+            nfcUidElement.textContent = nfcUid.substring(0, 6) + '...';
+        } else {
+            card.classList.remove('registered');
+            nfcUidElement.textContent = '---';
+        }
+    }
+}
+
+// 알림 표시
+function showAlert(message) {
+    // 간단한 alert 사용 (또는 모달 구현 가능)
+    alert(message);
+}
+
+// 이벤트 리스너 등록
+document.getElementById('saveBtn').addEventListener('click', saveNfc);
+document.getElementById('unregisterBtn').addEventListener('click', unregisterNfc);
+
+// 페이지 언로드 시 폴링 중지
+window.addEventListener('beforeunload', function() {
+    if (barcodePollingInterval) {
+        clearInterval(barcodePollingInterval);
+    }
+});
+</script>
 {% endblock %}
 
