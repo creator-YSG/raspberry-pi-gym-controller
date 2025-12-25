@@ -482,7 +482,12 @@ function startBarcodePolling() {
 
 // NFC 감지 처리
 function onNfcDetected(nfcUid) {
-    currentNfcUid = nfcUid.toUpperCase();
+    // NFC: 접두사 제거 (ESP32에서 "NFC:XXXXXX" 형식으로 전송됨)
+    let cleanUid = nfcUid.toUpperCase();
+    if (cleanUid.startsWith('NFC:')) {
+        cleanUid = cleanUid.substring(4);
+    }
+    currentNfcUid = cleanUid;
 
     // UI 업데이트
     document.getElementById('currentNfcUid').textContent = currentNfcUid;
