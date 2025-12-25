@@ -1,0 +1,107 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}센서 매핑 점검{% endblock %}
+
+{% block body_class %}settings-page{% endblock %}
+
+{% block content %}
+<div class="settings-container">
+    <!-- 좌측 상단: 뒤로가기 버튼 -->
+    <div class="back-button-container">
+        <button class="back-button" onclick="window.location.href='/'">
+            ← 홈으로
+        </button>
+    </div>
+
+    <!-- 페이지 제목 -->
+    <div class="settings-header">
+        <h1>📡 센서 매핑 점검</h1>
+    </div>
+
+    <!-- 컨텐츠 영역 -->
+    <div class="settings-content">
+        <div class="placeholder-message">
+            <p>이 화면은 아직 구현 중입니다.</p>
+            <p>각 센서의 매핑 상태를 확인하고 테스트하는 기능이 추가될 예정입니다.</p>
+        </div>
+    </div>
+</div>
+
+<style>
+.settings-container {
+    min-height: 100vh;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.back-button-container {
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    z-index: 1000;
+}
+
+.back-button {
+    background: rgba(255, 255, 255, 0.15);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 12px;
+    padding: 12px 20px;
+    cursor: pointer;
+    font-size: 18px;
+    color: white;
+    transition: all 0.3s ease;
+}
+
+.back-button:hover {
+    background: rgba(255, 255, 255, 0.25);
+    transform: scale(1.05);
+}
+
+.back-button:active {
+    transform: scale(0.95);
+}
+
+.settings-header {
+    margin-top: 60px;
+    margin-bottom: 40px;
+    text-align: center;
+}
+
+.settings-header h1 {
+    color: white;
+    font-size: 32px;
+    font-weight: bold;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.settings-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    max-width: 500px;
+    width: 100%;
+    padding: 20px;
+}
+
+.placeholder-message {
+    background: rgba(255, 255, 255, 0.1);
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-radius: 16px;
+    padding: 40px;
+    text-align: center;
+}
+
+.placeholder-message p {
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 18px;
+    line-height: 1.6;
+    margin: 10px 0;
+}
+</style>
+{% endblock %}
+

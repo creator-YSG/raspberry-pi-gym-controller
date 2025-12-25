@@ -250,3 +250,45 @@ def face_auth():
                          page_class='face-auth-page')
 
 
+# ========== 설정 메뉴 라우트 ==========
+
+@bp.route('/settings')
+def settings():
+    """설정 메뉴 화면"""
+    return render_template('pages/settings.html',
+                         title='설정',
+                         page_class='settings-page')
+
+
+@bp.route('/settings/face-register')
+def settings_face_register():
+    """얼굴인식 등록 화면"""
+    return render_template('pages/settings_face_register.html',
+                         title='얼굴인식 등록',
+                         page_class='settings-page')
+
+
+@bp.route('/settings/sensor-mapping')
+def settings_sensor_mapping():
+    """센서 매핑 점검 화면"""
+    return render_template('pages/settings_sensor_mapping.html',
+                         title='센서 매핑 점검',
+                         page_class='settings-page')
+
+
+@bp.route('/settings/nfc-register')
+def settings_nfc_register():
+    """NFC 태그 등록 화면"""
+    return render_template('pages/settings_nfc_register.html',
+                         title='NFC 태그 등록',
+                         page_class='settings-page')
+
+
+@bp.route('/settings/sheets-sync')
+def settings_sheets_sync():
+    """구글시트 즉시 동기화 화면"""
+    return render_template('pages/settings_sheets_sync.html',
+                         title='구글시트 동기화',
+                         page_class='settings-page')
+
+

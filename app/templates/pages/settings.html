@@ -1,0 +1,365 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}설정{% endblock %}
+
+{% block body_class %}settings-page{% endblock %}
+
+{% block content %}
+<div class="settings-container">
+    <!-- 좌측 상단: 뒤로가기 버튼 -->
+    <div class="back-button-container">
+        <button class="back-button" onclick="window.location.href='/'">
+            ← 홈으로
+        </button>
+    </div>
+
+    <!-- 페이지 제목 -->
+    <div class="settings-header">
+        <h1>⚙️ 설정</h1>
+    </div>
+
+    <!-- 메뉴 그리드 -->
+    <div class="settings-menu-grid">
+        <!-- 1. 얼굴인식 등록 -->
+        <button class="menu-item" onclick="window.location.href='/settings/face-register'">
+            <span class="menu-icon">👤</span>
+            <span class="menu-label">얼굴인식 등록</span>
+        </button>
+
+        <!-- 2. 센서 매핑 점검 -->
+        <button class="menu-item" onclick="window.location.href='/settings/sensor-mapping'">
+            <span class="menu-icon">📡</span>
+            <span class="menu-label">센서 매핑 점검</span>
+        </button>
+
+        <!-- 3. NFC 태그 등록 -->
+        <button class="menu-item" onclick="window.location.href='/settings/nfc-register'">
+            <span class="menu-icon">🔖</span>
+            <span class="menu-label">NFC 태그 등록</span>
+        </button>
+
+        <!-- 4. 구글시트 즉시 동기화 -->
+        <button class="menu-item" onclick="window.location.href='/settings/sheets-sync'">
+            <span class="menu-icon">📊</span>
+            <span class="menu-label">구글시트 동기화</span>
+        </button>
+
+        <!-- 5. 시스템 상태 모니터링 -->
+        <button class="menu-item" onclick="showSystemStatus()">
+            <span class="menu-icon">💻</span>
+            <span class="menu-label">시스템 상태</span>
+        </button>
+
+        <!-- 6. ESP32 재연결 -->
+        <button class="menu-item" onclick="reconnectESP32()">
+            <span class="menu-icon">🔌</span>
+            <span class="menu-label">ESP32 재연결</span>
+        </button>
+
+        <!-- 7. 동기화 상태 조회 -->
+        <button class="menu-item" onclick="showSyncStatus()">
+            <span class="menu-icon">🔄</span>
+            <span class="menu-label">동기화 상태</span>
+        </button>
+
+        <!-- 8. 프로그램 종료 -->
+        <button class="menu-item menu-item-danger" onclick="confirmShutdown()">
+            <span class="menu-icon">🚪</span>
+            <span class="menu-label">프로그램 종료</span>
+        </button>
+    </div>
+
+    <!-- 모달 팝업 (상태 표시용) -->
+    <div class="modal-overlay" id="modalOverlay" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header" id="modalHeader">상태</div>
+            <div class="modal-body" id="modalBody">로딩 중...</div>
+            <button class="modal-close-btn" onclick="closeModal()">닫기</button>
+        </div>
+    </div>
+</div>
+
+<style>
+.settings-container {
+    min-height: 100vh;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+/* 뒤로가기 버튼 */
+.back-button-container {
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    z-index: 1000;
+}
+
+.back-button {
+    background: rgba(255, 255, 255, 0.15);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 12px;
+    padding: 12px 20px;
+    cursor: pointer;
+    font-size: 18px;
+    color: white;
+    transition: all 0.3s ease;
+}
+
+.back-button:hover {
+    background: rgba(255, 255, 255, 0.25);
+    transform: scale(1.05);
+}
+
+.back-button:active {
+    transform: scale(0.95);
+}
+
+/* 페이지 헤더 */
+.settings-header {
+    margin-top: 60px;
+    margin-bottom: 40px;
+    text-align: center;
+}
+
+.settings-header h1 {
+    color: white;
+    font-size: 36px;
+    font-weight: bold;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* 메뉴 그리드 */
+.settings-menu-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 20px;
+    max-width: 500px;
+    width: 100%;
+    padding: 0 10px;
+}
+
+.menu-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.1);
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-radius: 16px;
+    padding: 30px 20px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.menu-item:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: translateY(-5px);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+.menu-item:active {
+    transform: translateY(0);
+}
+
+.menu-item-danger {
+    background: rgba(220, 53, 69, 0.3);
+    border-color: rgba(220, 53, 69, 0.5);
+}
+
+.menu-item-danger:hover {
+    background: rgba(220, 53, 69, 0.5);
+}
+
+.menu-icon {
+    font-size: 48px;
+    margin-bottom: 12px;
+}
+
+.menu-label {
+    color: white;
+    font-size: 16px;
+    font-weight: 600;
+    text-align: center;
+}
+
+/* 모달 팝업 */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000;
+}
+
+.modal-content {
+    background: #1a1a2e;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 20px;
+    padding: 30px;
+    max-width: 90%;
+    width: 400px;
+    max-height: 80%;
+    overflow-y: auto;
+}
+
+.modal-header {
+    color: white;
+    font-size: 24px;
+    font-weight: bold;
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+.modal-body {
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 16px;
+    line-height: 1.6;
+    margin-bottom: 20px;
+    white-space: pre-wrap;
+}
+
+.modal-close-btn {
+    width: 100%;
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    border-radius: 10px;
+    padding: 15px;
+    color: white;
+    font-size: 18px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.modal-close-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// 모달 표시
+function showModal(title, content) {
+    document.getElementById('modalHeader').textContent = title;
+    document.getElementById('modalBody').innerHTML = content;
+    document.getElementById('modalOverlay').style.display = 'flex';
+}
+
+// 모달 닫기
+function closeModal() {
+    document.getElementById('modalOverlay').style.display = 'none';
+}
+
+// 시스템 상태 조회
+function showSystemStatus() {
+    showModal('💻 시스템 상태', '로딩 중...');
+    
+    fetch('/api/system/status')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.status) {
+                const sys = data.status.system || {};
+                const content = `
+<b>CPU 사용률:</b> ${sys.cpu_percent || 'N/A'}%
+<b>메모리 사용:</b> ${sys.memory_used_gb || 'N/A'}GB / ${sys.memory_total_gb || 'N/A'}GB (${sys.memory_percent || 'N/A'}%)
+<b>디스크 사용:</b> ${sys.disk_used_gb || 'N/A'}GB / ${sys.disk_total_gb || 'N/A'}GB (${sys.disk_percent || 'N/A'}%)
+<b>가동 시간:</b> ${sys.uptime || 'N/A'}
+                `;
+                showModal('💻 시스템 상태', content);
+            } else {
+                showModal('💻 시스템 상태', '상태 조회 실패: ' + (data.error || '알 수 없는 오류'));
+            }
+        })
+        .catch(error => {
+            showModal('💻 시스템 상태', '오류 발생: ' + error.message);
+        });
+}
+
+// ESP32 재연결
+function reconnectESP32() {
+    showModal('🔌 ESP32 재연결', '재연결 시도 중...');
+    
+    fetch('/api/system/esp32/reconnect', { method: 'POST' })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showModal('🔌 ESP32 재연결', '✅ ' + data.message);
+            } else {
+                showModal('🔌 ESP32 재연결', '❌ 재연결 실패: ' + (data.error || data.message));
+            }
+        })
+        .catch(error => {
+            showModal('🔌 ESP32 재연결', '오류 발생: ' + error.message);
+        });
+}
+
+// 동기화 상태 조회
+function showSyncStatus() {
+    showModal('🔄 동기화 상태', '로딩 중...');
+    
+    fetch('/api/sync/status')
+        .then(response => response.json())
+        .then(data => {
+            let content = '';
+            if (data.success) {
+                const stats = data.stats || {};
+                content = `
+<b>스케줄러 상태:</b> ${data.running ? '✅ 실행 중' : '❌ 중지됨'}
+<b>총 동기화 횟수:</b> ${stats.total_syncs || 0}회
+<b>성공:</b> ${stats.successful_syncs || 0}회
+<b>실패:</b> ${stats.failed_syncs || 0}회
+<b>마지막 동기화:</b> ${stats.last_sync_time || 'N/A'}
+                `;
+            } else {
+                content = '❌ 스케줄러 미실행\n' + (data.error || '');
+            }
+            showModal('🔄 동기화 상태', content);
+        })
+        .catch(error => {
+            showModal('🔄 동기화 상태', '오류 발생: ' + error.message);
+        });
+}
+
+// 프로그램 종료 확인
+function confirmShutdown() {
+    if (confirm('정말로 프로그램을 종료하시겠습니까?\n\nFlask 앱과 브라우저가 모두 종료됩니다.')) {
+        showModal('🚪 프로그램 종료', '종료 중...');
+        
+        fetch('/api/system/shutdown', { method: 'POST' })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showModal('🚪 프로그램 종료', '✅ ' + data.message + '\n\n잠시 후 브라우저를 닫습니다.');
+                    // 브라우저 닫기 시도
+                    setTimeout(() => {
+                        window.close();
+                        // window.close()가 안 될 경우 빈 페이지로 이동
+                        window.location.href = 'about:blank';
+                    }, 2000);
+                } else {
+                    showModal('🚪 프로그램 종료', '❌ 종료 실패: ' + (data.error || data.message));
+                }
+            })
+            .catch(error => {
+                showModal('🚪 프로그램 종료', '오류 발생: ' + error.message);
+            });
+    }
+}
+
+// 모달 외부 클릭 시 닫기
+document.getElementById('modalOverlay').addEventListener('click', function(e) {
+    if (e.target === this) {
+        closeModal();
+    }
+});
+</script>
+{% endblock %}
+
