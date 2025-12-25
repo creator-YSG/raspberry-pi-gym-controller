@@ -2719,24 +2719,53 @@ def search_members():
 
         # DB 연결
         db = member_service.db
-        cursor = db.execute_query("""
-            SELECT
-                member_id,
-                member_name,
-                member_category,
-                face_embedding IS NOT NULL as face_registered,
-                face_registered_at
-            FROM members
-            WHERE member_id LIKE ? OR member_name LIKE ?
-            ORDER BY
-                CASE
-                    WHEN member_id = ? THEN 1
-                    WHEN member_name = ? THEN 2
-                    ELSE 3
-                END,
-                member_id
-            LIMIT ?
-        """, (search_pattern, search_pattern, query, query, limit))
+        
+        # face_embedding 컬럼 존재 여부 확인
+        test_cursor = db.execute_query("PRAGMA table_info(members)")
+        columns = [row['name'] for row in test_cursor.fetchall()] if test_cursor else []
+        has_face_embedding = 'face_embedding' in columns
+        
+        # 쿼리 생성 (face_embedding 컬럼이 있을 때만 포함)
+        if has_face_embedding:
+            query_sql = """
+                SELECT
+                    member_id,
+                    member_name,
+                    member_category,
+                    face_embedding IS NOT NULL as face_registered,
+                    face_registered_at
+                FROM members
+                WHERE member_id LIKE ? OR member_name LIKE ?
+                ORDER BY
+                    CASE
+                        WHEN member_id = ? THEN 1
+                        WHEN member_name = ? THEN 2
+                        ELSE 3
+                    END,
+                    member_id
+                LIMIT ?
+            """
+        else:
+            query_sql = """
+                SELECT
+                    member_id,
+                    member_name,
+                    member_category,
+                    0 as face_registered,
+                    NULL as face_registered_at
+                FROM members
+                WHERE member_id LIKE ? OR member_name LIKE ?
+                ORDER BY
+                    CASE
+                        WHEN member_id = ? THEN 1
+                        WHEN member_name = ? THEN 2
+                        ELSE 3
+                    END,
+                    member_id
+                LIMIT ?
+            """
+        
+        cursor = db.execute_query(query_sql, (search_pattern, search_pattern, query, query, limit))
 
         if not cursor:
             current_app.logger.warning("회원 검색 쿼리 실패")
