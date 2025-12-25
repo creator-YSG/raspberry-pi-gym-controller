@@ -677,6 +677,27 @@ let selectedMemberName = null;
 let currentLang = 'ko';
 let jamoBuffer = []; // 한글 자모 버퍼
 
+// 페이지 로드 시 터치 이벤트 바인딩
+document.addEventListener('DOMContentLoaded', function() {
+    // 모든 키 버튼에 터치 이벤트 추가
+    document.querySelectorAll('.key').forEach(function(btn) {
+        btn.addEventListener('touchend', function(e) {
+            e.preventDefault();
+            this.click();
+        }, {passive: false});
+    });
+    
+    // 언어 전환 버튼
+    document.querySelectorAll('.lang-btn').forEach(function(btn) {
+        btn.addEventListener('touchend', function(e) {
+            e.preventDefault();
+            this.click();
+        }, {passive: false});
+    });
+    
+    console.log('키보드 터치 이벤트 바인딩 완료');
+});
+
 // 언어 전환
 function setLang(lang) {
     currentLang = lang;
