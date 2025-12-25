@@ -169,6 +169,8 @@ let isProcessingBarcode = false;
 let sensorDebugMode = false;
 let sensorNotificationTimeout = null;
 let cameraEnabled = true; // 카메라 기반 얼굴인식 활성화 여부
+let nfcDoorCloseTimer = null;
+let nfcDoorDeviceId = null;
 
 // 페이지 로드 시 초기화
 document.addEventListener('DOMContentLoaded', function() {
@@ -434,8 +436,25 @@ function clearBarcodeQueue() {
     }
 }
 
+// NFC 문 닫기 헬퍼 함수
+function closeDoorNow() {
+    if (nfcDoorCloseTimer) {
+        clearTimeout(nfcDoorCloseTimer);
+        nfcDoorCloseTimer = null;
+    }
+    if (nfcDoorDeviceId) {
+        fetch('/api/hardware/motor_move', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ revs: -0.917, rpm: 30, device_id: nfcDoorDeviceId })
+        });
+        nfcDoorDeviceId = null;
+    }
+}
+
 // 화면 전환
 function navigateTo(page, params) {
+    closeDoorNow();  // 추가
     const queryString = new URLSearchParams(params).toString();
     const url = `/${page}${queryString ? '?' + queryString : ''}`;
     console.log('🔄 이동:', url);
@@ -484,6 +503,7 @@ document.addEventListener('keydown', function(e) {
 
 // 페이지 떠날 때 정리
 window.addEventListener('beforeunload', function() {
+    closeDoorNow();  // 추가
     // 바코드 폴링 중지
     if (pollingInterval) {
         clearInterval(pollingInterval);
@@ -520,27 +540,24 @@ function handleNFCScanned(nfcUid) {
                 const zone = data.locker_info.zone;
                 const lockerNumber = data.locker_info.locker_number;
                 const deviceId = zone === 'STAFF' ? 'esp32_staff' : 'esp32_male_female';
-                
+                nfcDoorDeviceId = deviceId;  // 저장
+
                 // 락커 번호 알림 표시
                 const notification = document.getElementById('nfcLockerNotification');
                 const lockerDisplay = document.getElementById('lockerNumberDisplay');
                 lockerDisplay.textContent = `${lockerNumber}번 락커`;
                 notification.style.display = 'block';
-                
+
                 // 문 열기
                 fetch('/api/hardware/motor_move', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ revs: 0.917, rpm: 30, device_id: deviceId })
                 });
-                
-                // 10초 후 문 닫기 + 알림 숨기기
-                setTimeout(() => {
-                    fetch('/api/hardware/motor_move', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ revs: -0.917, rpm: 30, device_id: deviceId })
-                    });
+
+                // 10초 후 문 닫기 (타이머 저장)
+                nfcDoorCloseTimer = setTimeout(() => {
+                    closeDoorNow();
                     notification.style.display = 'none';
                 }, 10000);
                 
