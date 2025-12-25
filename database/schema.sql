@@ -149,6 +149,21 @@ CREATE TABLE IF NOT EXISTS sensor_events (
 );
 
 -- =====================================================
+-- 센서 매핑 테이블 (ESP32 센서 → 락커 매핑)
+-- =====================================================
+CREATE TABLE IF NOT EXISTS sensor_mapping (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    addr TEXT NOT NULL,                  -- ESP32 MCP23017 I2C 주소 ("0x26", "0x23" 등)
+    chip_idx INTEGER NOT NULL,           -- ESP32 내 MCP 칩 인덱스 (0, 1, 2, 3)
+    pin INTEGER NOT NULL,                -- MCP23017 핀 번호 (0-15)
+    sensor_num INTEGER NOT NULL,         -- 논리적 센서 번호 (1-60)
+    locker_id TEXT,                      -- 락커 ID ("M01", "S01" 등)
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(addr, chip_idx, pin)
+);
+
+-- =====================================================
 -- 인덱스 생성
 -- =====================================================
 
@@ -183,6 +198,11 @@ CREATE INDEX IF NOT EXISTS idx_sensor_member ON sensor_events(member_id);
 CREATE INDEX IF NOT EXISTS idx_sensor_rental ON sensor_events(rental_id);
 CREATE INDEX IF NOT EXISTS idx_sensor_timestamp ON sensor_events(event_timestamp);
 CREATE INDEX IF NOT EXISTS idx_sensor_context ON sensor_events(session_context);
+
+-- 센서 매핑 테이블 인덱스
+CREATE INDEX IF NOT EXISTS idx_sensor_mapping_addr_chip_pin ON sensor_mapping(addr, chip_idx, pin);
+CREATE INDEX IF NOT EXISTS idx_sensor_mapping_sensor_num ON sensor_mapping(sensor_num);
+CREATE INDEX IF NOT EXISTS idx_sensor_mapping_locker_id ON sensor_mapping(locker_id);
 
 -- =====================================================
 -- 기본 데이터 삽입
@@ -224,6 +244,39 @@ INSERT OR IGNORE INTO locker_status (locker_number, zone, device_id, size) VALUE
 ('F09', 'FEMALE', 'esp32_male_female', 'medium'), ('F10', 'FEMALE', 'esp32_male_female', 'medium');
 
 -- =====================================================
+-- 센서 매핑 기본 데이터 (ESP32 센서 → 락커 매핑)
+-- =====================================================
+
+-- 기존 하드코딩 데이터를 DB로 마이그레이션 (app/__init__.py 기준)
+INSERT OR IGNORE INTO sensor_mapping (addr, chip_idx, pin, sensor_num, locker_id) VALUES
+-- addr=0x26, Chip0 → 교직원 (S01-S10)
+('0x26', 0, 1, 1, 'S01'), ('0x26', 0, 0, 2, 'S02'), ('0x26', 0, 6, 3, 'S03'), ('0x26', 0, 5, 4, 'S04'),
+('0x26', 0, 4, 5, 'S05'), ('0x26', 0, 3, 6, 'S06'), ('0x26', 0, 2, 7, 'S07'), ('0x26', 0, 9, 8, 'S08'),
+('0x26', 0, 8, 9, 'S09'), ('0x26', 0, 7, 10, 'S10'),
+
+-- addr=0x23, Chip0 → 남성 (M01-M10)
+('0x23', 0, 1, 11, 'M01'), ('0x23', 0, 2, 12, 'M02'), ('0x23', 0, 0, 13, 'M03'), ('0x23', 0, 6, 14, 'M04'),
+('0x23', 0, 5, 15, 'M05'), ('0x23', 0, 3, 16, 'M06'), ('0x23', 0, 4, 17, 'M07'), ('0x23', 0, 9, 18, 'M08'),
+('0x23', 0, 7, 19, 'M09'), ('0x23', 0, 8, 20, 'M10'),
+
+-- addr=0x25, Chip1 → 남성 (M11-M20)
+('0x25', 1, 0, 21, 'M11'), ('0x25', 1, 3, 22, 'M12'), ('0x25', 1, 1, 23, 'M13'), ('0x25', 1, 2, 24, 'M14'),
+('0x25', 1, 5, 25, 'M15'), ('0x25', 1, 7, 26, 'M16'), ('0x25', 1, 4, 27, 'M17'), ('0x25', 1, 6, 28, 'M18'),
+('0x25', 1, 8, 29, 'M19'), ('0x25', 1, 9, 30, 'M20'),
+
+-- addr=0x26, Chip2 → 남성 (M21-M30, M34-M35, M38-M40)
+('0x26', 2, 5, 31, 'M21'), ('0x26', 2, 6, 32, 'M22'), ('0x26', 2, 7, 33, 'M23'), ('0x26', 2, 10, 34, 'M24'),
+('0x26', 2, 11, 35, 'M25'), ('0x26', 2, 9, 36, 'M26'), ('0x26', 2, 8, 37, 'M27'), ('0x26', 2, 14, 38, 'M28'),
+('0x26', 2, 13, 39, 'M29'), ('0x26', 2, 12, 40, 'M30'), ('0x26', 2, 0, 44, 'M34'), ('0x26', 2, 1, 45, 'M35'),
+('0x26', 2, 3, 48, 'M38'), ('0x26', 2, 2, 49, 'M39'), ('0x26', 2, 4, 50, 'M40'),
+
+-- addr=0x27, Chip3 → 남성 (M31-M33, M36-M37) + 여성 (F01-F10)
+('0x27', 3, 10, 41, 'M31'), ('0x27', 3, 14, 42, 'M32'), ('0x27', 3, 11, 43, 'M33'), ('0x27', 3, 12, 46, 'M36'),
+('0x27', 3, 13, 47, 'M37'), ('0x27', 3, 0, 51, 'F01'), ('0x27', 3, 1, 52, 'F03'), ('0x27', 3, 2, 53, 'F02'),
+('0x27', 3, 3, 54, 'F07'), ('0x27', 3, 4, 55, 'F06'), ('0x27', 3, 5, 56, 'F04'), ('0x27', 3, 6, 57, 'F05'),
+('0x27', 3, 7, 58, 'F10'), ('0x27', 3, 8, 59, 'F09'), ('0x27', 3, 9, 60, 'F08');
+
+-- =====================================================
 -- 트리거 생성 (자동 업데이트)
 -- =====================================================
 
@@ -260,9 +313,17 @@ BEGIN
 END;
 
 -- system_settings 테이블 updated_at 자동 업데이트
-CREATE TRIGGER IF NOT EXISTS update_system_settings_timestamp 
+CREATE TRIGGER IF NOT EXISTS update_system_settings_timestamp
     AFTER UPDATE ON system_settings
     FOR EACH ROW
 BEGIN
     UPDATE system_settings SET updated_at = CURRENT_TIMESTAMP WHERE setting_key = NEW.setting_key;
+END;
+
+-- sensor_mapping 테이블 updated_at 자동 업데이트
+CREATE TRIGGER IF NOT EXISTS update_sensor_mapping_timestamp
+    AFTER UPDATE ON sensor_mapping
+    FOR EACH ROW
+BEGIN
+    UPDATE sensor_mapping SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
 END;

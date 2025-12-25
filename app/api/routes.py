@@ -2978,6 +2978,265 @@ def unregister_nfc(locker_number):
 
 
 # ==========================================
+# 센서 매핑 관리 API
+# ==========================================
+
+@bp.route('/sensor/mappings', methods=['GET'])
+def get_sensor_mappings():
+    """모든 센서 매핑 조회"""
+    try:
+        from database.database_manager import DatabaseManager
+
+        db_manager = DatabaseManager()
+        if not db_manager.connect():
+            return jsonify({
+                'success': False,
+                'error': '데이터베이스 연결 실패'
+            }), 500
+
+        mappings = db_manager.get_all_sensor_mappings()
+
+        # 구역별로 정리
+        male_zone = [m for m in mappings if m['locker_id'].startswith('M')]
+        female_zone = [m for m in mappings if m['locker_id'].startswith('F')]
+        staff_zone = [m for m in mappings if m['locker_id'].startswith('S')]
+
+        return jsonify({
+            'success': True,
+            'mappings': {
+                'male_zone': male_zone,
+                'female_zone': female_zone,
+                'staff_zone': staff_zone,
+                'total_mappings': len(mappings)
+            }
+        })
+
+    except Exception as e:
+        current_app.logger.error(f'센서 매핑 조회 오류: {e}')
+        return jsonify({
+            'success': False,
+            'error': f'센서 매핑 조회 중 오류가 발생했습니다: {str(e)}'
+        }), 500
+
+
+@bp.route('/sensor/register', methods=['POST'])
+def register_sensor_mapping():
+    """센서 매핑 등록"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({
+                'success': False,
+                'error': 'JSON 데이터가 필요합니다.'
+            }), 400
+
+        addr = data.get('addr')
+        chip_idx = data.get('chip_idx')
+        pin = data.get('pin')
+        locker_id = data.get('locker_id')
+
+        if not all([addr, chip_idx is not None, pin is not None, locker_id]):
+            return jsonify({
+                'success': False,
+                'error': 'addr, chip_idx, pin, locker_id 모두 필요합니다.'
+            }), 400
+
+        from database.database_manager import DatabaseManager
+
+        db_manager = DatabaseManager()
+        if not db_manager.connect():
+            return jsonify({
+                'success': False,
+                'error': '데이터베이스 연결 실패'
+            }), 500
+
+        # 센서 번호는 locker_id에서 추출 (M01 -> 1, F01 -> 51, S01 -> 1)
+        if locker_id.startswith('M'):
+            sensor_num = int(locker_id[1:])  # M01 -> 1, M40 -> 40
+        elif locker_id.startswith('F'):
+            sensor_num = 50 + int(locker_id[1:])  # F01 -> 51, F10 -> 60
+        elif locker_id.startswith('S'):
+            sensor_num = int(locker_id[1:])  # S01 -> 1, S10 -> 10
+        else:
+            return jsonify({
+                'success': False,
+                'error': f'잘못된 락커 ID 형식: {locker_id}'
+            }), 400
+
+        success = db_manager.add_sensor_mapping(addr, chip_idx, pin, sensor_num, locker_id)
+
+        if success:
+            # 구글 시트 동기화
+            try:
+                from app.services.sheets_sync import SheetsSync
+                sheets_sync = SheetsSync()
+                if sheets_sync.connect():
+                    # 센서매핑 시트에 업로드
+                    sheets_sync.upload_sensor_mappings(db_manager)
+                    current_app.logger.info(f'구글 시트 동기화 완료 (센서 매핑 등록): {locker_id}')
+            except Exception as sync_error:
+                current_app.logger.warning(f'구글 시트 동기화 실패 (무시): {sync_error}')
+
+            return jsonify({
+                'success': True,
+                'message': f'센서 매핑 등록 완료: {locker_id}',
+                'mapping': {
+                    'addr': addr,
+                    'chip_idx': chip_idx,
+                    'pin': pin,
+                    'sensor_num': sensor_num,
+                    'locker_id': locker_id
+                }
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': '센서 매핑 등록 실패 (중복 또는 오류)'
+            }), 400
+
+    except Exception as e:
+        current_app.logger.error(f'센서 매핑 등록 오류: {e}')
+        return jsonify({
+            'success': False,
+            'error': '센서 매핑 등록 중 오류가 발생했습니다.'
+        }), 500
+
+
+@bp.route('/sensor/unregister/<locker_id>', methods=['DELETE'])
+def unregister_sensor_mapping(locker_id):
+    """센서 매핑 해제"""
+    try:
+        from database.database_manager import DatabaseManager
+
+        db_manager = DatabaseManager()
+        if not db_manager.connect():
+            return jsonify({
+                'success': False,
+                'error': '데이터베이스 연결 실패'
+            }), 500
+
+        success = db_manager.delete_sensor_mapping(locker_id)
+
+        if success:
+            # 구글 시트 동기화
+            try:
+                from app.services.sheets_sync import SheetsSync
+                sheets_sync = SheetsSync()
+                if sheets_sync.connect():
+                    sheets_sync.upload_sensor_mappings(db_manager)
+                    current_app.logger.info(f'구글 시트 동기화 완료 (센서 매핑 해제): {locker_id}')
+            except Exception as sync_error:
+                current_app.logger.warning(f'구글 시트 동기화 실패 (무시): {sync_error}')
+
+            return jsonify({
+                'success': True,
+                'message': f'센서 매핑 해제 완료: {locker_id}'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': f'센서 매핑을 찾을 수 없습니다: {locker_id}'
+            }), 404
+
+    except Exception as e:
+        current_app.logger.error(f'센서 매핑 해제 오류: {e}')
+        return jsonify({
+            'success': False,
+            'error': '센서 매핑 해제 중 오류가 발생했습니다.'
+        }), 500
+
+
+# ==========================================
+# 문 제어 API
+# ==========================================
+
+@bp.route('/esp32/door/open-all', methods=['POST'])
+def open_all_doors():
+    """전체 문 열기 (양쪽 ESP32 모두)"""
+    try:
+        esp32_manager = getattr(current_app, 'esp32_manager', None)
+        if not esp32_manager:
+            return jsonify({
+                'success': False,
+                'error': 'ESP32 매니저가 초기화되지 않았습니다.'
+            }), 500
+
+        current_app.logger.info('전체 문 열기 시작 (esp32_staff + esp32_male_female)')
+
+        # 두 ESP32 모두에 모터 명령 전송
+        results = {}
+        device_ids = ["esp32_staff", "esp32_male_female"]
+
+        for device_id in device_ids:
+            try:
+                success = esp32_manager.send_command(device_id, "MOTOR_MOVE", revs=0.917, rpm=30)
+                results[device_id] = "성공" if success else "실패"
+                current_app.logger.info(f'문 열기 명령 전송: {device_id} - {"성공" if success else "실패"}')
+            except Exception as cmd_error:
+                results[device_id] = f"오류: {str(cmd_error)}"
+                current_app.logger.error(f'문 열기 명령 전송 실패: {device_id}, {cmd_error}')
+
+        # 하나라도 성공하면 전체 성공으로 처리
+        overall_success = any("성공" in result for result in results.values())
+
+        return jsonify({
+            'success': overall_success,
+            'message': '전체 문 열기 명령 전송 완료',
+            'results': results
+        })
+
+    except Exception as e:
+        current_app.logger.error(f'전체 문 열기 오류: {e}')
+        return jsonify({
+            'success': False,
+            'error': f'전체 문 열기 중 오류가 발생했습니다: {str(e)}'
+        }), 500
+
+
+@bp.route('/esp32/door/close-all', methods=['POST'])
+def close_all_doors():
+    """전체 문 닫기 (양쪽 ESP32 모두)"""
+    try:
+        esp32_manager = getattr(current_app, 'esp32_manager', None)
+        if not esp32_manager:
+            return jsonify({
+                'success': False,
+                'error': 'ESP32 매니저가 초기화되지 않았습니다.'
+            }), 500
+
+        current_app.logger.info('전체 문 닫기 시작 (esp32_staff + esp32_male_female)')
+
+        # 두 ESP32 모두에 모터 명령 전송
+        results = {}
+        device_ids = ["esp32_staff", "esp32_male_female"]
+
+        for device_id in device_ids:
+            try:
+                success = esp32_manager.send_command(device_id, "MOTOR_MOVE", revs=-0.917, rpm=30)
+                results[device_id] = "성공" if success else "실패"
+                current_app.logger.info(f'문 닫기 명령 전송: {device_id} - {"성공" if success else "실패"}')
+            except Exception as cmd_error:
+                results[device_id] = f"오류: {str(cmd_error)}"
+                current_app.logger.error(f'문 닫기 명령 전송 실패: {device_id}, {cmd_error}')
+
+        # 하나라도 성공하면 전체 성공으로 처리
+        overall_success = any("성공" in result for result in results.values())
+
+        return jsonify({
+            'success': overall_success,
+            'message': '전체 문 닫기 명령 전송 완료',
+            'results': results
+        })
+
+    except Exception as e:
+        current_app.logger.error(f'전체 문 닫기 오류: {e}')
+        return jsonify({
+            'success': False,
+            'error': f'전체 문 닫기 중 오류가 발생했습니다: {str(e)}'
+        }), 500
+
+
+# ==========================================
 # 동기화 관련 API
 # ==========================================
 

@@ -590,9 +590,57 @@ class SheetsSync:
             
             logger.info(f"[SheetsSync] 센서 이벤트 업로드 완료: {len(rows)}건")
             return len(rows)
-            
+
         except Exception as e:
             logger.error(f"[SheetsSync] 센서 이벤트 업로드 오류: {e}")
+            return 0
+
+    def upload_sensor_mappings(self, db_manager) -> int:
+        """센서 매핑 업로드"""
+        try:
+            worksheet = self._get_worksheet("sensor_mappings")
+            if not worksheet:
+                return 0
+
+            # 모든 센서 매핑 조회
+            mappings = db_manager.get_all_sensor_mappings()
+            if not mappings:
+                logger.info("[SheetsSync] 업로드할 센서 매핑 없음")
+                return 0
+
+            rows = []
+            for mapping in mappings:
+                rows.append([
+                    mapping.get('locker_id', ''),
+                    mapping.get('addr', ''),
+                    mapping.get('chip_idx', ''),
+                    mapping.get('pin', ''),
+                    mapping.get('sensor_num', ''),
+                    mapping.get('created_at', '')
+                ])
+
+            # 헤더 포함 전체 데이터 구성
+            headers = ["locker_id", "addr", "chip_idx", "pin", "sensor_num", "created_at"]
+            all_rows = [headers] + rows
+
+            # 시트 전체 업데이트
+            self._rate_limit()
+            worksheet.clear()
+            self._rate_limit()
+            worksheet.update(values=all_rows, range_name='A1')
+
+            # 헤더 스타일
+            self._rate_limit()
+            worksheet.format('A1:F1', {
+                'textFormat': {'bold': True},
+                'backgroundColor': {'red': 0.9, 'green': 0.9, 'blue': 0.9}
+            })
+
+            logger.info(f"[SheetsSync] 센서 매핑 업로드 완료: {len(rows)}건")
+            return len(rows)
+
+        except Exception as e:
+            logger.error(f"[SheetsSync] 센서 매핑 업로드 오류: {e}")
             return 0
     
     # =============================
@@ -622,6 +670,7 @@ class SheetsSync:
             'rentals': self.upload_rentals(db_manager),
             'lockers': self.upload_locker_status(db_manager),
             'sensor_events': self.upload_sensor_events(db_manager),
+            'sensor_mappings': self.upload_sensor_mappings(db_manager),
         }
         
         if any(result.values()):

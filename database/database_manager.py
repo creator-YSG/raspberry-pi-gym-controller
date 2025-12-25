@@ -411,6 +411,284 @@ class DatabaseManager:
         
         return stats
 
+    # =====================================================
+    # 센서 매핑 관련 메서드들
+    # =====================================================
+
+    def get_sensor_mapping_by_hardware(self, addr: str, chip_idx: int, pin: int) -> Optional[Dict[str, Any]]:
+        """하드웨어 정보(addr, chip_idx, pin)로 센서 매핑 조회
+
+        Args:
+            addr: ESP32 MCP23017 I2C 주소
+            chip_idx: ESP32 내 MCP 칩 인덱스
+            pin: MCP23017 핀 번호
+
+        Returns:
+            센서 매핑 정보 딕셔너리 또는 None
+        """
+        try:
+            with self._lock:
+                cursor = self.execute_query("""
+                    SELECT * FROM sensor_mapping
+                    WHERE addr = ? AND chip_idx = ? AND pin = ?
+                """, (addr, chip_idx, pin))
+
+                if cursor:
+                    row = cursor.fetchone()
+                    if row:
+                        return dict(row)
+
+                return None
+
+        except Exception as e:
+            self.logger.error(f"센서 매핑 조회 실패: addr={addr}, chip={chip_idx}, pin={pin}, {e}")
+            return None
+
+    def get_sensor_mapping_by_sensor_num(self, sensor_num: int) -> Optional[Dict[str, Any]]:
+        """센서 번호로 센서 매핑 조회
+
+        Args:
+            sensor_num: 논리적 센서 번호 (1-60)
+
+        Returns:
+            센서 매핑 정보 딕셔너리 또는 None
+        """
+        try:
+            with self._lock:
+                cursor = self.execute_query("""
+                    SELECT * FROM sensor_mapping
+                    WHERE sensor_num = ?
+                """, (sensor_num,))
+
+                if cursor:
+                    row = cursor.fetchone()
+                    if row:
+                        return dict(row)
+
+                return None
+
+        except Exception as e:
+            self.logger.error(f"센서 번호 매핑 조회 실패: sensor_num={sensor_num}, {e}")
+            return None
+
+    def get_sensor_mapping_by_locker_id(self, locker_id: str) -> Optional[Dict[str, Any]]:
+        """락커 ID로 센서 매핑 조회
+
+        Args:
+            locker_id: 락커 ID (M01, S01 등)
+
+        Returns:
+            센서 매핑 정보 딕셔너리 또는 None
+        """
+        try:
+            with self._lock:
+                cursor = self.execute_query("""
+                    SELECT * FROM sensor_mapping
+                    WHERE locker_id = ?
+                """, (locker_id,))
+
+                if cursor:
+                    row = cursor.fetchone()
+                    if row:
+                        return dict(row)
+
+                return None
+
+        except Exception as e:
+            self.logger.error(f"락커 ID 매핑 조회 실패: locker_id={locker_id}, {e}")
+            return None
+
+    def get_all_sensor_mappings(self) -> List[Dict[str, Any]]:
+        """모든 센서 매핑 조회
+
+        Returns:
+            센서 매핑 리스트
+        """
+        try:
+            with self._lock:
+                cursor = self.execute_query("""
+                    SELECT * FROM sensor_mapping
+                    ORDER BY sensor_num
+                """)
+
+                if cursor:
+                    return [dict(row) for row in cursor.fetchall()]
+
+                return []
+
+        except Exception as e:
+            self.logger.error(f"전체 센서 매핑 조회 실패: {e}")
+            return []
+
+    def add_sensor_mapping(self, addr: str, chip_idx: int, pin: int, sensor_num: int, locker_id: str) -> bool:
+        """새 센서 매핑 추가
+
+        Args:
+            addr: ESP32 MCP23017 I2C 주소
+            chip_idx: ESP32 내 MCP 칩 인덱스
+            pin: MCP23017 핀 번호
+            sensor_num: 논리적 센서 번호
+            locker_id: 락커 ID
+
+        Returns:
+            추가 성공 여부
+        """
+        try:
+            with self._lock:
+                # 기존 매핑 확인 (addr, chip_idx, pin 조합은 유니크)
+                existing = self.get_sensor_mapping_by_hardware(addr, chip_idx, pin)
+                if existing:
+                    self.logger.warning(f"센서 매핑 이미 존재: addr={addr}, chip={chip_idx}, pin={pin}")
+                    return False
+
+                # 센서 번호 중복 확인
+                existing_sensor = self.get_sensor_mapping_by_sensor_num(sensor_num)
+                if existing_sensor:
+                    self.logger.warning(f"센서 번호 중복: sensor_num={sensor_num}")
+                    return False
+
+                # 락커 ID 중복 확인
+                existing_locker = self.get_sensor_mapping_by_locker_id(locker_id)
+                if existing_locker:
+                    self.logger.warning(f"락커 ID 중복: locker_id={locker_id}")
+                    return False
+
+                # 새 매핑 추가
+                cursor = self.execute_query("""
+                    INSERT INTO sensor_mapping (addr, chip_idx, pin, sensor_num, locker_id)
+                    VALUES (?, ?, ?, ?, ?)
+                """, (addr, chip_idx, pin, sensor_num, locker_id))
+
+                if cursor:
+                    self.logger.info(f"센서 매핑 추가 성공: {locker_id} <- addr={addr}, chip={chip_idx}, pin={pin} (sensor_num={sensor_num})")
+                    return True
+
+                return False
+
+        except Exception as e:
+            self.logger.error(f"센서 매핑 추가 실패: {e}")
+            return False
+
+    def update_sensor_mapping(self, locker_id: str, addr: str = None, chip_idx: int = None,
+                             pin: int = None, sensor_num: int = None) -> bool:
+        """센서 매핑 업데이트
+
+        Args:
+            locker_id: 업데이트할 락커 ID
+            addr, chip_idx, pin, sensor_num: 업데이트할 값들 (None이면 변경하지 않음)
+
+        Returns:
+            업데이트 성공 여부
+        """
+        try:
+            with self._lock:
+                # 기존 매핑 확인
+                existing = self.get_sensor_mapping_by_locker_id(locker_id)
+                if not existing:
+                    self.logger.warning(f"업데이트할 센서 매핑 없음: locker_id={locker_id}")
+                    return False
+
+                # 업데이트할 필드들
+                update_fields = []
+                params = []
+
+                if addr is not None:
+                    update_fields.append("addr = ?")
+                    params.append(addr)
+
+                if chip_idx is not None:
+                    update_fields.append("chip_idx = ?")
+                    params.append(chip_idx)
+
+                if pin is not None:
+                    update_fields.append("pin = ?")
+                    params.append(pin)
+
+                if sensor_num is not None:
+                    update_fields.append("sensor_num = ?")
+                    params.append(sensor_num)
+
+                if not update_fields:
+                    self.logger.warning("업데이트할 필드 없음")
+                    return False
+
+                # 쿼리 실행
+                query = f"""
+                    UPDATE sensor_mapping
+                    SET {', '.join(update_fields)}
+                    WHERE locker_id = ?
+                """
+                params.append(locker_id)
+
+                cursor = self.execute_query(query, tuple(params))
+
+                if cursor:
+                    self.logger.info(f"센서 매핑 업데이트 성공: {locker_id}")
+                    return True
+
+                return False
+
+        except Exception as e:
+            self.logger.error(f"센서 매핑 업데이트 실패: {e}")
+            return False
+
+    def delete_sensor_mapping(self, locker_id: str) -> bool:
+        """센서 매핑 삭제
+
+        Args:
+            locker_id: 삭제할 락커 ID
+
+        Returns:
+            삭제 성공 여부
+        """
+        try:
+            with self._lock:
+                # 기존 매핑 확인
+                existing = self.get_sensor_mapping_by_locker_id(locker_id)
+                if not existing:
+                    self.logger.warning(f"삭제할 센서 매핑 없음: locker_id={locker_id}")
+                    return False
+
+                cursor = self.execute_query("""
+                    DELETE FROM sensor_mapping WHERE locker_id = ?
+                """, (locker_id,))
+
+                if cursor:
+                    self.logger.info(f"센서 매핑 삭제 성공: {locker_id}")
+                    return True
+
+                return False
+
+        except Exception as e:
+            self.logger.error(f"센서 매핑 삭제 실패: {e}")
+            return False
+
+    def get_sensor_num_from_hardware(self, addr: str, chip_idx: int, pin: int) -> Optional[int]:
+        """하드웨어 정보로 센서 번호 조회 (호환성 메서드)
+
+        Args:
+            addr: ESP32 MCP23017 I2C 주소
+            chip_idx: ESP32 내 MCP 칩 인덱스
+            pin: MCP23017 핀 번호
+
+        Returns:
+            센서 번호 또는 None
+        """
+        mapping = self.get_sensor_mapping_by_hardware(addr, chip_idx, pin)
+        return mapping['sensor_num'] if mapping else None
+
+    def get_locker_id_from_sensor_num(self, sensor_num: int) -> Optional[str]:
+        """센서 번호로 락커 ID 조회 (호환성 메서드)
+
+        Args:
+            sensor_num: 센서 번호
+
+        Returns:
+            락커 ID 또는 None
+        """
+        mapping = self.get_sensor_mapping_by_sensor_num(sensor_num)
+        return mapping['locker_id'] if mapping else None
+
 
 def create_database_manager(db_path: str = 'instance/gym_system.db', initialize: bool = True) -> DatabaseManager:
     """데이터베이스 매니저 생성 및 초기화

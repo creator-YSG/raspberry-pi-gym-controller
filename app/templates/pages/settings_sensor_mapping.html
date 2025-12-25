@@ -1,6 +1,6 @@
 {% extends "layouts/base.html" %}
 
-{% block title %}센서 매핑 점검{% endblock %}
+{% block title %}센서 매핑 설정{% endblock %}
 
 {% block body_class %}settings-page{% endblock %}
 
@@ -8,21 +8,83 @@
 <div class="settings-container">
     <!-- 좌측 상단: 뒤로가기 버튼 -->
     <div class="back-button-container">
-        <button class="back-button" onclick="window.location.href='/'">
-            ← 홈으로
+        <button class="back-button" onclick="window.location.href='/settings'">
+            ← 설정으로
         </button>
     </div>
 
     <!-- 페이지 제목 -->
     <div class="settings-header">
-        <h1>📡 센서 매핑 점검</h1>
+        <h1>🔧 센서 매핑 설정</h1>
+        <p class="settings-subtitle">60개 락커에 센서를 매핑하세요</p>
     </div>
 
-    <!-- 컨텐츠 영역 -->
-    <div class="settings-content">
-        <div class="placeholder-message">
-            <p>이 화면은 아직 구현 중입니다.</p>
-            <p>각 센서의 매핑 상태를 확인하고 테스트하는 기능이 추가될 예정입니다.</p>
+    <!-- 문 제어 버튼들 -->
+    <div class="door-control-buttons">
+        <button class="door-btn door-btn-open" id="openAllDoorsBtn">
+            🚪 전체 문 열기
+        </button>
+        <button class="door-btn door-btn-close" id="closeAllDoorsBtn">
+            🔒 전체 문 닫기
+        </button>
+    </div>
+
+    <!-- 센서 감지 상태 표시 -->
+    <div class="sensor-status" id="sensorStatus">
+        <div class="sensor-indicator">
+            <div class="sensor-light" id="sensorLight"></div>
+            <span id="sensorStatusText">센서를 감지하세요</span>
+        </div>
+        <div class="sensor-info-display">
+            <div class="sensor-info-item">
+                <label>Address:</label>
+                <span id="currentAddr">---</span>
+            </div>
+            <div class="sensor-info-item">
+                <label>Chip:</label>
+                <span id="currentChip">---</span>
+            </div>
+            <div class="sensor-info-item">
+                <label>Pin:</label>
+                <span id="currentPin">---</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 액션 버튼들 -->
+    <div class="action-buttons">
+        <button class="action-btn action-btn-save" id="saveBtn" disabled>
+            💾 저장
+        </button>
+        <button class="action-btn action-btn-unregister" id="unregisterBtn" disabled>
+            🗑️ 해제
+        </button>
+    </div>
+
+    <!-- 락커 그리드 -->
+    <div class="locker-grid-container">
+        <!-- STAFF 구역 -->
+        <div class="zone-section">
+            <h2 class="zone-title">교직원 구역 (S01-S10)</h2>
+            <div class="locker-grid" id="staffGrid">
+                <!-- JavaScript로 동적 생성 -->
+            </div>
+        </div>
+
+        <!-- MALE 구역 -->
+        <div class="zone-section">
+            <h2 class="zone-title">남성 구역 (M01-M40)</h2>
+            <div class="locker-grid" id="maleGrid">
+                <!-- JavaScript로 동적 생성 -->
+            </div>
+        </div>
+
+        <!-- FEMALE 구역 -->
+        <div class="zone-section">
+            <h2 class="zone-title">여성 구역 (F01-F10)</h2>
+            <div class="locker-grid" id="femaleGrid">
+                <!-- JavaScript로 동적 생성 -->
+            </div>
         </div>
     </div>
 </div>
@@ -37,6 +99,7 @@
     align-items: center;
 }
 
+/* 뒤로가기 버튼 */
 .back-button-container {
     position: fixed;
     top: 20px;
@@ -57,51 +120,601 @@
 
 .back-button:hover {
     background: rgba(255, 255, 255, 0.25);
-    transform: scale(1.05);
+    border-color: rgba(255, 255, 255, 0.5);
+    transform: translateY(-2px);
 }
 
-.back-button:active {
-    transform: scale(0.95);
-}
-
+/* 헤더 */
 .settings-header {
-    margin-top: 60px;
-    margin-bottom: 40px;
     text-align: center;
+    margin-bottom: 30px;
 }
 
 .settings-header h1 {
     color: white;
-    font-size: 32px;
-    font-weight: bold;
-    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+    font-size: 2.5rem;
+    margin-bottom: 10px;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.5);
 }
 
-.settings-content {
-    flex: 1;
+.settings-subtitle {
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 1.2rem;
+}
+
+/* 문 제어 버튼들 */
+.door-control-buttons {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 30px;
+}
+
+.door-btn {
+    padding: 15px 30px;
+    border: none;
+    border-radius: 12px;
+    font-size: 18px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+}
+
+.door-btn-open {
+    background: linear-gradient(135deg, #4CAF50, #45a049);
+    color: white;
+}
+
+.door-btn-open:hover {
+    background: linear-gradient(135deg, #45a049, #4CAF50);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(76, 175, 80, 0.4);
+}
+
+.door-btn-close {
+    background: linear-gradient(135deg, #f44336, #d32f2f);
+    color: white;
+}
+
+.door-btn-close:hover {
+    background: linear-gradient(135deg, #d32f2f, #f44336);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(244, 67, 54, 0.4);
+}
+
+/* 센서 상태 표시 */
+.sensor-status {
+    background: rgba(255, 255, 255, 0.1);
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-radius: 15px;
+    padding: 20px;
+    margin-bottom: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    min-width: 600px;
+    backdrop-filter: blur(10px);
+}
+
+.sensor-indicator {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.sensor-light {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #666;
+    transition: all 0.3s ease;
+}
+
+.sensor-light.active {
+    background: #4CAF50;
+    box-shadow: 0 0 20px rgba(76, 175, 80, 0.8);
+}
+
+#sensorStatusText {
+    color: white;
+    font-size: 18px;
+    font-weight: bold;
+}
+
+.sensor-info-display {
+    display: flex;
+    gap: 20px;
+}
+
+.sensor-info-item {
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
-    max-width: 500px;
-    width: 100%;
-    padding: 20px;
+    gap: 5px;
 }
 
-.placeholder-message {
+.sensor-info-item label {
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 14px;
+    font-weight: bold;
+}
+
+.sensor-info-item span {
+    color: white;
+    font-size: 16px;
+    font-family: monospace;
     background: rgba(255, 255, 255, 0.1);
-    border: 2px solid rgba(255, 255, 255, 0.2);
-    border-radius: 16px;
-    padding: 40px;
+    padding: 5px 10px;
+    border-radius: 6px;
+    min-width: 60px;
     text-align: center;
 }
 
-.placeholder-message p {
-    color: rgba(255, 255, 255, 0.8);
+/* 액션 버튼들 */
+.action-buttons {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 30px;
+}
+
+.action-btn {
+    padding: 15px 30px;
+    border: none;
+    border-radius: 12px;
     font-size: 18px;
-    line-height: 1.6;
-    margin: 10px 0;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+}
+
+.action-btn-save {
+    background: linear-gradient(135deg, #2196F3, #1976D2);
+    color: white;
+}
+
+.action-btn-save:hover:not(:disabled) {
+    background: linear-gradient(135deg, #1976D2, #2196F3);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(33, 150, 243, 0.4);
+}
+
+.action-btn-unregister {
+    background: linear-gradient(135deg, #FF9800, #F57C00);
+    color: white;
+}
+
+.action-btn-unregister:hover:not(:disabled) {
+    background: linear-gradient(135deg, #F57C00, #FF9800);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(255, 152, 0, 0.4);
+}
+
+.action-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2) !important;
+}
+
+/* 락커 그리드 */
+.locker-grid-container {
+    width: 100%;
+    max-width: 1200px;
+}
+
+.zone-section {
+    margin-bottom: 40px;
+}
+
+.zone-title {
+    color: white;
+    font-size: 1.5rem;
+    margin-bottom: 15px;
+    text-align: center;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+}
+
+.locker-grid {
+    display: grid;
+    grid-template-columns: repeat(10, 1fr);
+    gap: 8px;
+    margin-bottom: 20px;
+}
+
+.locker-card {
+    aspect-ratio: 1;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    backdrop-filter: blur(5px);
+}
+
+.locker-card:hover {
+    transform: scale(1.05);
+    border-color: rgba(255, 255, 255, 0.6);
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.locker-card.selected {
+    background: linear-gradient(135deg, #2196F3, #1976D2);
+    border-color: #2196F3;
+    color: white;
+    box-shadow: 0 0 20px rgba(33, 150, 243, 0.5);
+}
+
+.locker-card.mapped {
+    background: linear-gradient(135deg, #4CAF50, #45a049);
+    border-color: #4CAF50;
+    box-shadow: 0 0 15px rgba(76, 175, 80, 0.3);
+}
+
+.locker-card.mapped.selected {
+    background: linear-gradient(135deg, #FF9800, #F57C00);
+    border-color: #FF9800;
+    box-shadow: 0 0 20px rgba(255, 152, 0, 0.5);
+}
+
+/* 반응형 디자인 */
+@media (max-width: 768px) {
+    .settings-container {
+        padding: 10px;
+    }
+
+    .settings-header h1 {
+        font-size: 2rem;
+    }
+
+    .locker-grid {
+        grid-template-columns: repeat(5, 1fr);
+        gap: 5px;
+    }
+
+    .sensor-status {
+        flex-direction: column;
+        gap: 15px;
+        min-width: auto;
+    }
+
+    .sensor-info-display {
+        justify-content: center;
+    }
+
+    .door-control-buttons,
+    .action-buttons {
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .door-btn,
+    .action-btn {
+        padding: 12px 24px;
+        font-size: 16px;
+    }
 }
 </style>
-{% endblock %}
 
+<script>
+// 전역 변수
+let currentLockerId = null;
+let currentSensorData = null;
+let sensorMappings = {};
+
+// 페이지 로드 시 초기화
+document.addEventListener('DOMContentLoaded', function() {
+    initializePage();
+});
+
+function initializePage() {
+    // 락커 그리드 생성
+    createLockerGrids();
+
+    // 기존 매핑 데이터 로드
+    loadSensorMappings();
+
+    // 센서 폴링 시작
+    startSensorPolling();
+
+    // 이벤트 리스너 등록
+    setupEventListeners();
+
+    console.log('[SensorMapping] 페이지 초기화 완료');
+}
+
+function createLockerGrids() {
+    // STAFF 구역 (S01-S10)
+    const staffGrid = document.getElementById('staffGrid');
+    for (let i = 1; i <= 10; i++) {
+        const lockerId = `S${i.toString().padStart(2, '0')}`;
+        const card = createLockerCard(lockerId);
+        staffGrid.appendChild(card);
+    }
+
+    // MALE 구역 (M01-M40)
+    const maleGrid = document.getElementById('maleGrid');
+    for (let i = 1; i <= 40; i++) {
+        const lockerId = `M${i.toString().padStart(2, '0')}`;
+        const card = createLockerCard(lockerId);
+        maleGrid.appendChild(card);
+    }
+
+    // FEMALE 구역 (F01-F10)
+    const femaleGrid = document.getElementById('femaleGrid');
+    for (let i = 1; i <= 10; i++) {
+        const lockerId = `F${i.toString().padStart(2, '0')}`;
+        const card = createLockerCard(lockerId);
+        femaleGrid.appendChild(card);
+    }
+}
+
+function createLockerCard(lockerId) {
+    const card = document.createElement('div');
+    card.className = 'locker-card';
+    card.textContent = lockerId;
+    card.dataset.lockerId = lockerId;
+
+    card.addEventListener('click', () => selectLocker(lockerId));
+
+    return card;
+}
+
+function selectLocker(lockerId) {
+    // 기존 선택 해제
+    document.querySelectorAll('.locker-card.selected').forEach(card => {
+        card.classList.remove('selected');
+    });
+
+    // 새로운 선택
+    const card = document.querySelector(`[data-locker-id="${lockerId}"]`);
+    if (card) {
+        card.classList.add('selected');
+        currentLockerId = lockerId;
+        updateButtonStates();
+        console.log(`[SensorMapping] 락커 선택: ${lockerId}`);
+    }
+}
+
+function loadSensorMappings() {
+    fetch('/api/sensor/mappings')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                sensorMappings = {};
+
+                // 매핑 데이터를 locker_id 기준으로 정리
+                ['male_zone', 'female_zone', 'staff_zone'].forEach(zone => {
+                    data.mappings[zone].forEach(mapping => {
+                        sensorMappings[mapping.locker_id] = mapping;
+                    });
+                });
+
+                // UI 업데이트
+                updateLockerCards();
+                console.log('[SensorMapping] 매핑 데이터 로드 완료:', sensorMappings);
+            } else {
+                console.error('[SensorMapping] 매핑 데이터 로드 실패:', data.error);
+            }
+        })
+        .catch(error => {
+            console.error('[SensorMapping] 매핑 데이터 로드 오류:', error);
+        });
+}
+
+function updateLockerCards() {
+    document.querySelectorAll('.locker-card').forEach(card => {
+        const lockerId = card.dataset.lockerId;
+        const mapping = sensorMappings[lockerId];
+
+        if (mapping) {
+            card.classList.add('mapped');
+            card.title = `Addr: ${mapping.addr}, Chip: ${mapping.chip_idx}, Pin: ${mapping.pin}`;
+        } else {
+            card.classList.remove('mapped');
+            card.title = '';
+        }
+    });
+}
+
+function startSensorPolling() {
+    setInterval(pollSensorData, 500); // 0.5초마다 폴링
+}
+
+function pollSensorData() {
+    fetch('/api/hardware/sensor_events?limit=1')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.events && data.events.length > 0) {
+                const latestEvent = data.events[0];
+                onSensorDetected(latestEvent);
+            }
+        })
+        .catch(error => {
+            console.debug('[SensorMapping] 센서 폴링 오류 (무시):', error);
+        });
+}
+
+function onSensorDetected(sensorEvent) {
+    // 센서 이벤트에서 하드웨어 정보 추출
+    const addr = sensorEvent.addr || sensorEvent.address;
+    const chipIdx = sensorEvent.chip_idx;
+    const pin = sensorEvent.pin;
+
+    if (addr && chipIdx !== undefined && pin !== undefined) {
+        currentSensorData = { addr, chip_idx: chipIdx, pin };
+
+        // UI 업데이트
+        document.getElementById('currentAddr').textContent = addr;
+        document.getElementById('currentChip').textContent = chipIdx;
+        document.getElementById('currentPin').textContent = pin;
+        document.getElementById('sensorLight').className = 'sensor-light active';
+        document.getElementById('sensorStatusText').textContent = '센서 감지됨';
+
+        updateButtonStates();
+        console.log('[SensorMapping] 센서 감지:', currentSensorData);
+    }
+}
+
+function updateButtonStates() {
+    const saveBtn = document.getElementById('saveBtn');
+    const unregisterBtn = document.getElementById('unregisterBtn');
+
+    // 저장 버튼: 락커 선택 + 센서 감지 시 활성화
+    if (currentLockerId && currentSensorData) {
+        saveBtn.disabled = false;
+    } else {
+        saveBtn.disabled = true;
+    }
+
+    // 해제 버튼: 락커 선택 + 매핑 존재 시 활성화
+    if (currentLockerId && sensorMappings[currentLockerId]) {
+        unregisterBtn.disabled = false;
+    } else {
+        unregisterBtn.disabled = true;
+    }
+}
+
+function setupEventListeners() {
+    // 문 제어 버튼들
+    document.getElementById('openAllDoorsBtn').addEventListener('click', openAllDoors);
+    document.getElementById('closeAllDoorsBtn').addEventListener('click', closeAllDoors);
+
+    // 액션 버튼들
+    document.getElementById('saveBtn').addEventListener('click', saveMapping);
+    document.getElementById('unregisterBtn').addEventListener('click', unregisterMapping);
+}
+
+function openAllDoors() {
+    if (!confirm('정말로 전체 문을 열겠습니까?')) return;
+
+    document.getElementById('openAllDoorsBtn').disabled = true;
+    document.getElementById('openAllDoorsBtn').textContent = '열기 중...';
+
+    fetch('/api/esp32/door/open-all', { method: 'POST' })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('전체 문 열기 명령이 전송되었습니다.');
+            } else {
+                alert('전체 문 열기 실패: ' + (data.error || '알 수 없는 오류'));
+            }
+        })
+        .catch(error => {
+            alert('전체 문 열기 중 오류가 발생했습니다.');
+            console.error('[SensorMapping] 전체 문 열기 오류:', error);
+        })
+        .finally(() => {
+            document.getElementById('openAllDoorsBtn').disabled = false;
+            document.getElementById('openAllDoorsBtn').textContent = '🚪 전체 문 열기';
+        });
+}
+
+function closeAllDoors() {
+    if (!confirm('정말로 전체 문을 닫겠습니까?')) return;
+
+    document.getElementById('closeAllDoorsBtn').disabled = true;
+    document.getElementById('closeAllDoorsBtn').textContent = '닫기 중...';
+
+    fetch('/api/esp32/door/close-all', { method: 'POST' })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('전체 문 닫기 명령이 전송되었습니다.');
+            } else {
+                alert('전체 문 닫기 실패: ' + (data.error || '알 수 없는 오류'));
+            }
+        })
+        .catch(error => {
+            alert('전체 문 닫기 중 오류가 발생했습니다.');
+            console.error('[SensorMapping] 전체 문 닫기 오류:', error);
+        })
+        .finally(() => {
+            document.getElementById('closeAllDoorsBtn').disabled = false;
+            document.getElementById('closeAllDoorsBtn').textContent = '🔒 전체 문 닫기';
+        });
+}
+
+function saveMapping() {
+    if (!currentLockerId || !currentSensorData) {
+        alert('락커와 센서를 모두 선택해주세요.');
+        return;
+    }
+
+    const requestData = {
+        addr: currentSensorData.addr,
+        chip_idx: currentSensorData.chip_idx,
+        pin: currentSensorData.pin,
+        locker_id: currentLockerId
+    };
+
+    console.log('[SensorMapping] 매핑 저장 요청:', requestData);
+
+    fetch('/api/sensor/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(`센서 매핑이 성공적으로 저장되었습니다: ${currentLockerId}`);
+            loadSensorMappings(); // 매핑 데이터 새로고침
+            resetSensorState();
+        } else {
+            alert('센서 매핑 저장 실패: ' + (data.error || '알 수 없는 오류'));
+        }
+    })
+    .catch(error => {
+        alert('센서 매핑 저장 중 오류가 발생했습니다.');
+        console.error('[SensorMapping] 매핑 저장 오류:', error);
+    });
+}
+
+function unregisterMapping() {
+    if (!currentLockerId) {
+        alert('락커를 선택해주세요.');
+        return;
+    }
+
+    if (!confirm(`정말로 ${currentLockerId}의 센서 매핑을 해제하시겠습니까?`)) return;
+
+    console.log('[SensorMapping] 매핑 해제 요청:', currentLockerId);
+
+    fetch(`/api/sensor/unregister/${currentLockerId}`, { method: 'DELETE' })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert(`센서 매핑이 성공적으로 해제되었습니다: ${currentLockerId}`);
+                loadSensorMappings(); // 매핑 데이터 새로고침
+                resetSensorState();
+            } else {
+                alert('센서 매핑 해제 실패: ' + (data.error || '알 수 없는 오류'));
+            }
+        })
+        .catch(error => {
+            alert('센서 매핑 해제 중 오류가 발생했습니다.');
+            console.error('[SensorMapping] 매핑 해제 오류:', error);
+        });
+}
+
+function resetSensorState() {
+    // 센서 상태 초기화
+    currentSensorData = null;
+    document.getElementById('currentAddr').textContent = '---';
+    document.getElementById('currentChip').textContent = '---';
+    document.getElementById('currentPin').textContent = '---';
+    document.getElementById('sensorLight').className = 'sensor-light';
+    document.getElementById('sensorStatusText').textContent = '센서를 감지하세요';
+
+    updateButtonStates();
+}
+</script>
+{% endblock %}
