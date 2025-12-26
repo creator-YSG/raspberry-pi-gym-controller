@@ -50,6 +50,12 @@ class DBLogHandler(logging.Handler):
     def emit(self, record: logging.LogRecord):
         """로그 레코드 처리"""
         try:
+            # 반복적인 폴링 로그 필터링 (너무 많이 쌓이는 것 방지)
+            if record.name == 'werkzeug' and any(x in record.getMessage() for x in [
+                '/api/barcode/poll', '/api/camera/motion', '/api/sensors/poll'
+            ]):
+                return  # 폴링 요청은 DB에 저장 안 함
+            
             # 메시지 포맷팅
             message = self.format(record)
             

@@ -595,7 +595,7 @@ class SheetsSync:
             logger.error(f"[SheetsSync] 센서 이벤트 업로드 오류: {e}")
             return 0
     
-    def upload_system_logs(self, db_manager, limit: int = 500) -> int:
+    def upload_system_logs(self, db_manager, limit: int = 5000) -> int:
         """시스템 로그 업로드 (분석용)
         
         Args:
