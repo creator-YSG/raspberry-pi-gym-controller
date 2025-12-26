@@ -142,13 +142,17 @@ def member_check():
                     
                     # 🆕 구글 시트 즉시 동기화 (대여 pending 생성 시)
                     try:
+                        current_app.logger.info(f'📊 시트 동기화 시작: member_dict={bool(member_dict)}, rental_id={rental_id}')
                         from app.services.sheets_sync import SheetsSync
                         sheets_sync = SheetsSync()
-                        
+                        current_app.logger.info(f'📊 SheetsSync 객체 생성 완료')
+
                         # 회원 이름 가져오기
                         member_name = member_dict.get('member_name', '') if member_dict else ''
-                        
-                        sheets_sync.append_rental_record(
+                        current_app.logger.info(f'📊 member_name={member_name}')
+
+                        current_app.logger.info(f'📊 append_rental_record 호출 직전')
+                        result = sheets_sync.append_rental_record(
                             rental_id=rental_id,
                             member_id=member_id,
                             member_name=member_name,
@@ -159,9 +163,10 @@ def member_check():
                             status='pending',
                             photo_url=''
                         )
+                        current_app.logger.info(f'📊 append_rental_record 결과: {result}')
                         current_app.logger.info(f'📊 구글시트 대여 기록 추가 (pending): rental_id={rental_id}')
                     except Exception as sheet_error:
-                        current_app.logger.warning(f'⚠️ 시트 동기화 실패 (무시): {sheet_error}')
+                        current_app.logger.warning(f'⚠️ 시트 동기화 실패 (무시): {sheet_error}', exc_info=True)
                     
                     # 🆕 인증 사진 촬영 (pending rental 생성 직후)
                     try:

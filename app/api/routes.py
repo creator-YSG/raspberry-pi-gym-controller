@@ -923,7 +923,7 @@ def process_rental():
                             sensor_time=rental_time,
                             status='active'
                         )
-                        current_app.logger.info(f'📊 구글시트 업데이트 (active): rental_id={rental_id_for_sync}, locker={locker_id}')
+                                current_app.logger.info(f'📊 구글시트 업데이트 (active): rental_id={rental_id_for_sync}, locker={locker_id}')
                     except Exception as sheet_error:
                         current_app.logger.warning(f'⚠️ 시트 동기화 실패 (무시): {sheet_error}')
                 

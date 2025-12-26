@@ -265,12 +265,22 @@ class SheetsSync:
                              sensor_time: str, status: str, photo_url: str = '') -> bool:
         """대여 기록 시트에 추가 (record_type='rental')"""
         try:
+            logger.info(f"[SheetsSync] append_rental_record 시작: rental_id={rental_id}")
+            # 연결 확인 및 필요시 연결
+            if not self.connected:
+                logger.info(f"[SheetsSync] 연결 안됨, 연결 시도")
+                if not self.connect():
+                    logger.error(f"[SheetsSync] 연결 실패")
+                    return False
+
             worksheet = self._get_worksheet("rentals")
             if not worksheet:
+                logger.error(f"[SheetsSync] 시트 연결 실패")
                 return False
-            
+
             zone = self._get_zone(locker_number)
-            
+            logger.info(f"[SheetsSync] zone 계산: {zone}")
+
             row_data = [
                 rental_id,
                 'rental',  # record_type
@@ -285,15 +295,17 @@ class SheetsSync:
                 photo_url,
                 datetime.now().isoformat()
             ]
-            
+
+            logger.info(f"[SheetsSync] row_data 준비: {row_data[:5]}...")
             self._rate_limit()
             worksheet.append_row(row_data)
-            
+            logger.info(f"[SheetsSync] append_row 완료")
+
             logger.info(f"[SheetsSync] 대여 기록 추가: rental_id={rental_id}, locker={locker_number}")
             return True
-            
+
         except Exception as e:
-            logger.error(f"[SheetsSync] 대여 기록 추가 오류: {e}")
+            logger.error(f"[SheetsSync] 대여 기록 추가 오류: {e}", exc_info=True)
             return False
     
     def append_return_record(self, rental_id: int, member_id: str, member_name: str,
@@ -301,6 +313,13 @@ class SheetsSync:
                              sensor_time: str, status: str, photo_url: str = '') -> bool:
         """반납 기록 시트에 추가 (record_type='return')"""
         try:
+            # 연결 확인 및 필요시 연결
+            if not self.connected:
+                logger.info(f"[SheetsSync] 연결 안됨, 연결 시도")
+                if not self.connect():
+                    logger.error(f"[SheetsSync] 연결 실패")
+                    return False
+
             worksheet = self._get_worksheet("rentals")
             if not worksheet:
                 return False
@@ -312,8 +331,8 @@ class SheetsSync:
                 'return',  # record_type
                 member_id,
                 member_name,
-                locker_number,
-                zone,
+                    locker_number,
+                    zone,
                 auth_method,
                 auth_time,
                 sensor_time,
@@ -335,6 +354,13 @@ class SheetsSync:
     def update_rental_status(self, rental_id: int, sensor_time: str, status: str) -> bool:
         """대여 레코드의 sensor_time, status 업데이트 (pending → active)"""
         try:
+            # 연결 확인 및 필요시 연결
+            if not self.connected:
+                logger.info(f"[SheetsSync] 연결 안됨, 연결 시도")
+                if not self.connect():
+                    logger.error(f"[SheetsSync] 연결 실패")
+                    return False
+
             worksheet = self._get_worksheet("rentals")
             if not worksheet:
                 return False
@@ -351,7 +377,7 @@ class SheetsSync:
             
             if row_num is None:
                 logger.warning(f"[SheetsSync] rental_id={rental_id} (rental) 행 없음")
-                return False
+                    return False
             
             # 컬럼: 9=sensor_time, 10=status
             self._rate_limit()
@@ -376,7 +402,7 @@ class SheetsSync:
             photo_url: 드라이브 URL
             db_manager: DatabaseManager (사용 안 함, 호환성 유지)
             record_type: 'rental' 또는 'return'
-            
+        
         Returns:
             성공 여부
         """
@@ -397,7 +423,7 @@ class SheetsSync:
             
             if row_num is None:
                 logger.warning(f"[SheetsSync] rental_id={rental_id} ({record_type}) 행 없음")
-                return False
+                    return False
             
             # 컬럼 11: photo_url
             COL_PHOTO_URL = 11
