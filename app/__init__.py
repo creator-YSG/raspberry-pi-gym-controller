@@ -91,6 +91,13 @@ def create_app(config_name='default'):
     # Flask 종료 시 DB 체크포인트 실행 (데이터 손실 방지)
     setup_shutdown_hook(app)
     
+    # DB 로그 핸들러 활성화 (모든 로그를 DB에 저장)
+    try:
+        from app.services.db_log_handler import setup_db_logging
+        setup_db_logging(db_path='instance/gym_system.db')
+    except Exception as log_err:
+        app.logger.warning(f"DB 로그 핸들러 설정 실패: {log_err}")
+    
     app.logger.info("🚀 락카키 대여기 웹 애플리케이션 초기화 완료")
     
     return app

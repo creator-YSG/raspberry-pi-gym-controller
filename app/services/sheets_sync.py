@@ -595,6 +595,98 @@ class SheetsSync:
             logger.error(f"[SheetsSync] 센서 이벤트 업로드 오류: {e}")
             return 0
     
+    def upload_system_logs(self, db_manager, limit: int = 500) -> int:
+        """시스템 로그 업로드 (분석용)
+        
+        Args:
+            db_manager: DatabaseManager
+            limit: 최대 업로드 건수
+            
+        Returns:
+            업로드된 건수
+        """
+        try:
+            worksheet = self._get_worksheet("system_logs")
+            if not worksheet:
+                # 시트가 없으면 생성
+                try:
+                    self.spreadsheet.add_worksheet(title="시스템로그", rows=1000, cols=10)
+                    worksheet = self.spreadsheet.worksheet("시스템로그")
+                except Exception as create_err:
+                    logger.warning(f"[SheetsSync] 시스템로그 시트 생성 실패: {create_err}")
+                    return 0
+            
+            # 동기화되지 않은 로그 조회
+            cursor = db_manager.execute_query("""
+                SELECT log_id, log_level, logger_name, message, member_id, 
+                       rental_id, locker_number, extra_data, created_at
+                FROM system_logs
+                WHERE sync_status = 0
+                ORDER BY log_id ASC
+                LIMIT ?
+            """, (limit,))
+            
+            if not cursor:
+                return 0
+            
+            rows_data = cursor.fetchall()
+            if not rows_data:
+                return 0
+            
+            log_ids = []
+            rows = []
+            for row in rows_data:
+                record = self._row_to_dict(row)
+                log_ids.append(record.get('log_id'))
+                rows.append([
+                    record.get('log_id', ''),
+                    record.get('log_level', ''),
+                    record.get('logger_name', ''),
+                    str(record.get('message', ''))[:500],  # 메시지 길이 제한
+                    record.get('member_id', '') or '',
+                    record.get('rental_id', '') or '',
+                    record.get('locker_number', '') or '',
+                    record.get('created_at', '')
+                ])
+            
+            # 기존 데이터에 추가 (append)
+            self._rate_limit()
+            
+            # 헤더가 없으면 추가
+            existing = worksheet.get_all_values()
+            if not existing:
+                headers = [
+                    "log_id", "log_level", "logger_name", "message",
+                    "member_id", "rental_id", "locker_number", "created_at"
+                ]
+                worksheet.append_row(headers)
+                self._rate_limit()
+                worksheet.format('A1:H1', {
+                    'textFormat': {'bold': True},
+                    'backgroundColor': {'red': 0.9, 'green': 0.9, 'blue': 0.9}
+                })
+            
+            # 로그 추가
+            for row in rows:
+                self._rate_limit()
+                worksheet.append_row(row)
+            
+            # 동기화 상태 업데이트
+            if log_ids:
+                placeholders = ','.join(['?' for _ in log_ids])
+                db_manager.execute_query(f"""
+                    UPDATE system_logs SET sync_status = 1
+                    WHERE log_id IN ({placeholders})
+                """, tuple(log_ids))
+                db_manager.conn.commit()
+            
+            logger.info(f"[SheetsSync] 시스템 로그 업로드 완료: {len(rows)}건")
+            return len(rows)
+            
+        except Exception as e:
+            logger.error(f"[SheetsSync] 시스템 로그 업로드 오류: {e}")
+            return 0
+    
     def upload_sensor_mappings(self, db_manager) -> int:
         """센서 매핑 업로드"""
         try:

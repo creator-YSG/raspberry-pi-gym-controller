@@ -334,3 +334,24 @@ CREATE TRIGGER IF NOT EXISTS update_sensor_mapping_timestamp
 BEGIN
     UPDATE sensor_mapping SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
 END;
+
+-- =====================================================
+-- 시스템 로그 테이블 (분석용)
+-- =====================================================
+CREATE TABLE IF NOT EXISTS system_logs (
+    log_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    log_level TEXT NOT NULL,              -- DEBUG, INFO, WARNING, ERROR, CRITICAL
+    logger_name TEXT,                     -- 로거 이름 (모듈명)
+    message TEXT NOT NULL,                -- 로그 메시지
+    member_id TEXT,                       -- 관련 회원 ID (있는 경우)
+    rental_id INTEGER,                    -- 관련 대여 ID (있는 경우)
+    locker_number TEXT,                   -- 관련 락커 번호 (있는 경우)
+    extra_data TEXT,                      -- 추가 데이터 (JSON)
+    sync_status INTEGER DEFAULT 0,        -- 0: 미동기화, 1: 동기화완료
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 로그 테이블 인덱스
+CREATE INDEX IF NOT EXISTS idx_system_logs_level ON system_logs(log_level);
+CREATE INDEX IF NOT EXISTS idx_system_logs_sync ON system_logs(sync_status);
+CREATE INDEX IF NOT EXISTS idx_system_logs_created ON system_logs(created_at);

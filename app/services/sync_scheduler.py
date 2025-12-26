@@ -190,14 +190,15 @@ class SyncScheduler:
         if not self.sheets_sync:
             return
         
-        # 대여 기록 + 센서 이벤트 업로드
+        # 대여 기록 + 센서 이벤트 + 시스템 로그 업로드
         rentals = self.sheets_sync.upload_rentals(self.db_manager)
         sensor_events = self.sheets_sync.upload_sensor_events(self.db_manager)
+        system_logs = self.sheets_sync.upload_system_logs(self.db_manager)
         
-        if rentals > 0 or sensor_events > 0:
+        if rentals > 0 or sensor_events > 0 or system_logs > 0:
             self.stats['last_upload'] = datetime.now().isoformat()
             self.stats['upload_count'] += 1
-            logger.info(f"[SyncScheduler] 업로드 완료: 대여 {rentals}건, 센서 {sensor_events}건")
+            logger.info(f"[SyncScheduler] 업로드 완료: 대여 {rentals}건, 센서 {sensor_events}건, 로그 {system_logs}건")
         
         # Pending 사진 드라이브 업로드 (photo_path 있지만 photo_url 없는 레코드)
         try:
