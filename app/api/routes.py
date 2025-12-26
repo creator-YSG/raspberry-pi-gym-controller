@@ -1307,20 +1307,21 @@ def log_sensor_event():
         from datetime import datetime
         event_time = datetime.now().isoformat()
         
-        locker_service.db.execute_query("""
+        cursor = locker_service.db.execute_query("""
             INSERT INTO sensor_events 
             (locker_number, sensor_state, member_id, rental_id, session_context, event_timestamp, description)
             VALUES (?, ?, ?, ?, ?, ?, ?)
         """, (locker_number, sensor_state, member_id, rental_id, session_context, event_time, description))
         
         locker_service.db.conn.commit()
+        event_id = cursor.lastrowid if cursor else None
         
         current_app.logger.info(f'📊 센서 이벤트 기록: {description}')
         
         return jsonify({
             'success': True,
             'message': '센서 이벤트 기록 완료',
-            'event_id': locker_service.db.cursor.lastrowid
+            'event_id': event_id
         })
         
     except Exception as e:
