@@ -529,11 +529,12 @@ function startSensorPolling() {
 }
 
 function pollSensorData() {
-    fetch('/api/hardware/sensor_events?limit=1')
+    fetch('/api/sensor/poll')
         .then(response => response.json())
         .then(data => {
-            if (data.success && data.events && data.events.length > 0) {
-                const latestEvent = data.events[0];
+            // /api/sensor/poll은 {has_events, events} 형태로 반환
+            if (data.has_events && data.events && data.events.length > 0) {
+                const latestEvent = data.events[data.events.length - 1];
                 onSensorDetected(latestEvent);
             }
         })

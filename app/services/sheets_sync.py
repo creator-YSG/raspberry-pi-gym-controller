@@ -590,11 +590,11 @@ class SheetsSync:
             
             logger.info(f"[SheetsSync] 센서 이벤트 업로드 완료: {len(rows)}건")
             return len(rows)
-
+            
         except Exception as e:
             logger.error(f"[SheetsSync] 센서 이벤트 업로드 오류: {e}")
             return 0
-
+    
     def upload_sensor_mappings(self, db_manager) -> int:
         """센서 매핑 업로드"""
         try:

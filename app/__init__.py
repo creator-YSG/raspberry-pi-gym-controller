@@ -242,6 +242,35 @@ def setup_esp32_event_handlers(app, esp32_manager):
         except Exception as e:
             app.logger.error(f"❌ 바코드 큐 추가 오류: {e}")
     
+    # 하드코딩 센서 매핑 (DB 폴백용)
+    # (addr, chip_idx, pin) → sensor_num
+    HARDCODED_SENSOR_MAPPING = {
+        # addr=0x26, Chip0 → 교직원 (S01-S10)
+        ("0x26", 0, 1): 1, ("0x26", 0, 0): 2, ("0x26", 0, 6): 3, ("0x26", 0, 5): 4,
+        ("0x26", 0, 4): 5, ("0x26", 0, 3): 6, ("0x26", 0, 2): 7, ("0x26", 0, 9): 8,
+        ("0x26", 0, 8): 9, ("0x26", 0, 7): 10,
+        # addr=0x23, Chip0 → 남성 (M01-M10)
+        ("0x23", 0, 1): 11, ("0x23", 0, 2): 12, ("0x23", 0, 0): 13, ("0x23", 0, 6): 14,
+        ("0x23", 0, 5): 15, ("0x23", 0, 3): 16, ("0x23", 0, 4): 17, ("0x23", 0, 9): 18,
+        ("0x23", 0, 7): 19, ("0x23", 0, 8): 20,
+        # addr=0x25, Chip1 → 남성 (M11-M20)
+        ("0x25", 1, 0): 21, ("0x25", 1, 3): 22, ("0x25", 1, 1): 23, ("0x25", 1, 2): 24,
+        ("0x25", 1, 5): 25, ("0x25", 1, 7): 26, ("0x25", 1, 4): 27, ("0x25", 1, 6): 28,
+        ("0x25", 1, 8): 29, ("0x25", 1, 9): 30,
+        # addr=0x26, Chip2 → 남성 (M21-M30, M34-M35, M38-M40)
+        ("0x26", 2, 5): 31, ("0x26", 2, 6): 32, ("0x26", 2, 7): 33, ("0x26", 2, 10): 34,
+        ("0x26", 2, 11): 35, ("0x26", 2, 9): 36, ("0x26", 2, 8): 37, ("0x26", 2, 14): 38,
+        ("0x26", 2, 13): 39, ("0x26", 2, 12): 40, ("0x26", 2, 0): 44, ("0x26", 2, 1): 45,
+        ("0x26", 2, 3): 48, ("0x26", 2, 2): 49, ("0x26", 2, 4): 50,
+        # addr=0x24, Chip1 → 남성 (M31-M33, M36-M37)
+        ("0x24", 1, 9): 41, ("0x24", 1, 7): 42, ("0x24", 1, 8): 43,
+        ("0x24", 1, 6): 46, ("0x24", 1, 5): 47,
+        # addr=0x27, Chip3 → 여성 (F01-F10)
+        ("0x27", 3, 0): 51, ("0x27", 3, 1): 52, ("0x27", 3, 3): 53, ("0x27", 3, 2): 54,
+        ("0x27", 3, 4): 55, ("0x27", 3, 5): 56, ("0x27", 3, 6): 57, ("0x27", 3, 8): 58,
+        ("0x27", 3, 7): 59, ("0x27", 3, 9): 60,
+    }
+    
     async def handle_sensor_triggered(event_data):
         """센서 이벤트 처리"""
         app.logger.info(f"🔥 [DEBUG] 센서 이벤트 핸들러 호출됨! event_data: {event_data}")
@@ -254,7 +283,8 @@ def setup_esp32_event_handlers(app, esp32_manager):
         
         app.logger.info(f"📡 센서: Chip{chip_idx} Addr{addr} Pin{pin} = {raw_state} ({'ACTIVE' if active else 'INACTIVE'})")
         
-        # DB에서 센서 번호 조회 (하드코딩 대신 DB 우선)
+        # DB에서 센서 번호 조회 (DB 우선, 실패 시 하드코딩 폴백)
+        sensor_num = None
         try:
             from database.database_manager import DatabaseManager
             db_manager = DatabaseManager()
@@ -262,18 +292,16 @@ def setup_esp32_event_handlers(app, esp32_manager):
                 sensor_num = db_manager.get_sensor_num_from_hardware(addr, chip_idx, pin)
                 if sensor_num:
                     app.logger.info(f"🔍 DB 매핑: addr={addr}, chip={chip_idx}, pin={pin} → sensor_num={sensor_num}")
-                else:
-                    app.logger.warning(f"🔍 DB에 매핑되지 않은 센서: addr={addr}, chip={chip_idx}, pin={pin}")
-            else:
-                app.logger.error("❌ DB 연결 실패 - 하드코딩 매핑으로 폴백")
-                sensor_num = None
         except Exception as db_error:
-            app.logger.error(f"❌ DB 센서 조회 오류: {db_error} - 하드코딩 매핑으로 폴백")
-            sensor_num = None
+            app.logger.warning(f"⚠️ DB 센서 조회 오류: {db_error}")
         
-        # 매핑되지 않은 핀 감지 시 경고
+        # DB에 없으면 하드코딩 폴백
         if sensor_num is None:
-            app.logger.warning(f"🔍 매핑되지 않은 핀 {pin} 감지됨!")
+            sensor_num = HARDCODED_SENSOR_MAPPING.get((addr, chip_idx, pin))
+            if sensor_num:
+                app.logger.info(f"🔄 하드코딩 폴백: addr={addr}, chip={chip_idx}, pin={pin} → sensor_num={sensor_num}")
+            else:
+                app.logger.warning(f"🔍 매핑되지 않은 핀: addr={addr}, chip={chip_idx}, pin={pin}")
         
         app.logger.info(f"🔥 [DEBUG] 핀 {pin} -> 센서 {sensor_num} 매핑")
         
@@ -287,6 +315,7 @@ def setup_esp32_event_handlers(app, esp32_manager):
             # 센서 큐에 저장 (폴링용)
             sensor_data = {
                 'sensor_num': sensor_num,
+                'addr': addr,
                 'chip_idx': chip_idx,
                 'pin': pin,
                 'state': raw_state,

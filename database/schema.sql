@@ -313,7 +313,7 @@ BEGIN
 END;
 
 -- system_settings 테이블 updated_at 자동 업데이트
-CREATE TRIGGER IF NOT EXISTS update_system_settings_timestamp
+CREATE TRIGGER IF NOT EXISTS update_system_settings_timestamp 
     AFTER UPDATE ON system_settings
     FOR EACH ROW
 BEGIN

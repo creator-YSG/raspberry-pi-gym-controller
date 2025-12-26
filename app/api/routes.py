@@ -3153,6 +3153,8 @@ def unregister_sensor_mapping(locker_id):
 @bp.route('/esp32/door/open-all', methods=['POST'])
 def open_all_doors():
     """전체 문 열기 (양쪽 ESP32 모두)"""
+    import asyncio
+    
     try:
         esp32_manager = getattr(current_app, 'esp32_manager', None)
         if not esp32_manager:
@@ -3169,7 +3171,13 @@ def open_all_doors():
 
         for device_id in device_ids:
             try:
-                success = esp32_manager.send_command(device_id, "MOTOR_MOVE", revs=0.917, rpm=30)
+                # 비동기 함수를 동기적으로 호출
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                success = loop.run_until_complete(
+                    esp32_manager.send_command(device_id, "MOTOR_MOVE", revs=0.917, rpm=30)
+                )
+                loop.close()
                 results[device_id] = "성공" if success else "실패"
                 current_app.logger.info(f'문 열기 명령 전송: {device_id} - {"성공" if success else "실패"}')
             except Exception as cmd_error:
@@ -3196,6 +3204,8 @@ def open_all_doors():
 @bp.route('/esp32/door/close-all', methods=['POST'])
 def close_all_doors():
     """전체 문 닫기 (양쪽 ESP32 모두)"""
+    import asyncio
+    
     try:
         esp32_manager = getattr(current_app, 'esp32_manager', None)
         if not esp32_manager:
@@ -3212,7 +3222,13 @@ def close_all_doors():
 
         for device_id in device_ids:
             try:
-                success = esp32_manager.send_command(device_id, "MOTOR_MOVE", revs=-0.917, rpm=30)
+                # 비동기 함수를 동기적으로 호출
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                success = loop.run_until_complete(
+                    esp32_manager.send_command(device_id, "MOTOR_MOVE", revs=-0.917, rpm=30)
+                )
+                loop.close()
                 results[device_id] = "성공" if success else "실패"
                 current_app.logger.info(f'문 닫기 명령 전송: {device_id} - {"성공" if success else "실패"}')
             except Exception as cmd_error:
