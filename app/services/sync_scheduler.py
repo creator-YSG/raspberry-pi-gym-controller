@@ -72,10 +72,15 @@ class SyncScheduler:
             'last_upload': None,
             'last_locker_update': None,
             'last_gym_settings': None,
+            'last_photo_upload': None,
             'download_count': 0,
             'upload_count': 0,
+            'photo_upload_count': 0,
             'error_count': 0,
         }
+        
+        # DriveService (lazy init)
+        self._drive_service = None
         
         logger.info(f"[SyncScheduler] 초기화 완료")
         logger.info(f"  - 다운로드 간격: {self.download_interval}초")
@@ -193,6 +198,125 @@ class SyncScheduler:
             self.stats['last_upload'] = datetime.now().isoformat()
             self.stats['upload_count'] += 1
             logger.info(f"[SyncScheduler] 업로드 완료: 대여 {rentals}건, 센서 {sensor_events}건")
+        
+        # Pending 사진 드라이브 업로드 (photo_path 있지만 photo_url 없는 레코드)
+        try:
+            photo_count = self._upload_pending_photos()
+            if photo_count > 0:
+                self.stats['last_photo_upload'] = datetime.now().isoformat()
+                self.stats['photo_upload_count'] += photo_count
+        except Exception as e:
+            logger.error(f"[SyncScheduler] 사진 업로드 오류: {e}")
+    
+    def _upload_pending_photos(self) -> int:
+        """
+        Pending 사진 업로드 (photo_path 있지만 photo_url 없는 레코드)
+        드라이브 업로드 후 DB와 구글시트 업데이트
+        
+        Returns:
+            업로드 성공 건수
+        """
+        from pathlib import Path
+        
+        # DriveService lazy init
+        if self._drive_service is None:
+            try:
+                from app.services.drive_service import DriveService
+                self._drive_service = DriveService()
+            except Exception as e:
+                logger.warning(f"[SyncScheduler] DriveService 초기화 실패: {e}")
+                return 0
+        
+        # 드라이브 연결 확인
+        if not self._drive_service.connect():
+            logger.debug("[SyncScheduler] 드라이브 연결 실패, 사진 업로드 스킵")
+            return 0
+        
+        # Pending 레코드 조회 (photo_path 있고 photo_url 없는 것)
+        try:
+            cursor = self.db_manager.execute_query("""
+                SELECT rental_id, rental_photo_path 
+                FROM rentals 
+                WHERE rental_photo_path IS NOT NULL 
+                  AND rental_photo_path != ''
+                  AND (rental_photo_url IS NULL OR rental_photo_url = '')
+                ORDER BY rental_id
+                LIMIT 10
+            """)
+            
+            if not cursor:
+                return 0
+            
+            pending_records = cursor.fetchall()
+            if not pending_records:
+                return 0
+            
+            logger.info(f"[SyncScheduler] 📸 Pending 사진 {len(pending_records)}건 발견")
+            
+        except Exception as e:
+            logger.error(f"[SyncScheduler] Pending 사진 조회 실패: {e}")
+            return 0
+        
+        uploaded_count = 0
+        
+        for record in pending_records:
+            rental_id = record[0]
+            photo_path = record[1]
+            
+            # 파일 존재 확인
+            full_path = Path(photo_path)
+            if not full_path.exists():
+                # 프로젝트 루트 기준 경로 시도
+                project_root = Path(__file__).parent.parent.parent
+                full_path = project_root / photo_path
+            
+            if not full_path.exists():
+                logger.warning(f"[SyncScheduler] 사진 파일 없음: {photo_path}")
+                continue
+            
+            try:
+                # 드라이브 업로드
+                # 폴더 경로 추출 (예: instance/photos/rentals/2025/12/xxx.jpg → rentals/2025/12)
+                path_parts = Path(photo_path).parts
+                if 'rentals' in path_parts:
+                    idx = path_parts.index('rentals')
+                    drive_folder = '/'.join(path_parts[idx:-1])  # rentals/2025/12
+                else:
+                    drive_folder = 'rentals'
+                
+                drive_url = self._drive_service.upload_file(
+                    str(full_path),
+                    drive_folder=drive_folder,
+                    max_retries=2
+                )
+                
+                if drive_url:
+                    # DB 업데이트
+                    self.db_manager.execute_query("""
+                        UPDATE rentals 
+                        SET rental_photo_url = ?
+                        WHERE rental_id = ?
+                    """, (drive_url, rental_id))
+                    self.db_manager.conn.commit()
+                    
+                    # 구글시트 업데이트
+                    try:
+                        self.sheets_sync.update_rental_photo(rental_id, photo_path, drive_url)
+                    except Exception as sheet_err:
+                        logger.warning(f"[SyncScheduler] 시트 업데이트 실패 (rental_id={rental_id}): {sheet_err}")
+                    
+                    uploaded_count += 1
+                    logger.info(f"[SyncScheduler] ✅ 사진 업로드 완료: rental_id={rental_id}")
+                else:
+                    logger.warning(f"[SyncScheduler] 사진 업로드 실패: rental_id={rental_id}")
+                    
+            except Exception as e:
+                logger.error(f"[SyncScheduler] 사진 업로드 오류 (rental_id={rental_id}): {e}")
+        
+        if uploaded_count > 0:
+            logger.info(f"[SyncScheduler] 📸 총 {uploaded_count}건 사진 업로드 완료")
+        
+        return uploaded_count
     
     def _sync_locker_status(self):
         """락카 상태 동기화 실행"""
