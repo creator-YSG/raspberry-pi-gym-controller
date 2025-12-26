@@ -377,7 +377,7 @@ class SheetsSync:
             
             if row_num is None:
                 logger.warning(f"[SheetsSync] rental_id={rental_id} (rental) 행 없음")
-                    return False
+                return False
             
             # 컬럼: 9=sensor_time, 10=status
             self._rate_limit()
@@ -423,7 +423,7 @@ class SheetsSync:
             
             if row_num is None:
                 logger.warning(f"[SheetsSync] rental_id={rental_id} ({record_type}) 행 없음")
-                    return False
+                return False
             
             # 컬럼 11: photo_url
             COL_PHOTO_URL = 11

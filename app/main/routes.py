@@ -173,9 +173,6 @@ def member_check():
                     else:
                         current_app.logger.warning(f'📊 구글시트 대여 기록 추가 실패 (pending): rental_id={rental_id}')
 
-                except Exception as e:
-                    current_app.logger.error(f'❌ 대여 프로세스 오류: {e}', exc_info=True)
-                    
                     # 🆕 인증 사진 촬영 (pending rental 생성 직후)
                     try:
                         from app.api.routes import _capture_auth_photo
@@ -185,6 +182,7 @@ def member_check():
                         current_app.logger.warning(f'📸 인증 사진 촬영 실패 (무시): {photo_error}')
                         
                 except Exception as e:
+                    current_app.logger.error(f'❌ 대여 프로세스 오류: {e}', exc_info=True)
                     current_app.logger.error(f'❌ Pending 레코드 생성 오류: {e}', exc_info=True)
             
             # 🆕 반납 프로세스인 경우: 바코드 인증 시점에 return_barcode_time 기록

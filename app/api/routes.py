@@ -807,9 +807,18 @@ def _capture_auth_photo(member_id: str, auth_method: str):
                                             # db_manager 전달하여 행 없으면 추가
                                             db3 = DatabaseManager('instance/gym_system.db')
                                             db3.connect()
-                                            sheets.update_rental_photo(r_id, s_path, drive_url, db3)
+                                            
+                                            # 🆕 rental_id 상태 확인하여 대여/반납 구분
+                                            cursor = db3.execute_query("SELECT status FROM rentals WHERE rental_id = ?", (r_id,))
+                                            status_row = cursor.fetchone() if cursor else None
+                                            rental_status = status_row[0] if status_row else 'unknown'
+                                            
+                                            # 반납 완료 상태면 'return', 그 외에는 'rental'
+                                            record_type = 'return' if rental_status == 'returned' else 'rental'
+                                            
+                                            sheets.update_rental_photo(r_id, s_path, drive_url, db3, record_type)
                                             db3.close()
-                                            logger.info(f'📊 구글시트 업데이트 완료 (rental_id: {r_id})')
+                                            logger.info(f'📊 구글시트 업데이트 완료 (rental_id: {r_id}, type: {record_type})')
                                     except Exception as sync_error:
                                         logger.warning(f'구글시트 업데이트 오류 (무시): {sync_error}')
                                         
@@ -923,7 +932,7 @@ def process_rental():
                             sensor_time=rental_time,
                             status='active'
                         )
-                                current_app.logger.info(f'📊 구글시트 업데이트 (active): rental_id={rental_id_for_sync}, locker={locker_id}')
+                        current_app.logger.info(f'📊 구글시트 업데이트 (active): rental_id={rental_id_for_sync}, locker={locker_id}')
                     except Exception as sheet_error:
                         current_app.logger.warning(f'⚠️ 시트 동기화 실패 (무시): {sheet_error}')
                 
