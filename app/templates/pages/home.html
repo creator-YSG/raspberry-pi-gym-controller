@@ -17,18 +17,8 @@
         <div class="current-time" id="currentTime"></div>
     </div>
     
-    <!-- 비밀번호 입력 모달 -->
-    <div class="password-modal" id="passwordModal" style="display: none;">
-        <div class="password-modal-content">
-            <div class="password-modal-title">관리자 비밀번호 입력</div>
-            <input type="text" id="adminPasswordInput" class="password-input" placeholder="비밀번호" maxlength="20" inputmode="numeric" pattern="[0-9]*" autocomplete="off" />
-            <div class="password-modal-buttons">
-                <button class="btn-cancel" onclick="closePasswordModal()">취소</button>
-                <button class="btn-confirm" onclick="verifyPassword()">확인</button>
-            </div>
-            <div class="password-error" id="passwordError" style="display: none;">비밀번호가 틀렸습니다.</div>
-        </div>
-    </div>
+    <!-- 비밀번호 입력 모달 (공통 컴포넌트) -->
+    {% include 'components/password_modal.html' %}
 
     <!-- 중앙: 바코드/QR 일러스트 -->
     <div class="scan-visual">
@@ -100,115 +90,7 @@
     margin-top: 60px;
 }
 
-/* 비밀번호 모달 */
-.password-modal {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.85);
-    z-index: 10000;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    animation: fadeIn 0.2s ease;
-}
-
-@keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
-}
-
-.password-modal-content {
-    background: linear-gradient(145deg, #2a2a3e, #1e1e2e);
-    border-radius: 24px;
-    padding: 40px 50px;
-    text-align: center;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    min-width: 350px;
-}
-
-.password-modal-title {
-    font-size: 1.5rem;
-    font-weight: 600;
-    color: #fff;
-    margin-bottom: 30px;
-}
-
-.password-input {
-    width: 100%;
-    padding: 18px 20px;
-    font-size: 1.5rem;
-    text-align: center;
-    border: 2px solid rgba(255, 255, 255, 0.2);
-    border-radius: 12px;
-    background: rgba(255, 255, 255, 0.1);
-    color: #fff;
-    outline: none;
-    transition: border-color 0.3s;
-    box-sizing: border-box;
-    letter-spacing: 0.3em;
-}
-
-.password-input:focus {
-    border-color: #4caf50;
-}
-
-.password-input::placeholder {
-    color: rgba(255, 255, 255, 0.4);
-    letter-spacing: 0.1em;
-}
-
-.password-modal-buttons {
-    display: flex;
-    gap: 15px;
-    margin-top: 30px;
-}
-
-.password-modal-buttons button {
-    flex: 1;
-    padding: 16px 30px;
-    font-size: 1.1rem;
-    font-weight: 600;
-    border: none;
-    border-radius: 12px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.btn-cancel {
-    background: rgba(255, 255, 255, 0.15);
-    color: #fff;
-}
-
-.btn-cancel:hover {
-    background: rgba(255, 255, 255, 0.25);
-}
-
-.btn-confirm {
-    background: linear-gradient(135deg, #4caf50, #45a049);
-    color: #fff;
-}
-
-.btn-confirm:hover {
-    background: linear-gradient(135deg, #5cbf60, #4caf50);
-    transform: translateY(-2px);
-}
-
-.password-error {
-    color: #ff6b6b;
-    margin-top: 15px;
-    font-size: 0.95rem;
-    animation: shake 0.3s ease;
-}
-
-@keyframes shake {
-    0%, 100% { transform: translateX(0); }
-    25% { transform: translateX(-8px); }
-    75% { transform: translateX(8px); }
-}
+/* 비밀번호 모달 스타일은 components/password_modal.html에서 정의 */
 
 /* 센서 디버그 토글 버튼 */
 .sensor-debug-toggle {
@@ -655,67 +537,7 @@ function handleGymNameTouch() {
     }, TOUCH_TIMEOUT);
 }
 
-function showPasswordModal() {
-    const modal = document.getElementById('passwordModal');
-    const input = document.getElementById('adminPasswordInput');
-    const error = document.getElementById('passwordError');
-    
-    modal.style.display = 'flex';
-    error.style.display = 'none';
-    input.value = '';
-    
-    // 포커스 (약간의 딜레이 필요)
-    setTimeout(() => input.focus(), 100);
-}
-
-function closePasswordModal() {
-    const modal = document.getElementById('passwordModal');
-    const input = document.getElementById('adminPasswordInput');
-    
-    modal.style.display = 'none';
-    input.value = '';
-    
-    // 바코드 입력 필드로 포커스 복귀
-    document.getElementById('barcodeInput').focus();
-}
-
-function verifyPassword() {
-    const input = document.getElementById('adminPasswordInput');
-    const error = document.getElementById('passwordError');
-    const password = input.value;
-    
-    fetch('/api/verify-admin-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: password })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            console.log('✅ 비밀번호 인증 성공');
-            window.location.href = data.redirect || '/settings';
-        } else {
-            console.log('❌ 비밀번호 인증 실패');
-            error.style.display = 'block';
-            input.value = '';
-            input.focus();
-        }
-    })
-    .catch(err => {
-        console.error('❌ 비밀번호 검증 오류:', err);
-        error.textContent = '시스템 오류가 발생했습니다.';
-        error.style.display = 'block';
-    });
-}
-
-// Enter 키로 비밀번호 확인
-document.addEventListener('keydown', function(e) {
-    const modal = document.getElementById('passwordModal');
-    if (modal.style.display === 'flex' && e.key === 'Enter') {
-        e.preventDefault();
-        verifyPassword();
-    }
-});
+// 비밀번호 모달 관련 함수는 components/password_modal.html에서 정의됨
 
 // ESC 키 방지
 document.addEventListener('keydown', function(e) {
