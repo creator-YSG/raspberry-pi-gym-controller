@@ -910,32 +910,32 @@ def process_rental():
                 
                 current_app.logger.info(f'✅ 대여 완료: {locker_id} → {member_id}')
                 
-                # 🆕 구글 시트 즉시 동기화 - 주석 처리 (스케줄러가 5분마다 업로드함)
-                # if pending_rental:
-                #     rental_id_for_sync = rental_id_to_update
-                #     try:
-                #         from app.services.sheets_sync import SheetsSync
-                #         sheets_sync = SheetsSync()
-                #         
-                #         # 시트에서 해당 행 찾아서 락커번호/상태 업데이트
-                #         worksheet = sheets_sync._get_worksheet("rentals")
-                #         if worksheet:
-                #             sheets_sync._rate_limit()
-                #             cell = worksheet.find(str(rental_id_for_sync), in_column=1)
-                #             if cell:
-                #                 row_num = cell.row
-                #                 # 컬럼: 5=locker_number, 8=rental_sensor_time, 10=status
-                #                 sheets_sync._rate_limit()
-                #                 worksheet.update_cell(row_num, 5, locker_id)  # locker_number
-                #                 sheets_sync._rate_limit()
-                #                 worksheet.update_cell(row_num, 8, rental_time)  # rental_sensor_time
-                #                 sheets_sync._rate_limit()
-                #                 worksheet.update_cell(row_num, 10, 'active')  # status
-                #                 current_app.logger.info(f'📊 구글시트 업데이트 (active): rental_id={rental_id_for_sync}, locker={locker_id}')
-                #             else:
-                #                 current_app.logger.warning(f'⚠️ 시트에서 rental_id={rental_id_for_sync} 행을 찾지 못함')
-                #     except Exception as sheet_error:
-                #         current_app.logger.warning(f'⚠️ 시트 동기화 실패 (무시): {sheet_error}')
+                # 🆕 구글 시트 즉시 동기화 (대여 활성화 시)
+                if pending_rental:
+                    rental_id_for_sync = rental_id_to_update
+                    try:
+                        from app.services.sheets_sync import SheetsSync
+                        sheets_sync = SheetsSync()
+                        
+                        # 시트에서 해당 행 찾아서 락커번호/상태 업데이트
+                        worksheet = sheets_sync._get_worksheet("rentals")
+                        if worksheet:
+                            sheets_sync._rate_limit()
+                            cell = worksheet.find(str(rental_id_for_sync), in_column=1)
+                            if cell:
+                                row_num = cell.row
+                                # 컬럼: 5=locker_number, 8=rental_sensor_time, 11=status
+                                sheets_sync._rate_limit()
+                                worksheet.update_cell(row_num, 5, locker_id)  # locker_number
+                                sheets_sync._rate_limit()
+                                worksheet.update_cell(row_num, 8, rental_time)  # rental_sensor_time
+                                sheets_sync._rate_limit()
+                                worksheet.update_cell(row_num, 11, 'active')  # status
+                                current_app.logger.info(f'📊 구글시트 업데이트 (active): rental_id={rental_id_for_sync}, locker={locker_id}')
+                            else:
+                                current_app.logger.warning(f'⚠️ 시트에서 rental_id={rental_id_for_sync} 행을 찾지 못함')
+                    except Exception as sheet_error:
+                        current_app.logger.warning(f'⚠️ 시트 동기화 실패 (무시): {sheet_error}')
                 
                 # 🆕 문 닫기 로직 추가 (백그라운드 스레드)
                 import threading

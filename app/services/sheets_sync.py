@@ -288,13 +288,15 @@ class SheetsSync:
                     zone,
                     record.get('rental_barcode_time', ''),
                     record.get('rental_sensor_time', ''),
+                    record.get('return_barcode_time', ''),
                     record.get('return_sensor_time', ''),
                     record.get('status'),
                     record.get('device_id', ''),
                     record.get('created_at'),
                     record.get('auth_method', ''),
                     record.get('rental_photo_path', ''),
-                    record.get('rental_photo_url', '')
+                    record.get('rental_photo_url', ''),
+                    record.get('updated_at', '')
                 ])
                 rental_ids.append(record.get('rental_id'))
             
@@ -356,9 +358,9 @@ class SheetsSync:
             row_num = cell.row
             
             # 컬럼 인덱스 (1-based)
-            # 14: rental_photo_path, 15: rental_photo_url
-            COL_PHOTO_PATH = 14
-            COL_PHOTO_URL = 15
+            # 15: rental_photo_path, 16: rental_photo_url
+            COL_PHOTO_PATH = 15
+            COL_PHOTO_URL = 16
             
             # 셀 업데이트 (batch로 효율적)
             self._rate_limit()
@@ -411,24 +413,35 @@ class SheetsSync:
                     rental = cursor.fetchone() if cursor else None
                     
                     if rental:
-                        # 전체 데이터 추가
+                        # 전체 데이터 추가 (시트 컬럼 순서에 맞춤)
                         record = self._row_to_dict(rental)
+                        locker_number = record.get('locker_number', '') or ''
+                        zone = ''
+                        if locker_number.startswith('M'):
+                            zone = 'MALE'
+                        elif locker_number.startswith('F'):
+                            zone = 'FEMALE'
+                        elif locker_number.startswith('S'):
+                            zone = 'STAFF'
+                        
                         row_data = [
                             record.get('rental_id', ''),
                             record.get('transaction_id', '') or '',
                             record.get('member_id', '') or '',
                             record.get('member_name', '') or '',
-                            record.get('locker_number', '') or '',
+                            locker_number,
+                            zone,
                             record.get('rental_barcode_time', '') or '',
-                            record.get('return_barcode_time', '') or '',
                             record.get('rental_sensor_time', '') or '',
+                            record.get('return_barcode_time', '') or '',
                             record.get('return_sensor_time', '') or '',
                             record.get('status', ''),
-                            record.get('created_at', ''),
-                            record.get('updated_at', ''),
+                            record.get('device_id', '') or '',
+                            record.get('created_at', '') or '',
                             record.get('auth_method', '') or '',
                             record.get('rental_photo_path', '') or '',
-                            record.get('rental_photo_url', '') or ''
+                            record.get('rental_photo_url', '') or '',
+                            record.get('updated_at', '') or ''
                         ]
                         
                         self._rate_limit()
@@ -443,10 +456,10 @@ class SheetsSync:
                     return False
             
             # 컬럼 인덱스 (1-based)
-            # 7: return_barcode_time, 10: status, 12: updated_at
-            COL_RETURN_TIME = 7
-            COL_STATUS = 10
-            COL_UPDATED_AT = 12
+            # 10: return_sensor_time, 11: status, 17: updated_at
+            COL_RETURN_TIME = 10
+            COL_STATUS = 11
+            COL_UPDATED_AT = 17
             
             # 셀 업데이트
             from datetime import datetime
