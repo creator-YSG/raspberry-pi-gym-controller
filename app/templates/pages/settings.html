@@ -15,56 +15,56 @@
 
     <!-- 페이지 제목 -->
     <div class="settings-header">
-        <h1>⚙️ 설정</h1>
+        <h1>설정</h1>
     </div>
 
     <!-- 메뉴 그리드 -->
     <div class="settings-menu-grid">
         <!-- 1. 얼굴인식 등록 -->
         <button class="menu-item" onclick="window.location.href='/settings/face-register'">
-            <span class="menu-icon">👤</span>
+            <span class="menu-icon">[Face]</span>
             <span class="menu-label">얼굴인식 등록</span>
         </button>
 
         <!-- 2. 센서 매핑 점검 -->
         <button class="menu-item" onclick="window.location.href='/settings/sensor-mapping'">
-            <span class="menu-icon">📡</span>
+            <span class="menu-icon">[Sensor]</span>
             <span class="menu-label">센서 매핑 점검</span>
         </button>
 
         <!-- 3. NFC 태그 등록 -->
         <button class="menu-item" onclick="window.location.href='/settings/nfc-register'">
-            <span class="menu-icon">🔖</span>
+            <span class="menu-icon">[NFC]</span>
             <span class="menu-label">NFC 태그 등록</span>
         </button>
 
         <!-- 4. 구글시트 즉시 동기화 -->
         <button class="menu-item" onclick="window.location.href='/settings/sheets-sync'">
-            <span class="menu-icon">📊</span>
+            <span class="menu-icon">[Sheets]</span>
             <span class="menu-label">구글시트 동기화</span>
         </button>
 
         <!-- 5. 시스템 상태 모니터링 -->
         <button class="menu-item" onclick="showSystemStatus()">
-            <span class="menu-icon">💻</span>
+            <span class="menu-icon">[SYS]</span>
             <span class="menu-label">시스템 상태</span>
         </button>
 
         <!-- 6. ESP32 재연결 -->
         <button class="menu-item" onclick="reconnectESP32()">
-            <span class="menu-icon">🔌</span>
+            <span class="menu-icon">[ESP32]</span>
             <span class="menu-label">ESP32 재연결</span>
         </button>
 
         <!-- 7. 동기화 상태 조회 -->
         <button class="menu-item" onclick="showSyncStatus()">
-            <span class="menu-icon">🔄</span>
+            <span class="menu-icon">[Sync]</span>
             <span class="menu-label">동기화 상태</span>
         </button>
 
         <!-- 8. 프로그램 종료 -->
         <button class="menu-item menu-item-danger" onclick="confirmShutdown()">
-            <span class="menu-icon">🚪</span>
+            <span class="menu-icon">[EXIT]</span>
             <span class="menu-label">프로그램 종료</span>
         </button>
     </div>
@@ -174,8 +174,11 @@
 }
 
 .menu-icon {
-    font-size: 48px;
+    font-size: 20px;
+    font-weight: bold;
+    color: #4fc3f7;
     margin-bottom: 12px;
+    font-family: monospace;
 }
 
 .menu-label {
@@ -260,7 +263,7 @@ function closeModal() {
 
 // 시스템 상태 조회
 function showSystemStatus() {
-    showModal('💻 시스템 상태', '로딩 중...');
+    showModal('시스템 상태', '로딩 중...');
     
     fetch('/api/system/status')
         .then(response => response.json())
@@ -273,37 +276,37 @@ function showSystemStatus() {
 <b>디스크 사용:</b> ${sys.disk_used_gb || 'N/A'}GB / ${sys.disk_total_gb || 'N/A'}GB (${sys.disk_percent || 'N/A'}%)
 <b>가동 시간:</b> ${sys.uptime || 'N/A'}
                 `;
-                showModal('💻 시스템 상태', content);
+                showModal('시스템 상태', content);
             } else {
-                showModal('💻 시스템 상태', '상태 조회 실패: ' + (data.error || '알 수 없는 오류'));
+                showModal('시스템 상태', '상태 조회 실패: ' + (data.error || '알 수 없는 오류'));
             }
         })
         .catch(error => {
-            showModal('💻 시스템 상태', '오류 발생: ' + error.message);
+            showModal('시스템 상태', '오류 발생: ' + error.message);
         });
 }
 
 // ESP32 재연결
 function reconnectESP32() {
-    showModal('🔌 ESP32 재연결', '재연결 시도 중...');
+    showModal('ESP32 재연결', '재연결 시도 중...');
     
     fetch('/api/system/esp32/reconnect', { method: 'POST' })
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                showModal('🔌 ESP32 재연결', '✅ ' + data.message);
+                showModal('ESP32 재연결', '[OK] ' + data.message);
             } else {
-                showModal('🔌 ESP32 재연결', '❌ 재연결 실패: ' + (data.error || data.message));
+                showModal('ESP32 재연결', '[ERR] 재연결 실패: ' + (data.error || data.message));
             }
         })
         .catch(error => {
-            showModal('🔌 ESP32 재연결', '오류 발생: ' + error.message);
+            showModal('ESP32 재연결', '오류 발생: ' + error.message);
         });
 }
 
 // 동기화 상태 조회
 function showSyncStatus() {
-    showModal('🔄 동기화 상태', '로딩 중...');
+    showModal('동기화 상태', '로딩 중...');
     
     fetch('/api/sync/status')
         .then(response => response.json())
@@ -312,32 +315,32 @@ function showSyncStatus() {
             if (data.success) {
                 const stats = data.stats || {};
                 content = `
-<b>스케줄러 상태:</b> ${data.running ? '✅ 실행 중' : '❌ 중지됨'}
+<b>스케줄러 상태:</b> ${data.running ? '[O] 실행 중' : '[X] 중지됨'}
 <b>총 동기화 횟수:</b> ${stats.total_syncs || 0}회
 <b>성공:</b> ${stats.successful_syncs || 0}회
 <b>실패:</b> ${stats.failed_syncs || 0}회
 <b>마지막 동기화:</b> ${stats.last_sync_time || 'N/A'}
                 `;
             } else {
-                content = '❌ 스케줄러 미실행\n' + (data.error || '');
+                content = '[X] 스케줄러 미실행\n' + (data.error || '');
             }
-            showModal('🔄 동기화 상태', content);
+            showModal('동기화 상태', content);
         })
         .catch(error => {
-            showModal('🔄 동기화 상태', '오류 발생: ' + error.message);
+            showModal('동기화 상태', '오류 발생: ' + error.message);
         });
 }
 
 // 프로그램 종료 확인
 function confirmShutdown() {
     if (confirm('정말로 프로그램을 종료하시겠습니까?\n\nFlask 앱과 브라우저가 모두 종료됩니다.')) {
-        showModal('🚪 프로그램 종료', '종료 중...');
+        showModal('프로그램 종료', '종료 중...');
         
         fetch('/api/system/shutdown', { method: 'POST' })
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    showModal('🚪 프로그램 종료', '✅ ' + data.message + '\n\n잠시 후 브라우저를 닫습니다.');
+                    showModal('프로그램 종료', '[OK] ' + data.message + '\n\n잠시 후 브라우저를 닫습니다.');
                     // 브라우저 닫기 시도
                     setTimeout(() => {
                         window.close();
@@ -345,11 +348,11 @@ function confirmShutdown() {
                         window.location.href = 'about:blank';
                     }, 2000);
                 } else {
-                    showModal('🚪 프로그램 종료', '❌ 종료 실패: ' + (data.error || data.message));
+                    showModal('프로그램 종료', '[ERR] 종료 실패: ' + (data.error || data.message));
                 }
             })
             .catch(error => {
-                showModal('🚪 프로그램 종료', '오류 발생: ' + error.message);
+                showModal('프로그램 종료', '오류 발생: ' + error.message);
             });
     }
 }
