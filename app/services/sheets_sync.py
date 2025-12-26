@@ -512,9 +512,7 @@ class SheetsSync:
                     datetime.now().isoformat()
                 ])
             
-            # 시트 전체 업데이트
-            self._rate_limit()
-            worksheet.clear()
+            # 시트 전체 업데이트 (clear 없이 덮어쓰기 - API 오류 시 데이터 유실 방지)
             self._rate_limit()
             worksheet.update(values=rows, range_name='A1')
             
@@ -575,9 +573,7 @@ class SheetsSync:
             
             all_rows = [headers] + rows
             
-            # 시트 전체 업데이트 (최근 데이터만)
-            self._rate_limit()
-            worksheet.clear()
+            # 시트 전체 업데이트 (clear 없이 덮어쓰기)
             self._rate_limit()
             worksheet.update(values=all_rows, range_name='A1')
             
@@ -715,9 +711,7 @@ class SheetsSync:
             headers = ["locker_id", "addr", "chip_idx", "pin", "sensor_num", "created_at"]
             all_rows = [headers] + rows
 
-            # 시트 전체 업데이트
-            self._rate_limit()
-            worksheet.clear()
+            # 시트 전체 업데이트 (clear 없이 덮어쓰기)
             self._rate_limit()
             worksheet.update(values=all_rows, range_name='A1')
 
