@@ -663,6 +663,33 @@ class DatabaseManager:
             self.logger.error(f"센서 매핑 삭제 실패: {e}")
             return False
 
+    def delete_sensor_mapping_by_hardware(self, addr: str, chip_idx: int, pin: int) -> bool:
+        """하드웨어 정보로 센서 매핑 삭제
+
+        Args:
+            addr: ESP32 MCP23017 I2C 주소
+            chip_idx: ESP32 내 MCP 칩 인덱스
+            pin: MCP23017 핀 번호
+
+        Returns:
+            삭제 성공 여부
+        """
+        try:
+            with self._lock:
+                cursor = self.execute_query("""
+                    DELETE FROM sensor_mapping WHERE addr = ? AND chip_idx = ? AND pin = ?
+                """, (addr, chip_idx, pin))
+
+                if cursor and cursor.rowcount > 0:
+                    self.logger.info(f"센서 매핑 삭제 성공: addr={addr}, chip={chip_idx}, pin={pin}")
+                    return True
+
+                return False
+
+        except Exception as e:
+            self.logger.error(f"센서 매핑 삭제 실패 (하드웨어): {e}")
+            return False
+
     def get_sensor_num_from_hardware(self, addr: str, chip_idx: int, pin: int) -> Optional[int]:
         """하드웨어 정보로 센서 번호 조회 (호환성 메서드)
 

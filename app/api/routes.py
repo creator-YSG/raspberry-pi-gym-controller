@@ -3019,6 +3019,53 @@ def get_sensor_mappings():
         }), 500
 
 
+@bp.route('/sensor/lookup', methods=['GET'])
+def lookup_sensor_mapping():
+    """addr, chip_idx, pin으로 현재 매핑된 락커 조회"""
+    try:
+        addr = request.args.get('addr')
+        chip_idx = request.args.get('chip_idx', type=int)
+        pin = request.args.get('pin', type=int)
+
+        if not addr or chip_idx is None or pin is None:
+            return jsonify({
+                'success': False,
+                'error': 'addr, chip_idx, pin 파라미터가 필요합니다.'
+            }), 400
+
+        from database.database_manager import DatabaseManager
+
+        db_manager = DatabaseManager()
+        if not db_manager.connect():
+            return jsonify({
+                'success': False,
+                'error': '데이터베이스 연결 실패'
+            }), 500
+
+        mapping = db_manager.get_sensor_mapping_by_hardware(addr, chip_idx, pin)
+
+        if mapping:
+            return jsonify({
+                'success': True,
+                'locker_id': mapping.get('locker_id'),
+                'sensor_num': mapping.get('sensor_num'),
+                'mapping': mapping
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'locker_id': None,
+                'message': '매핑되지 않은 센서입니다.'
+            })
+
+    except Exception as e:
+        current_app.logger.error(f'센서 매핑 조회 오류: {e}')
+        return jsonify({
+            'success': False,
+            'error': f'센서 매핑 조회 중 오류가 발생했습니다: {str(e)}'
+        }), 500
+
+
 @bp.route('/sensor/register', methods=['POST'])
 def register_sensor_mapping():
     """센서 매핑 등록"""
@@ -3034,6 +3081,7 @@ def register_sensor_mapping():
         chip_idx = data.get('chip_idx')
         pin = data.get('pin')
         locker_id = data.get('locker_id')
+        overwrite = data.get('overwrite', False)
 
         if not all([addr, chip_idx is not None, pin is not None, locker_id]):
             return jsonify({
@@ -3052,7 +3100,7 @@ def register_sensor_mapping():
 
         # 센서 번호는 locker_id에서 추출 (M01 -> 1, F01 -> 51, S01 -> 1)
         if locker_id.startswith('M'):
-            sensor_num = int(locker_id[1:])  # M01 -> 1, M40 -> 40
+            sensor_num = int(locker_id[1:]) + 10  # M01 -> 11, M40 -> 50
         elif locker_id.startswith('F'):
             sensor_num = 50 + int(locker_id[1:])  # F01 -> 51, F10 -> 60
         elif locker_id.startswith('S'):
@@ -3062,6 +3110,13 @@ def register_sensor_mapping():
                 'success': False,
                 'error': f'잘못된 락커 ID 형식: {locker_id}'
             }), 400
+
+        # 덮어쓰기 모드인 경우 기존 매핑 삭제
+        if overwrite:
+            existing = db_manager.get_sensor_mapping_by_hardware(addr, chip_idx, pin)
+            if existing:
+                db_manager.delete_sensor_mapping_by_hardware(addr, chip_idx, pin)
+                current_app.logger.info(f'기존 센서 매핑 삭제: {existing.get("locker_id")}')
 
         success = db_manager.add_sensor_mapping(addr, chip_idx, pin, sensor_num, locker_id)
 
