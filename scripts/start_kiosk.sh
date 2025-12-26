@@ -5,7 +5,7 @@ echo "🏋️ 락카키 대여기 키오스크 모드 시작"
 echo "=================================="
 
 # 프로젝트 디렉토리로 이동
-cd /home/pi/gym-controller
+cd /home/pi/raspberry-pi-gym-controller
 
 # Flask 서버를 백그라운드에서 시작
 echo "🚀 Flask 서버 시작 중..."
