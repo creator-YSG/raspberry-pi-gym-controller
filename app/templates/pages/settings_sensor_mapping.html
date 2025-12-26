@@ -1,10 +1,12 @@
-{% extends "layouts/base.html" %}
-
-{% block title %}센서 매핑 설정{% endblock %}
-
-{% block body_class %}settings-page{% endblock %}
-
-{% block content %}
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>센서 매핑 설정</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/korean-fonts.css') }}">
+</head>
+<body style="margin: 0; padding: 0; overflow-y: scroll !important; height: auto;">
 <div class="settings-container">
     <!-- 좌측 상단: 뒤로가기 버튼 -->
     <div class="back-button-container">
@@ -94,28 +96,23 @@
 </div>
 
 <style>
-/* 스크롤 강제 활성화 */
-html, body, body.settings-page {
-    overflow: auto !important;
-    overflow-x: hidden !important;
-    height: auto !important;
-    min-height: 100vh !important;
-    max-height: none !important;
+* {
+    box-sizing: border-box;
 }
 
-body.settings-page .app-container,
-.app-container {
-    overflow: visible !important;
-    height: auto !important;
-    min-height: auto !important;
-    max-height: none !important;
+html, body {
+    margin: 0;
+    padding: 0;
+    min-height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
 }
 
 .settings-container {
-    min-height: auto;
+    min-height: 100vh;
     background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
     padding: 20px;
-    padding-bottom: 100px;
+    padding-bottom: 150px;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -788,4 +785,5 @@ function resetSensorState() {
     updateButtonStates();
 }
 </script>
-{% endblock %}
+</body>
+</html>
