@@ -315,11 +315,29 @@ function setupBarcodeScanner() {
     });
 }
 
-// 바코드 폴링 시작
-function startBarcodePolling() {
+// 바코드 폴링 초기화 (큐 비우기 후 폴링 시작)
+async function startBarcodePolling() {
+    console.log('🧹 얼굴인식 페이지 로드 시 바코드 큐 비우기...');
+
+    try {
+        // 서버 API로 큐 비우기
+        const clearResponse = await fetch('/api/barcode/clear', { method: 'POST' });
+        const clearData = await clearResponse.json();
+
+        if (clearData.success) {
+            console.log(`✅ 바코드 큐 클리어 완료: ${clearData.cleared}개 제거`);
+        } else {
+            console.warn('⚠️ 바코드 큐 클리어 실패:', clearData.error);
+        }
+    } catch (error) {
+        console.error('❌ 바코드 큐 클리어 오류:', error);
+    }
+
+    // 큐 비우기 완료 후 실제 폴링 시작
+    console.log('🔄 바코드 폴링 시작...');
     pollingInterval = setInterval(function() {
         if (isProcessingBarcode || isProcessingAuth) return;
-        
+
         fetch('/api/barcode/poll')
             .then(response => response.json())
             .then(data => {

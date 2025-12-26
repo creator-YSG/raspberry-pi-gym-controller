@@ -192,36 +192,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // 센서 디버그 모드 초기화
     initSensorDebugMode();
     
-    // 바코드 폴링 (200ms마다 체크)
-    pollingInterval = setInterval(function() {
-        // 이미 처리 중이면 폴링 건너뛰기
-        if (isProcessingBarcode) {
-            return;
-        }
-        
-        const t_poll_start = performance.now();
-        fetch('/api/barcode/poll')
-            .then(response => response.json())
-            .then(data => {
-                if (data.has_barcode && !isProcessingBarcode) {
-                    const t_poll_end = performance.now();
-                    console.log(`⏱️ [PERF-POLL] 바코드 폴링 성공: ${(t_poll_end - t_poll_start).toFixed(2)}ms | 바코드: ${data.barcode}`);
-                    handleBarcodeScanned(data.barcode);
-                }
-            })
-            .catch(error => {
-                // 조용히 무시
-            });
-    }, 200);
-    
-    // 카메라 프레임 변화 감지 폴링 (5초 후 시작)
-    if (cameraEnabled) {
-        console.log('📷 모션 감지 5초 후 시작...');
-        setTimeout(function() {
-            console.log('📷 모션 감지 시작');
-            startMotionPolling();
-        }, 5000);
-    }
+    // 페이지 로드 시 큐 비우기 후 폴링 시작
+    initializeBarcodePolling();
     
     // 키오스크 최적화
     if (!document.fullscreenElement) {
@@ -417,22 +389,77 @@ function handleBarcodeScanned(barcode) {
     });
 }
 
-// 바코드 큐 비우기 (중복 바코드 제거)
-function clearBarcodeQueue() {
-    console.log('🧹 바코드 큐 비우는 중...');
-    
-    // 큐에 남은 모든 바코드 제거 (최대 10회 시도)
-    let cleared = 0;
-    for (let i = 0; i < 10; i++) {
+// 바코드 폴링 초기화 (페이지 로드 시 큐 비우기 후 폴링 시작)
+async function initializeBarcodePolling() {
+    console.log('🧹 페이지 로드 시 바코드 큐 비우기...');
+
+    try {
+        // 서버 API로 큐 비우기
+        const clearResponse = await fetch('/api/barcode/clear', { method: 'POST' });
+        const clearData = await clearResponse.json();
+
+        if (clearData.success) {
+            console.log(`✅ 바코드 큐 클리어 완료: ${clearData.cleared}개 제거`);
+        } else {
+            console.warn('⚠️ 바코드 큐 클리어 실패:', clearData.error);
+        }
+    } catch (error) {
+        console.error('❌ 바코드 큐 클리어 오류:', error);
+    }
+
+    // 큐 비우기 완료 후 폴링 시작
+    console.log('🔄 바코드 폴링 시작...');
+    startBarcodePolling();
+
+    // 카메라 프레임 변화 감지 폴링 (5초 후 시작)
+    if (cameraEnabled) {
+        console.log('📷 모션 감지 5초 후 시작...');
+        setTimeout(function() {
+            console.log('📷 모션 감지 시작');
+            startMotionPolling();
+        }, 5000);
+    }
+}
+
+// 바코드 폴링 시작
+function startBarcodePolling() {
+    pollingInterval = setInterval(function() {
+        // 이미 처리 중이면 폴링 건너뛰기
+        if (isProcessingBarcode) {
+            return;
+        }
+
+        const t_poll_start = performance.now();
         fetch('/api/barcode/poll')
             .then(response => response.json())
             .then(data => {
-                if (data.has_barcode) {
-                    cleared++;
-                    console.log(`🗑️ 큐에서 제거: ${data.barcode} (${cleared}번째)`);
+                if (data.has_barcode && !isProcessingBarcode) {
+                    const t_poll_end = performance.now();
+                    console.log(`⏱️ [PERF-POLL] 바코드 폴링 성공: ${(t_poll_end - t_poll_start).toFixed(2)}ms | 바코드: ${data.barcode}`);
+                    handleBarcodeScanned(data.barcode);
                 }
             })
-            .catch(() => {});
+            .catch(error => {
+                // 조용히 무시
+            });
+    }, 200);
+}
+
+// 바코드 큐 비우기 (중복 바코드 제거) - 서버 API 사용
+async function clearBarcodeQueue() {
+    console.log('🧹 바코드 큐 비우기...');
+
+    try {
+        const response = await fetch('/api/barcode/clear', { method: 'POST' });
+        const data = await response.json();
+
+        if (data.success) {
+            console.log(`✅ 바코드 큐 클리어: ${data.cleared}개 제거`);
+        } else {
+            console.warn('⚠️ 바코드 큐 클리어 실패:', data.error);
+        }
+    } catch (error) {
+        console.error('❌ 바코드 큐 클리어 오류:', error);
     }
 }
 

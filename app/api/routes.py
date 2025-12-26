@@ -263,6 +263,42 @@ def poll_barcode():
         return jsonify({'has_barcode': False, 'error': str(e)})
 
 
+@bp.route('/barcode/clear', methods=['POST'])
+def clear_barcode_queue():
+    """바코드 큐 비우기 (중복 바코드 제거용)"""
+    try:
+        import queue
+        barcode_queue = getattr(current_app, 'barcode_queue', None)
+
+        if barcode_queue:
+            cleared = 0
+            while not barcode_queue.empty():
+                try:
+                    barcode_queue.get_nowait()
+                    cleared += 1
+                except queue.Empty:
+                    break
+
+            current_app.logger.info(f'바코드 큐 클리어: {cleared}개 제거')
+            return jsonify({
+                'success': True,
+                'cleared': cleared,
+                'message': f'바코드 큐에서 {cleared}개 항목 제거됨'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': '바코드 큐가 초기화되지 않았습니다.'
+            }), 500
+
+    except Exception as e:
+        current_app.logger.error(f'바코드 큐 클리어 오류: {e}')
+        return jsonify({
+            'success': False,
+            'error': f'바코드 큐 클리어 중 오류가 발생했습니다: {str(e)}'
+        }), 500
+
+
 @bp.route('/sensor/poll', methods=['GET'])
 def poll_sensor():
     """센서 폴링 (큐에서 가져오기)"""
@@ -302,10 +338,46 @@ def poll_sensor():
         else:
             current_app.logger.warning("⚠️ [SENSOR_POLL] sensor_queue가 None!")
             return jsonify({'has_events': False, 'error': 'sensor_queue_not_initialized'})
-            
+
     except Exception as e:
         current_app.logger.error(f'센서 폴링 오류: {e}')
         return jsonify({'has_events': False, 'error': str(e)})
+
+
+@bp.route('/sensor/clear', methods=['POST'])
+def clear_sensor_queue():
+    """센서 큐 비우기 (중복 센서 이벤트 제거용)"""
+    try:
+        import queue
+        sensor_queue = getattr(current_app, 'sensor_queue', None)
+
+        if sensor_queue:
+            cleared = 0
+            while not sensor_queue.empty():
+                try:
+                    sensor_queue.get_nowait()
+                    cleared += 1
+                except queue.Empty:
+                    break
+
+            current_app.logger.info(f'센서 큐 클리어: {cleared}개 제거')
+            return jsonify({
+                'success': True,
+                'cleared': cleared,
+                'message': f'센서 큐에서 {cleared}개 항목 제거됨'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': '센서 큐가 초기화되지 않았습니다.'
+            }), 500
+
+    except Exception as e:
+        current_app.logger.error(f'센서 큐 클리어 오류: {e}')
+        return jsonify({
+            'success': False,
+            'error': f'센서 큐 클리어 중 오류가 발생했습니다: {str(e)}'
+        }), 500
 
 
 @bp.route('/sensors/<int:sensor_num>/locker', methods=['GET'])
