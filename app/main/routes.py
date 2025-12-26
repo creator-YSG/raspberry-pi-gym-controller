@@ -187,6 +187,33 @@ def member_check():
                     
                     current_app.logger.info(f'📝 반납 바코드 시간 기록: member={member_id}, time={return_barcode_time}')
                     
+                    # 🆕 구글 시트 즉시 동기화 (반납 시작 시)
+                    try:
+                        # rental_id 조회
+                        cursor = locker_service.db.execute_query("""
+                            SELECT rental_id FROM rentals 
+                            WHERE member_id = ? AND status = 'active'
+                            ORDER BY created_at DESC LIMIT 1
+                        """, (member_id,))
+                        rental_row = cursor.fetchone() if cursor else None
+                        
+                        if rental_row:
+                            rental_id_for_sync = rental_row[0]
+                            from app.services.sheets_sync import SheetsSync
+                            sheets_sync = SheetsSync()
+                            
+                            worksheet = sheets_sync._get_worksheet("rentals")
+                            if worksheet:
+                                sheets_sync._rate_limit()
+                                cell = worksheet.find(str(rental_id_for_sync), in_column=1)
+                                if cell:
+                                    # 컬럼 9: return_barcode_time
+                                    sheets_sync._rate_limit()
+                                    worksheet.update_cell(cell.row, 9, return_barcode_time)
+                                    current_app.logger.info(f'📊 구글시트 업데이트 (반납시작): rental_id={rental_id_for_sync}')
+                    except Exception as sheet_error:
+                        current_app.logger.warning(f'⚠️ 시트 동기화 실패 (무시): {sheet_error}')
+                    
                     # 🆕 인증 사진 촬영 (반납 시에도)
                     try:
                         from app.api.routes import _capture_auth_photo
