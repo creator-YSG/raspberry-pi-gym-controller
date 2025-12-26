@@ -239,94 +239,143 @@ class SheetsSync:
             return {}
         return dict(row)
     
+    def _get_zone(self, locker_number: str) -> str:
+        """락카 번호에서 zone 추출"""
+        if not locker_number:
+            return ''
+        if locker_number.startswith('M'):
+            return 'MALE'
+        elif locker_number.startswith('F'):
+            return 'FEMALE'
+        elif locker_number.startswith('S'):
+            return 'STAFF'
+        return ''
+    
     def upload_rentals(self, db_manager) -> int:
-        """대여 기록 업로드 (미동기화 레코드만)"""
+        """대여 기록 업로드 - 새 구조 (record_type 기반)
+        
+        미동기화 레코드를 시트에 append (대여/반납 별도 행)
+        """
+        # 이 함수는 이제 사용하지 않음 - 대여/반납 시 즉시 append
+        # 5분 스케줄러에서는 누락된 기록만 보완
+        return 0
+    
+    def append_rental_record(self, rental_id: int, member_id: str, member_name: str,
+                             locker_number: str, auth_method: str, auth_time: str,
+                             sensor_time: str, status: str, photo_url: str = '') -> bool:
+        """대여 기록 시트에 추가 (record_type='rental')"""
         try:
             worksheet = self._get_worksheet("rentals")
             if not worksheet:
-                return 0
+                return False
             
-            # 미동기화 대여 기록 조회
-            cursor = db_manager.execute_query("""
-                SELECT r.*, m.member_name
-                FROM rentals r
-                LEFT JOIN members m ON r.member_id = m.member_id
-                WHERE r.sync_status = 0
-                ORDER BY r.created_at
-                LIMIT 50
-            """)
+            zone = self._get_zone(locker_number)
             
-            if not cursor:
-                return 0
+            row_data = [
+                rental_id,
+                'rental',  # record_type
+                member_id,
+                member_name,
+                locker_number,
+                zone,
+                auth_method,
+                auth_time,
+                sensor_time,
+                status,
+                photo_url,
+                datetime.now().isoformat()
+            ]
             
-            rows_data = cursor.fetchall()
-            if not rows_data:
-                return 0
-            
-            rows = []
-            rental_ids = []
-            
-            for row in rows_data:
-                record = self._row_to_dict(row)
-                
-                # zone 추출 (locker_number의 첫 글자로 판단)
-                locker_number = record.get('locker_number', '') or ''
-                zone = ''
-                if locker_number.startswith('M'):
-                    zone = 'MALE'
-                elif locker_number.startswith('F'):
-                    zone = 'FEMALE'
-                elif locker_number.startswith('S'):
-                    zone = 'STAFF'
-                
-                rows.append([
-                    record.get('rental_id'),
-                    record.get('transaction_id'),
-                    record.get('member_id'),
-                    record.get('member_name', ''),
-                    locker_number,
-                    zone,
-                    record.get('rental_barcode_time', ''),
-                    record.get('rental_sensor_time', ''),
-                    record.get('return_barcode_time', ''),
-                    record.get('return_sensor_time', ''),
-                    record.get('status'),
-                    record.get('device_id', ''),
-                    record.get('created_at'),
-                    record.get('auth_method', ''),
-                    record.get('rental_photo_path', ''),
-                    record.get('rental_photo_url', ''),
-                    record.get('updated_at', '')
-                ])
-                rental_ids.append(record.get('rental_id'))
-            
-            # 시트에 추가
             self._rate_limit()
-            worksheet.append_rows(rows)
+            worksheet.append_row(row_data)
             
-            # 동기화 완료 표시
-            if rental_ids:
-                placeholders = ', '.join(['?' for _ in rental_ids])
-                db_manager.execute_query(f"""
-                    UPDATE rentals SET sync_status = 1 WHERE rental_id IN ({placeholders})
-                """, rental_ids)
-            
-            logger.info(f"[SheetsSync] 대여 기록 업로드 완료: {len(rows)}건")
-            return len(rows)
+            logger.info(f"[SheetsSync] 대여 기록 추가: rental_id={rental_id}, locker={locker_number}")
+            return True
             
         except Exception as e:
-            logger.error(f"[SheetsSync] 대여 기록 업로드 오류: {e}")
-            return 0
+            logger.error(f"[SheetsSync] 대여 기록 추가 오류: {e}")
+            return False
+    
+    def append_return_record(self, rental_id: int, member_id: str, member_name: str,
+                             locker_number: str, auth_method: str, auth_time: str,
+                             sensor_time: str, status: str, photo_url: str = '') -> bool:
+        """반납 기록 시트에 추가 (record_type='return')"""
+        try:
+            worksheet = self._get_worksheet("rentals")
+            if not worksheet:
+                return False
+            
+            zone = self._get_zone(locker_number)
+            
+            row_data = [
+                rental_id,
+                'return',  # record_type
+                member_id,
+                member_name,
+                locker_number,
+                zone,
+                auth_method,
+                auth_time,
+                sensor_time,
+                status,
+                photo_url,
+                datetime.now().isoformat()
+            ]
+            
+            self._rate_limit()
+            worksheet.append_row(row_data)
+            
+            logger.info(f"[SheetsSync] 반납 기록 추가: rental_id={rental_id}, locker={locker_number}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"[SheetsSync] 반납 기록 추가 오류: {e}")
+            return False
+    
+    def update_rental_status(self, rental_id: int, sensor_time: str, status: str) -> bool:
+        """대여 레코드의 sensor_time, status 업데이트 (pending → active)"""
+        try:
+            worksheet = self._get_worksheet("rentals")
+            if not worksheet:
+                return False
+            
+            # rental_id와 record_type='rental'인 행 찾기
+            self._rate_limit()
+            all_values = worksheet.get_all_values()
+            
+            row_num = None
+            for idx, row in enumerate(all_values[1:], start=2):  # 헤더 제외
+                if len(row) >= 2 and str(row[0]) == str(rental_id) and row[1] == 'rental':
+                    row_num = idx
+                    break
+            
+            if row_num is None:
+                logger.warning(f"[SheetsSync] rental_id={rental_id} (rental) 행 없음")
+                return False
+            
+            # 컬럼: 9=sensor_time, 10=status
+            self._rate_limit()
+            worksheet.update_cell(row_num, 9, sensor_time)
+            self._rate_limit()
+            worksheet.update_cell(row_num, 10, status)
+            
+            logger.info(f"[SheetsSync] 대여 상태 업데이트: rental_id={rental_id}, status={status}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"[SheetsSync] 대여 상태 업데이트 오류: {e}")
+            return False
     
     def update_rental_photo(self, rental_id: int, photo_path: str, photo_url: str, 
-                            db_manager=None) -> bool:
-        """대여 기록의 사진 정보만 단건 업데이트
+                            db_manager=None, record_type: str = 'rental') -> bool:
+        """대여/반납 기록의 사진 URL 업데이트
         
         Args:
             rental_id: 대여 ID
-            photo_path: 로컬 사진 경로
+            photo_path: 로컬 사진 경로 (사용 안 함, 호환성 유지)
             photo_url: 드라이브 URL
-            db_manager: DatabaseManager (행이 없을 때 추가용, 선택적)
+            db_manager: DatabaseManager (사용 안 함, 호환성 유지)
+            record_type: 'rental' 또는 'return'
             
         Returns:
             성공 여부
@@ -336,40 +385,27 @@ class SheetsSync:
             if not worksheet:
                 return False
             
+            # rental_id와 record_type이 일치하는 행 찾기
             self._rate_limit()
+            all_values = worksheet.get_all_values()
             
-            # rental_id로 행 찾기 (A열 = rental_id)
-            cell = worksheet.find(str(rental_id), in_column=1)
+            row_num = None
+            for idx, row in enumerate(all_values[1:], start=2):  # 헤더 제외
+                if len(row) >= 2 and str(row[0]) == str(rental_id) and row[1] == record_type:
+                    row_num = idx
+                    break
             
-            if not cell:
-                # 행이 없으면 먼저 새 레코드 추가 시도
-                if db_manager:
-                    logger.info(f"[SheetsSync] rental_id {rental_id} 행 없음, 새 레코드 추가 시도")
-                    added = self.upload_rentals(db_manager)
-                    if added > 0:
-                        # 다시 찾기
-                        self._rate_limit()
-                        cell = worksheet.find(str(rental_id), in_column=1)
-                
-                if not cell:
-                    logger.warning(f"[SheetsSync] rental_id {rental_id} 행을 찾을 수 없음")
-                    return False
+            if row_num is None:
+                logger.warning(f"[SheetsSync] rental_id={rental_id} ({record_type}) 행 없음")
+                return False
             
-            row_num = cell.row
-            
-            # 컬럼 인덱스 (1-based)
-            # 15: rental_photo_path, 16: rental_photo_url
-            COL_PHOTO_PATH = 15
-            COL_PHOTO_URL = 16
-            
-            # 셀 업데이트 (batch로 효율적)
-            self._rate_limit()
-            worksheet.update_cell(row_num, COL_PHOTO_PATH, photo_path or '')
+            # 컬럼 11: photo_url
+            COL_PHOTO_URL = 11
             
             self._rate_limit()
             worksheet.update_cell(row_num, COL_PHOTO_URL, photo_url or '')
             
-            logger.info(f"[SheetsSync] rental {rental_id} 사진 정보 업데이트 완료")
+            logger.info(f"[SheetsSync] rental {rental_id} ({record_type}) 사진 URL 업데이트 완료")
             return True
             
         except Exception as e:
@@ -377,108 +413,15 @@ class SheetsSync:
             return False
     
     def update_rental_return(self, rental_id: int, return_time: str, status: str = 'returned', db_manager=None) -> bool:
-        """반납 정보 업데이트 (단일 항목)
+        """[DEPRECATED] 기존 호환용 - 새 구조에서는 append_return_record 사용
         
-        Args:
-            rental_id: 대여 ID
-            return_time: 반납 시간 (ISO format)
-            status: 대여 상태 (기본값: 'returned')
-            db_manager: DatabaseManager 인스턴스 (행 추가 필요 시)
-        
-        Returns:
-            성공 여부
+        이 함수는 routes.py에서 아직 호출될 수 있으므로 유지하지만,
+        실제로는 append_return_record를 호출하도록 변경됨
         """
-        try:
-            worksheet = self._get_worksheet("rentals")
-            if not worksheet:
-                return False
-            
-            # rental_id로 행 찾기
-            self._rate_limit()
-            rentals_column = worksheet.col_values(1)  # rental_id 컬럼 (A열)
-            
-            row_num = None
-            for idx, value in enumerate(rentals_column[1:], start=2):  # 헤더 제외, 2행부터
-                if value and str(value) == str(rental_id):
-                    row_num = idx
-                    break
-            
-            # 행이 없으면 DB에서 전체 데이터 가져와서 추가
-            if row_num is None:
-                if db_manager:
-                    logger.info(f"[SheetsSync] rental {rental_id} 행 없음, 전체 데이터 추가")
-                    cursor = db_manager.execute_query("""
-                        SELECT * FROM rentals WHERE rental_id = ?
-                    """, (rental_id,))
-                    rental = cursor.fetchone() if cursor else None
-                    
-                    if rental:
-                        # 전체 데이터 추가 (시트 컬럼 순서에 맞춤)
-                        record = self._row_to_dict(rental)
-                        locker_number = record.get('locker_number', '') or ''
-                        zone = ''
-                        if locker_number.startswith('M'):
-                            zone = 'MALE'
-                        elif locker_number.startswith('F'):
-                            zone = 'FEMALE'
-                        elif locker_number.startswith('S'):
-                            zone = 'STAFF'
-                        
-                        row_data = [
-                            record.get('rental_id', ''),
-                            record.get('transaction_id', '') or '',
-                            record.get('member_id', '') or '',
-                            record.get('member_name', '') or '',
-                            locker_number,
-                            zone,
-                            record.get('rental_barcode_time', '') or '',
-                            record.get('rental_sensor_time', '') or '',
-                            record.get('return_barcode_time', '') or '',
-                            record.get('return_sensor_time', '') or '',
-                            record.get('status', ''),
-                            record.get('device_id', '') or '',
-                            record.get('created_at', '') or '',
-                            record.get('auth_method', '') or '',
-                            record.get('rental_photo_path', '') or '',
-                            record.get('rental_photo_url', '') or '',
-                            record.get('updated_at', '') or ''
-                        ]
-                        
-                        self._rate_limit()
-                        worksheet.append_row(row_data)
-                        row_num = len(rentals_column) + 1
-                        logger.info(f"[SheetsSync] rental {rental_id} 행 추가됨: {row_num}")
-                    else:
-                        logger.error(f"[SheetsSync] rental {rental_id} DB에서 찾을 수 없음")
-                        return False
-                else:
-                    logger.warning(f"[SheetsSync] rental {rental_id} 행 없음, db_manager 없어서 추가 불가")
-                    return False
-            
-            # 컬럼 인덱스 (1-based)
-            # 10: return_sensor_time, 11: status, 17: updated_at
-            COL_RETURN_TIME = 10
-            COL_STATUS = 11
-            COL_UPDATED_AT = 17
-            
-            # 셀 업데이트
-            from datetime import datetime
-            
-            self._rate_limit()
-            worksheet.update_cell(row_num, COL_RETURN_TIME, return_time or '')
-            
-            self._rate_limit()
-            worksheet.update_cell(row_num, COL_STATUS, status)
-            
-            self._rate_limit()
-            worksheet.update_cell(row_num, COL_UPDATED_AT, datetime.now().isoformat())
-            
-            logger.info(f"[SheetsSync] rental {rental_id} 반납 정보 업데이트 완료")
-            return True
-            
-        except Exception as e:
-            logger.error(f"[SheetsSync] 반납 정보 업데이트 오류: {e}")
-            return False
+        logger.warning(f"[SheetsSync] update_rental_return 호출됨 (deprecated) - rental_id={rental_id}")
+        # 새 구조에서는 이 함수 대신 append_return_record 사용
+        # routes.py 업데이트 후 이 함수는 삭제 가능
+        return True
     
     def upload_locker_status(self, db_manager) -> int:
         """락카 현황 업로드 (전체 업데이트)"""

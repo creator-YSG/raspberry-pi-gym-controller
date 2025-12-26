@@ -917,23 +917,13 @@ def process_rental():
                         from app.services.sheets_sync import SheetsSync
                         sheets_sync = SheetsSync()
                         
-                        # 시트에서 해당 행 찾아서 락커번호/상태 업데이트
-                        worksheet = sheets_sync._get_worksheet("rentals")
-                        if worksheet:
-                            sheets_sync._rate_limit()
-                            cell = worksheet.find(str(rental_id_for_sync), in_column=1)
-                            if cell:
-                                row_num = cell.row
-                                # 컬럼: 5=locker_number, 8=rental_sensor_time, 11=status
-                                sheets_sync._rate_limit()
-                                worksheet.update_cell(row_num, 5, locker_id)  # locker_number
-                                sheets_sync._rate_limit()
-                                worksheet.update_cell(row_num, 8, rental_time)  # rental_sensor_time
-                                sheets_sync._rate_limit()
-                                worksheet.update_cell(row_num, 11, 'active')  # status
-                                current_app.logger.info(f'📊 구글시트 업데이트 (active): rental_id={rental_id_for_sync}, locker={locker_id}')
-                            else:
-                                current_app.logger.warning(f'⚠️ 시트에서 rental_id={rental_id_for_sync} 행을 찾지 못함')
+                        # 새 구조: sensor_time, status 업데이트
+                        sheets_sync.update_rental_status(
+                            rental_id=rental_id_for_sync,
+                            sensor_time=rental_time,
+                            status='active'
+                        )
+                        current_app.logger.info(f'📊 구글시트 업데이트 (active): rental_id={rental_id_for_sync}, locker={locker_id}')
                     except Exception as sheet_error:
                         current_app.logger.warning(f'⚠️ 시트 동기화 실패 (무시): {sheet_error}')
                 
@@ -1081,20 +1071,35 @@ def process_rental():
                         
                         current_app.logger.info(f'✅ 반납 완료: {target_locker} ← {member_id}')
                         
-                        # 🆕 구글 시트 동기화 (반납 완료 시)
+                        # 🆕 구글 시트 동기화 (반납 완료 시) - 새 구조: 별도 행 추가
                         try:
                             rental_id_for_sync = rental[0]  # rental_id
+                            auth_method_for_sync = rental[17] if len(rental) > 17 else 'barcode'
+                            return_barcode_time = rental[7] if len(rental) > 7 else return_time
+                            
+                            # 회원 이름 조회
+                            cursor_name = locker_service.db.execute_query(
+                                "SELECT member_name FROM members WHERE member_id = ?", (member_id,)
+                            )
+                            member_name_row = cursor_name.fetchone() if cursor_name else None
+                            member_name = member_name_row[0] if member_name_row else ''
+                            
                             from app.services.sheets_sync import SheetsSync
                             sheets_sync = SheetsSync()
                             
-                            # 기존 함수 사용
-                            sheets_sync.update_rental_return(
+                            # 새 구조: 반납 기록 별도 행 추가
+                            sheets_sync.append_return_record(
                                 rental_id=rental_id_for_sync,
-                                return_time=return_time,
+                                member_id=member_id,
+                                member_name=member_name,
+                                locker_number=target_locker,
+                                auth_method=auth_method_for_sync,
+                                auth_time=return_barcode_time or '',
+                                sensor_time=return_time,
                                 status='returned',
-                                db_manager=locker_service.db
+                                photo_url=''  # 반납 사진 URL은 나중에 업데이트
                             )
-                            current_app.logger.info(f'📊 구글시트 업데이트 (returned): rental_id={rental_id_for_sync}')
+                            current_app.logger.info(f'📊 구글시트 반납 기록 추가: rental_id={rental_id_for_sync}')
                         except Exception as sheet_error:
                             current_app.logger.warning(f'⚠️ 시트 동기화 실패 (무시): {sheet_error}')
                         

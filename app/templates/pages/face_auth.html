@@ -585,10 +585,12 @@ function handleNFCScanned(nfcUid) {
         if (data.success && data.locker_info) {
             navigateTo('member-check', {
                 action: 'return',
+                member_id: data.locker_info.current_member,
                 locker_id: data.locker_info.locker_number,
                 zone: data.locker_info.zone,
                 method: 'nfc',
-                nfc_uid: nfcUid
+                nfc_uid: nfcUid,
+                auth_method: 'nfc'
             });
         } else {
             navigateTo('error', { type: 'nfc_error', message: data.error || 'NFC 오류' });

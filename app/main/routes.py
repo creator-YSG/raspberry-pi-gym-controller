@@ -140,6 +140,29 @@ def member_check():
                     else:
                         current_app.logger.error(f'⚠️ Pending 레코드 생성됨 but 검증 실패: member={member_id}, rental_id={rental_id}')
                     
+                    # 🆕 구글 시트 즉시 동기화 (대여 pending 생성 시)
+                    try:
+                        from app.services.sheets_sync import SheetsSync
+                        sheets_sync = SheetsSync()
+                        
+                        # 회원 이름 가져오기
+                        member_name = member_dict.get('member_name', '') if member_dict else ''
+                        
+                        sheets_sync.append_rental_record(
+                            rental_id=rental_id,
+                            member_id=member_id,
+                            member_name=member_name,
+                            locker_number='PENDING',
+                            auth_method=auth_method,
+                            auth_time=rental_time,
+                            sensor_time='',  # 아직 센서 감지 안 됨
+                            status='pending',
+                            photo_url=''
+                        )
+                        current_app.logger.info(f'📊 구글시트 대여 기록 추가 (pending): rental_id={rental_id}')
+                    except Exception as sheet_error:
+                        current_app.logger.warning(f'⚠️ 시트 동기화 실패 (무시): {sheet_error}')
+                    
                     # 🆕 인증 사진 촬영 (pending rental 생성 직후)
                     try:
                         from app.api.routes import _capture_auth_photo
@@ -187,32 +210,7 @@ def member_check():
                     
                     current_app.logger.info(f'📝 반납 바코드 시간 기록: member={member_id}, time={return_barcode_time}')
                     
-                    # 🆕 구글 시트 즉시 동기화 (반납 시작 시)
-                    try:
-                        # rental_id 조회
-                        cursor = locker_service.db.execute_query("""
-                            SELECT rental_id FROM rentals 
-                            WHERE member_id = ? AND status = 'active'
-                            ORDER BY created_at DESC LIMIT 1
-                        """, (member_id,))
-                        rental_row = cursor.fetchone() if cursor else None
-                        
-                        if rental_row:
-                            rental_id_for_sync = rental_row[0]
-                            from app.services.sheets_sync import SheetsSync
-                            sheets_sync = SheetsSync()
-                            
-                            worksheet = sheets_sync._get_worksheet("rentals")
-                            if worksheet:
-                                sheets_sync._rate_limit()
-                                cell = worksheet.find(str(rental_id_for_sync), in_column=1)
-                                if cell:
-                                    # 컬럼 9: return_barcode_time
-                                    sheets_sync._rate_limit()
-                                    worksheet.update_cell(cell.row, 9, return_barcode_time)
-                                    current_app.logger.info(f'📊 구글시트 업데이트 (반납시작): rental_id={rental_id_for_sync}')
-                    except Exception as sheet_error:
-                        current_app.logger.warning(f'⚠️ 시트 동기화 실패 (무시): {sheet_error}')
+                    # 구글 시트 동기화는 반납 완료 시에 한 번에 기록 (새 구조)
                     
                     # 🆕 인증 사진 촬영 (반납 시에도)
                     try:
