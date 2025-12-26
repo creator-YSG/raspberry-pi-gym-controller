@@ -94,20 +94,25 @@
 </div>
 
 <style>
-/* body overflow 오버라이드 */
-body.settings-page {
-    overflow-y: auto !important;
+/* 스크롤 강제 활성화 */
+html, body, body.settings-page {
+    overflow: auto !important;
     overflow-x: hidden !important;
+    height: auto !important;
+    min-height: 100vh !important;
+    max-height: none !important;
 }
 
-body.settings-page .app-container {
+body.settings-page .app-container,
+.app-container {
     overflow: visible !important;
     height: auto !important;
-    min-height: 100vh;
+    min-height: auto !important;
+    max-height: none !important;
 }
 
 .settings-container {
-    min-height: 100vh;
+    min-height: auto;
     background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
     padding: 20px;
     padding-bottom: 100px;
