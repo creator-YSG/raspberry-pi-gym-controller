@@ -52,7 +52,8 @@ class DBLogHandler(logging.Handler):
         try:
             # 반복적인 폴링 로그 필터링 (너무 많이 쌓이는 것 방지)
             if record.name == 'werkzeug' and any(x in record.getMessage() for x in [
-                '/api/barcode/poll', '/api/camera/motion', '/api/sensors/poll'
+                '/api/barcode/poll', '/api/camera/motion', '/api/sensors/poll',
+                '/api/face/detect'  # 얼굴 감지 폴링도 제외
             ]):
                 return  # 폴링 요청은 DB에 저장 안 함
             
