@@ -649,7 +649,7 @@ class SheetsSync:
                     record.get('created_at', '')
                 ])
             
-            # 기존 데이터에 추가 (append)
+            # 기존 데이터에 추가 (배치로 한 번에)
             self._rate_limit()
             
             # 헤더가 없으면 추가
@@ -666,10 +666,10 @@ class SheetsSync:
                     'backgroundColor': {'red': 0.9, 'green': 0.9, 'blue': 0.9}
                 })
             
-            # 로그 추가
-            for row in rows:
+            # 로그 배치 추가 (한 번의 API 호출로 여러 행 추가)
+            if rows:
                 self._rate_limit()
-                worksheet.append_row(row)
+                worksheet.append_rows(rows, value_input_option='RAW')
             
             # 동기화 상태 업데이트
             if log_ids:
