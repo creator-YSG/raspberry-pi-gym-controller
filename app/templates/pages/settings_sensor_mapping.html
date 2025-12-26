@@ -2,11 +2,32 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>센서 매핑 설정</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/korean-fonts.css') }}">
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+        .scroll-wrapper {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            overflow-y: scroll;
+            overflow-x: hidden;
+            -webkit-overflow-scrolling: touch;
+            touch-action: pan-y;
+        }
+    </style>
 </head>
-<body style="margin: 0; padding: 0; overflow-y: scroll !important; height: auto;">
+<body>
+<div class="scroll-wrapper" id="scrollWrapper">
 <div class="settings-container">
     <!-- 좌측 상단: 뒤로가기 버튼 -->
     <div class="back-button-container">
@@ -94,18 +115,11 @@
         </div>
     </div>
 </div>
+</div><!-- scroll-wrapper 끝 -->
 
 <style>
 * {
     box-sizing: border-box;
-}
-
-html, body {
-    margin: 0;
-    padding: 0;
-    min-height: 100%;
-    overflow-y: auto;
-    overflow-x: hidden;
 }
 
 .settings-container {
