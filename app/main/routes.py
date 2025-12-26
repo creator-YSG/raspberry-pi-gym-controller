@@ -2,18 +2,54 @@
 메인 페이지 라우트
 """
 
-from flask import render_template, current_app, request
+from flask import render_template, current_app, request, jsonify
 from app.main import bp
 from app.services.locker_service import LockerService
 from app.services.member_service import MemberService
+
+
+def get_gym_name() -> str:
+    """DB에서 헬스장 이름 가져오기"""
+    try:
+        from database.database_manager import DatabaseManager
+        db = DatabaseManager('instance/gym_system.db')
+        db.connect()
+        cursor = db.execute_query(
+            "SELECT setting_value FROM system_settings WHERE setting_key = 'gym_name'"
+        )
+        result = cursor.fetchone() if cursor else None
+        db.close()
+        return result[0] if result else '헬스장'
+    except Exception as e:
+        current_app.logger.warning(f"헬스장 이름 조회 실패: {e}")
+        return '헬스장'
+
+
+def get_admin_password() -> str:
+    """DB에서 관리자 비밀번호 가져오기"""
+    try:
+        from database.database_manager import DatabaseManager
+        db = DatabaseManager('instance/gym_system.db')
+        db.connect()
+        cursor = db.execute_query(
+            "SELECT setting_value FROM system_settings WHERE setting_key = 'admin_password'"
+        )
+        result = cursor.fetchone() if cursor else None
+        db.close()
+        return result[0] if result else '1234'
+    except Exception as e:
+        current_app.logger.warning(f"관리자 비밀번호 조회 실패: {e}")
+        return '1234'
 
 
 @bp.route('/')
 @bp.route('/index')
 def index():
     """홈 화면 - 바코드 스캔 대기"""
+    gym_name = get_gym_name()
     return render_template('pages/home.html', 
                          title='락카키 대여기',
+                         gym_name=gym_name,
                          page_class='home-page')
 
 
@@ -245,8 +281,10 @@ def error():
 @bp.route('/face-auth')
 def face_auth():
     """얼굴 인증 화면 - 카메라 영상 표시 및 자동 인증"""
+    gym_name = get_gym_name()
     return render_template('pages/face_auth.html',
                          title='얼굴 인증',
+                         gym_name=gym_name,
                          page_class='face-auth-page')
 
 
@@ -291,4 +329,21 @@ def settings_sheets_sync():
                          title='구글시트 동기화',
                          page_class='settings-page')
 
+
+# ========== 비밀번호 검증 API ==========
+
+@bp.route('/api/verify-admin-password', methods=['POST'])
+def verify_admin_password():
+    """관리자 비밀번호 검증 API (5회 터치 후 호출)"""
+    data = request.get_json()
+    password = data.get('password', '') if data else ''
+    
+    correct_password = get_admin_password()
+    
+    if password == correct_password:
+        current_app.logger.info("✅ 관리자 비밀번호 인증 성공")
+        return jsonify({'success': True, 'redirect': '/settings'})
+    else:
+        current_app.logger.warning(f"❌ 관리자 비밀번호 인증 실패: 입력값={password}")
+        return jsonify({'success': False, 'message': '비밀번호가 틀렸습니다.'})
 

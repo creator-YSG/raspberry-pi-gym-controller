@@ -6,17 +6,28 @@
 
 {% block content %}
 <div class="home-container">
-    <!-- 우측 상단: 설정 버튼 -->
-    <div class="settings-button-container">
-        <button class="settings-button" id="settingsButton" onclick="window.location.href='/settings'">
-            ⚙️
-        </button>
+    <!-- 상단: 헬스장 이름 (5회 터치로 설정 진입) -->
+    <div class="gym-name-section" id="gymNameSection">
+        <div class="gym-name-text" id="gymNameText">{{ gym_name }}</div>
     </div>
 
     <!-- 상단: 날짜/시간 -->
     <div class="datetime-section">
         <div class="current-date" id="currentDate"></div>
         <div class="current-time" id="currentTime"></div>
+    </div>
+    
+    <!-- 비밀번호 입력 모달 -->
+    <div class="password-modal" id="passwordModal" style="display: none;">
+        <div class="password-modal-content">
+            <div class="password-modal-title">관리자 비밀번호 입력</div>
+            <input type="password" id="adminPasswordInput" class="password-input" placeholder="비밀번호" maxlength="20" />
+            <div class="password-modal-buttons">
+                <button class="btn-cancel" onclick="closePasswordModal()">취소</button>
+                <button class="btn-confirm" onclick="verifyPassword()">확인</button>
+            </div>
+            <div class="password-error" id="passwordError" style="display: none;">비밀번호가 틀렸습니다.</div>
+        </div>
     </div>
 
     <!-- 중앙: 바코드/QR 일러스트 -->
@@ -55,33 +66,142 @@
 </div>
 
 <style>
-/* 설정 버튼 */
-.settings-button-container {
+/* 헬스장 이름 섹션 */
+.gym-name-section {
     position: fixed;
-    top: 20px;
-    right: 20px;
+    top: 0;
+    left: 0;
+    right: 0;
+    padding: 25px 0;
+    text-align: center;
     z-index: 1000;
-}
-
-.settings-button {
-    background: rgba(255, 255, 255, 0.15);
-    border: 2px solid rgba(255, 255, 255, 0.3);
-    border-radius: 12px;
-    padding: 12px 16px;
     cursor: pointer;
-    font-size: 28px;
-    transition: all 0.3s ease;
-    color: white;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
 }
 
-.settings-button:hover {
+.gym-name-text {
+    font-size: 2.2rem;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.95);
+    text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.3);
+    letter-spacing: 0.1em;
+    transition: transform 0.1s ease;
+}
+
+.gym-name-section:active .gym-name-text {
+    transform: scale(0.98);
+}
+
+/* 비밀번호 모달 */
+.password-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.85);
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.password-modal-content {
+    background: linear-gradient(145deg, #2a2a3e, #1e1e2e);
+    border-radius: 24px;
+    padding: 40px 50px;
+    text-align: center;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    min-width: 350px;
+}
+
+.password-modal-title {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: #fff;
+    margin-bottom: 30px;
+}
+
+.password-input {
+    width: 100%;
+    padding: 18px 20px;
+    font-size: 1.5rem;
+    text-align: center;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+    outline: none;
+    transition: border-color 0.3s;
+    box-sizing: border-box;
+    letter-spacing: 0.3em;
+}
+
+.password-input:focus {
+    border-color: #4caf50;
+}
+
+.password-input::placeholder {
+    color: rgba(255, 255, 255, 0.4);
+    letter-spacing: 0.1em;
+}
+
+.password-modal-buttons {
+    display: flex;
+    gap: 15px;
+    margin-top: 30px;
+}
+
+.password-modal-buttons button {
+    flex: 1;
+    padding: 16px 30px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-cancel {
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+}
+
+.btn-cancel:hover {
     background: rgba(255, 255, 255, 0.25);
-    transform: scale(1.05);
-    border-color: rgba(255, 255, 255, 0.5);
 }
 
-.settings-button:active {
-    transform: scale(0.95);
+.btn-confirm {
+    background: linear-gradient(135deg, #4caf50, #45a049);
+    color: #fff;
+}
+
+.btn-confirm:hover {
+    background: linear-gradient(135deg, #5cbf60, #4caf50);
+    transform: translateY(-2px);
+}
+
+.password-error {
+    color: #ff6b6b;
+    margin-top: 15px;
+    font-size: 0.95rem;
+    animation: shake 0.3s ease;
+}
+
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-8px); }
+    75% { transform: translateX(8px); }
 }
 
 /* 센서 디버그 토글 버튼 */
@@ -172,6 +292,12 @@ let cameraEnabled = true; // 카메라 기반 얼굴인식 활성화 여부
 let nfcDoorCloseTimer = null;
 let nfcDoorDeviceId = null;
 
+// 5회 터치 설정 진입
+let gymNameTouchCount = 0;
+let gymNameTouchTimer = null;
+const TOUCH_THRESHOLD = 5;  // 5회 터치
+const TOUCH_TIMEOUT = 2000; // 2초 내에 터치해야 함
+
 // 페이지 로드 시 초기화
 document.addEventListener('DOMContentLoaded', function() {
     console.log('락카키 대여기 시작');
@@ -186,8 +312,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // 하드웨어 바코드 스캐너 리스닝
     setupBarcodeScanner();
     
-    // 숨겨진 관리자 모드 (좌측 하단 3초 누르기)
-    setupAdminTrigger();
+    // 헬스장 이름 5회 터치 → 설정 진입
+    setupGymNameTouch();
     
     // 센서 디버그 모드 초기화
     initSensorDebugMode();
@@ -488,38 +614,102 @@ function navigateTo(page, params) {
     window.location.href = url;
 }
 
-// 숨겨진 관리자 모드 트리거
-function setupAdminTrigger() {
-    const trigger = document.getElementById('adminTrigger');
-    let pressTimer = null;
+// 헬스장 이름 5회 터치 설정 진입
+function setupGymNameTouch() {
+    const gymNameSection = document.getElementById('gymNameSection');
     
-    trigger.addEventListener('mousedown', function() {
-        pressTimer = setTimeout(function() {
-            openAdminMode();
-        }, 3000);
-    });
-    
-    trigger.addEventListener('mouseup', function() {
-        clearTimeout(pressTimer);
-    });
-    
-    trigger.addEventListener('touchstart', function() {
-        pressTimer = setTimeout(function() {
-            openAdminMode();
-        }, 3000);
-    });
-    
-    trigger.addEventListener('touchend', function() {
-        clearTimeout(pressTimer);
+    gymNameSection.addEventListener('click', handleGymNameTouch);
+    gymNameSection.addEventListener('touchend', function(e) {
+        e.preventDefault();
+        handleGymNameTouch();
     });
 }
 
-function openAdminMode() {
-    const password = prompt('관리자 비밀번호:');
-    if (password === '1234') {
-        window.location.href = '/admin';
+function handleGymNameTouch() {
+    gymNameTouchCount++;
+    console.log(`🔢 헬스장 이름 터치: ${gymNameTouchCount}/${TOUCH_THRESHOLD}`);
+    
+    // 타이머 리셋
+    if (gymNameTouchTimer) {
+        clearTimeout(gymNameTouchTimer);
     }
+    
+    // 5회 터치 달성
+    if (gymNameTouchCount >= TOUCH_THRESHOLD) {
+        console.log('🔓 5회 터치 완료! 비밀번호 입력창 표시');
+        gymNameTouchCount = 0;
+        showPasswordModal();
+        return;
+    }
+    
+    // 2초 후 카운터 리셋
+    gymNameTouchTimer = setTimeout(function() {
+        console.log('⏰ 터치 타이머 만료, 카운터 리셋');
+        gymNameTouchCount = 0;
+    }, TOUCH_TIMEOUT);
 }
+
+function showPasswordModal() {
+    const modal = document.getElementById('passwordModal');
+    const input = document.getElementById('adminPasswordInput');
+    const error = document.getElementById('passwordError');
+    
+    modal.style.display = 'flex';
+    error.style.display = 'none';
+    input.value = '';
+    
+    // 포커스 (약간의 딜레이 필요)
+    setTimeout(() => input.focus(), 100);
+}
+
+function closePasswordModal() {
+    const modal = document.getElementById('passwordModal');
+    const input = document.getElementById('adminPasswordInput');
+    
+    modal.style.display = 'none';
+    input.value = '';
+    
+    // 바코드 입력 필드로 포커스 복귀
+    document.getElementById('barcodeInput').focus();
+}
+
+function verifyPassword() {
+    const input = document.getElementById('adminPasswordInput');
+    const error = document.getElementById('passwordError');
+    const password = input.value;
+    
+    fetch('/api/verify-admin-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: password })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            console.log('✅ 비밀번호 인증 성공');
+            window.location.href = data.redirect || '/settings';
+        } else {
+            console.log('❌ 비밀번호 인증 실패');
+            error.style.display = 'block';
+            input.value = '';
+            input.focus();
+        }
+    })
+    .catch(err => {
+        console.error('❌ 비밀번호 검증 오류:', err);
+        error.textContent = '시스템 오류가 발생했습니다.';
+        error.style.display = 'block';
+    });
+}
+
+// Enter 키로 비밀번호 확인
+document.addEventListener('keydown', function(e) {
+    const modal = document.getElementById('passwordModal');
+    if (modal.style.display === 'flex' && e.key === 'Enter') {
+        e.preventDefault();
+        verifyPassword();
+    }
+});
 
 // ESC 키 방지
 document.addEventListener('keydown', function(e) {

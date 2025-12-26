@@ -2,45 +2,66 @@
 동기화 스케줄러
 
 백그라운드에서 주기적으로 Google Sheets 동기화 실행
-- 회원 정보 다운로드: 5분마다
-- 대여/센서 업로드: 5분마다
-- 락카 상태 업데이트: 1분마다
+- 회원 정보 다운로드: 5분마다 (설정에서 읽음)
+- 대여/센서 업로드: 5분마다 (설정에서 읽음)
+- 락카 상태 업데이트: 1분마다 (설정에서 읽음)
+- 헬스장 설정 동기화: 다운로드 시 함께 수행
 """
 
+import json
 import threading
 import time
 import logging
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
 from app.services.sheets_sync import SheetsSync
+from app.services.integration_sync import IntegrationSync
 
 logger = logging.getLogger(__name__)
+
+
+def _load_sync_config() -> dict:
+    """동기화 설정 로드 (config/google_sheets_config.json에서)"""
+    config_path = Path(__file__).parent.parent.parent / "config" / "google_sheets_config.json"
+    try:
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config = json.load(f)
+        return config.get('sync_settings', {})
+    except Exception as e:
+        logger.warning(f"[SyncScheduler] 설정 로드 실패, 기본값 사용: {e}")
+        return {}
 
 
 class SyncScheduler:
     """동기화 스케줄러"""
     
     def __init__(self, sheets_sync: SheetsSync, db_manager,
-                 download_interval: int = 300,
-                 upload_interval: int = 300,
-                 locker_status_interval: int = 60):
+                 integration_sync: IntegrationSync = None,
+                 download_interval: int = None,
+                 upload_interval: int = None,
+                 locker_status_interval: int = None):
         """
         초기화
         
         Args:
             sheets_sync: SheetsSync 인스턴스
             db_manager: DatabaseManager 인스턴스
-            download_interval: 다운로드 동기화 간격 (초, 기본 5분)
-            upload_interval: 업로드 동기화 간격 (초, 기본 5분)
-            locker_status_interval: 락카 상태 동기화 간격 (초, 기본 1분)
+            integration_sync: IntegrationSync 인스턴스 (헬스장 설정 동기화)
+            download_interval: 다운로드 동기화 간격 (초, None이면 설정에서 읽음)
+            upload_interval: 업로드 동기화 간격 (초, None이면 설정에서 읽음)
+            locker_status_interval: 락카 상태 동기화 간격 (초, None이면 설정에서 읽음)
         """
         self.sheets_sync = sheets_sync
         self.db_manager = db_manager
+        self.integration_sync = integration_sync or IntegrationSync()
         
-        self.download_interval = download_interval
-        self.upload_interval = upload_interval
-        self.locker_status_interval = locker_status_interval
+        # 설정에서 interval 읽기
+        sync_config = _load_sync_config()
+        self.download_interval = download_interval or sync_config.get('download_interval_sec', 300)
+        self.upload_interval = upload_interval or sync_config.get('upload_interval_sec', 300)
+        self.locker_status_interval = locker_status_interval or sync_config.get('device_status_interval_sec', 60)
         
         self._running = False
         self._threads = []
@@ -50,15 +71,16 @@ class SyncScheduler:
             'last_download': None,
             'last_upload': None,
             'last_locker_update': None,
+            'last_gym_settings': None,
             'download_count': 0,
             'upload_count': 0,
             'error_count': 0,
         }
         
         logger.info(f"[SyncScheduler] 초기화 완료")
-        logger.info(f"  - 다운로드 간격: {download_interval}초")
-        logger.info(f"  - 업로드 간격: {upload_interval}초")
-        logger.info(f"  - 락카 상태 간격: {locker_status_interval}초")
+        logger.info(f"  - 다운로드 간격: {self.download_interval}초")
+        logger.info(f"  - 업로드 간격: {self.upload_interval}초")
+        logger.info(f"  - 락카 상태 간격: {self.locker_status_interval}초")
     
     def start(self):
         """스케줄러 시작"""
@@ -137,6 +159,7 @@ class SyncScheduler:
         if not self.sheets_sync:
             return
         
+        # 1. 락카키 시트에서 회원/설정 다운로드
         result = self.sheets_sync.sync_all_downloads(self.db_manager)
         
         if result:
@@ -146,6 +169,16 @@ class SyncScheduler:
             total = sum(result.values())
             if total > 0:
                 logger.info(f"[SyncScheduler] 다운로드 완료: 회원 {result.get('members', 0)}명, 설정 {result.get('settings', 0)}개")
+        
+        # 2. 통합 시트에서 헬스장 설정 다운로드
+        try:
+            if self.integration_sync:
+                gym_settings = self.integration_sync.download_gym_settings(self.db_manager)
+                if gym_settings:
+                    self.stats['last_gym_settings'] = datetime.now().isoformat()
+                    logger.info(f"[SyncScheduler] 헬스장 설정 동기화: {len(gym_settings)}개")
+        except Exception as e:
+            logger.error(f"[SyncScheduler] 헬스장 설정 동기화 실패: {e}")
     
     def _sync_uploads(self):
         """업로드 동기화 실행"""
@@ -223,7 +256,7 @@ def init_scheduler(db_manager, auto_start: bool = True) -> Optional[SyncSchedule
     global _scheduler
     
     try:
-        # SheetsSync 초기화
+        # SheetsSync 초기화 (락카키 시트)
         sheets_sync = SheetsSync()
         
         # 연결 테스트
@@ -231,8 +264,16 @@ def init_scheduler(db_manager, auto_start: bool = True) -> Optional[SyncSchedule
             logger.warning("[SyncScheduler] Google Sheets 연결 실패, 오프라인 모드로 실행")
             # 연결 실패해도 스케줄러는 생성 (나중에 재연결 시도)
         
-        # 스케줄러 생성
-        _scheduler = SyncScheduler(sheets_sync, db_manager)
+        # IntegrationSync 초기화 (통합 시트)
+        integration_sync = IntegrationSync()
+        # 연결은 필요 시 자동으로 수행됨
+        
+        # 스케줄러 생성 (interval은 config에서 자동으로 읽음)
+        _scheduler = SyncScheduler(
+            sheets_sync=sheets_sync,
+            db_manager=db_manager,
+            integration_sync=integration_sync
+        )
         
         if auto_start:
             _scheduler.start()

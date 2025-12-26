@@ -1,6 +1,7 @@
 """
 시스템 간 통합을 위한 구글 시트 동기화
 락카키 대여기 ↔ 운동복 대여기 간 통신 정보 공유
++ 헬스장 공통 설정 (gym_name, admin_password) 동기화
 """
 
 import json
@@ -8,6 +9,7 @@ import socket
 import logging
 from datetime import datetime
 from pathlib import Path
+from typing import Dict, Optional
 
 try:
     import gspread
@@ -22,20 +24,50 @@ logger = logging.getLogger(__name__)
 class IntegrationSync:
     """시스템 통합 정보 동기화"""
     
-    # System_Integration 시트 ID
-    INTEGRATION_SHEET_ID = "15qpiY1r_SEK6b2dr00UDmKrYHSVuGMmiMeTZ898Lv8Q"
+    # 기본 System_Integration 시트 ID (설정 파일에서 오버라이드 가능)
+    DEFAULT_INTEGRATION_SHEET_ID = "15qpiY1r_SEK6b2dr00UDmKrYHSVuGMmiMeTZ898Lv8Q"
     
-    def __init__(self):
-        """초기화"""
+    def __init__(self, config_path: str = None):
+        """초기화
+        
+        Args:
+            config_path: 설정 파일 경로 (기본: config/google_sheets_config.json)
+        """
         self.project_root = Path(__file__).parent.parent.parent
         self.credentials_path = self.project_root / "config" / "google_credentials.json"
         self.cache_file = self.project_root / "config" / "locker_api_cache.json"
+        
+        # 설정 로드
+        if config_path is None:
+            config_path = self.project_root / "config" / "google_sheets_config.json"
+        self.config = self._load_config(config_path)
+        
+        # 통합 시트 ID (설정 파일에서 읽거나 기본값 사용)
+        self.integration_sheet_id = self.config.get(
+            'integration_sheet_id', 
+            self.DEFAULT_INTEGRATION_SHEET_ID
+        )
+        
+        # 시트 이름 매핑
+        self.sheet_names = self.config.get('integration_sheet_names', {
+            'gym_settings': '헬스장설정',
+            'device_info': '시트1'
+        })
         
         self.client = None
         self.spreadsheet = None
         self.connected = False
         
-        logger.info("[IntegrationSync] 초기화")
+        logger.info(f"[IntegrationSync] 초기화 (시트 ID: {self.integration_sheet_id[:20]}...)")
+    
+    def _load_config(self, config_path) -> dict:
+        """설정 파일 로드"""
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception as e:
+            logger.warning(f"[IntegrationSync] 설정 파일 로드 실패: {e}")
+            return {}
     
     def connect(self) -> bool:
         """구글 시트 연결"""
@@ -54,7 +86,7 @@ class IntegrationSync:
             )
             
             self.client = gspread.authorize(credentials)
-            self.spreadsheet = self.client.open_by_key(self.INTEGRATION_SHEET_ID)
+            self.spreadsheet = self.client.open_by_key(self.integration_sheet_id)
             self.connected = True
             
             logger.info(f"[IntegrationSync] ✅ 연결 성공: {self.spreadsheet.title}")
@@ -78,6 +110,98 @@ class IntegrationSync:
             s.close()
         return ip
     
+    # =============================
+    # 헬스장 설정 동기화
+    # =============================
+    
+    def download_gym_settings(self, db_manager=None) -> Dict[str, str]:
+        """헬스장 설정 다운로드 (gym_name, admin_password 등)
+        
+        Args:
+            db_manager: DatabaseManager 인스턴스 (DB에 저장할 경우)
+            
+        Returns:
+            설정 딕셔너리 {'gym_name': '...', 'admin_password': '...'}
+        """
+        if not self.connected:
+            if not self.connect():
+                logger.warning("[IntegrationSync] 연결 실패, 캐시에서 로드")
+                return self._load_gym_settings_cache()
+        
+        try:
+            sheet_name = self.sheet_names.get('gym_settings', '헬스장설정')
+            worksheet = self.spreadsheet.worksheet(sheet_name)
+            
+            records = worksheet.get_all_records()
+            
+            settings = {}
+            for record in records:
+                key = record.get('setting_key')
+                value = record.get('setting_value')
+                if key and value is not None:
+                    settings[key] = str(value)
+                    
+                    # DB에 저장
+                    if db_manager:
+                        try:
+                            db_manager.execute_query("""
+                                INSERT OR REPLACE INTO system_settings 
+                                (setting_key, setting_value, setting_type, description, updated_at)
+                                VALUES (?, ?, ?, ?, ?)
+                            """, (
+                                key,
+                                str(value),
+                                record.get('setting_type', 'string'),
+                                record.get('description', ''),
+                                datetime.now().isoformat()
+                            ))
+                        except Exception as e:
+                            logger.error(f"[IntegrationSync] DB 저장 실패: {key}, {e}")
+            
+            # 캐시 저장
+            self._save_gym_settings_cache(settings)
+            
+            logger.info(f"[IntegrationSync] ✅ 헬스장 설정 다운로드 완료: {len(settings)}개")
+            return settings
+            
+        except Exception as e:
+            logger.error(f"[IntegrationSync] ❌ 헬스장 설정 다운로드 실패: {e}")
+            return self._load_gym_settings_cache()
+    
+    def _save_gym_settings_cache(self, settings: dict):
+        """헬스장 설정 캐시 저장"""
+        cache_file = self.project_root / "config" / "gym_settings_cache.json"
+        try:
+            data = {
+                'settings': settings,
+                'cached_at': datetime.now().isoformat()
+            }
+            with open(cache_file, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            logger.error(f"[IntegrationSync] 설정 캐시 저장 실패: {e}")
+    
+    def _load_gym_settings_cache(self) -> Dict[str, str]:
+        """헬스장 설정 캐시 로드"""
+        cache_file = self.project_root / "config" / "gym_settings_cache.json"
+        try:
+            if cache_file.exists():
+                with open(cache_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                return data.get('settings', {})
+        except Exception as e:
+            logger.error(f"[IntegrationSync] 설정 캐시 로드 실패: {e}")
+        
+        # 기본값 반환
+        return {
+            'gym_name': '헬스장',
+            'admin_password': '1234'
+        }
+    
+    # =============================
+    # 디바이스 정보 동기화 (기존 기능)
+    # =============================
+    
     def initialize_sheet_headers(self):
         """시트 헤더 초기화 (최초 1회)"""
         if not self.connected:
@@ -98,7 +222,7 @@ class IntegrationSync:
             ]
             
             # 첫 번째 행에 헤더 쓰기
-            worksheet.update('A1:E1', [headers])
+            worksheet.update(range_name='A1:E1', values=[headers])
             
             # 헤더 행 서식 설정 (볼드, 배경색)
             worksheet.format('A1:E1', {
@@ -137,11 +261,11 @@ class IntegrationSync:
             
             if len(existing_data) <= 1:
                 # 데이터 없음 → 2번째 행에 추가
-                worksheet.update('A2:E2', [data])
+                worksheet.update(range_name='A2:E2', values=[data])
                 logger.info(f"[IntegrationSync] ✅ IP 추가: {ip}:{port}")
             else:
                 # 데이터 있음 → 2번째 행 업데이트
-                worksheet.update('A2:E2', [data])
+                worksheet.update(range_name='A2:E2', values=[data])
                 logger.info(f"[IntegrationSync] ✅ IP 업데이트: {ip}:{port}")
             
             print(f"✅ 락카키 대여기 IP 업로드 완료: {ip}:{port}")
@@ -220,3 +344,14 @@ class IntegrationSync:
             'status': 'unknown'
         }
 
+
+# 싱글톤 인스턴스
+_integration_sync: Optional[IntegrationSync] = None
+
+
+def get_integration_sync() -> IntegrationSync:
+    """IntegrationSync 싱글톤 인스턴스 반환"""
+    global _integration_sync
+    if _integration_sync is None:
+        _integration_sync = IntegrationSync()
+    return _integration_sync

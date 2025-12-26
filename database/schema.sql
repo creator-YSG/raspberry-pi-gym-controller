@@ -209,11 +209,18 @@ CREATE INDEX IF NOT EXISTS idx_sensor_mapping_locker_id ON sensor_mapping(locker
 -- =====================================================
 
 -- 시스템 설정 기본값
+-- 주의: gym_name, admin_password는 구글시트 통합시트(System_Integration)의 헬스장설정에서 관리
+-- 나머지 설정은 구글시트 락카키시트의 시스템설정에서 관리
 INSERT OR IGNORE INTO system_settings (setting_key, setting_value, setting_type, description) VALUES
+('gym_name', '헬스장', 'string', '헬스장 이름 (화면 상단 표시, 통합시트에서 동기화)'),
+('admin_password', '1234', 'string', '설정 화면 진입 비밀번호 (통합시트에서 동기화)'),
 ('transaction_timeout_seconds', '30', 'integer', '트랜잭션 타임아웃 시간 (초)'),
 ('max_daily_rentals', '3', 'integer', '일일 최대 대여 횟수'),
 ('sensor_verification_timeout', '30', 'integer', '센서 검증 타임아웃 시간 (초)'),
-('sync_interval_minutes', '30', 'integer', '구글시트 동기화 간격 (분)'),
+('sync_interval_minutes', '5', 'integer', '구글시트 동기화 간격 (분)'),
+('download_interval_sec', '300', 'integer', '다운로드 동기화 간격 (초)'),
+('upload_interval_sec', '300', 'integer', '업로드 동기화 간격 (초)'),
+('locker_status_interval_sec', '60', 'integer', '락카 상태 동기화 간격 (초)'),
 ('system_version', '1.0.0', 'string', '시스템 버전'),
 ('last_sync_time', '', 'string', '마지막 동기화 시간'),
 ('maintenance_mode', 'false', 'boolean', '유지보수 모드 여부');
