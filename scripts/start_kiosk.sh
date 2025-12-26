@@ -14,7 +14,7 @@ FLASK_PID=$!
 
 # 서버가 시작될 때까지 대기
 echo "⏳ 서버 시작 대기 중..."
-sleep 5
+sleep 10
 
 # 서버 상태 확인
 if curl -s http://localhost:5000 > /dev/null; then
