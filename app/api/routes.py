@@ -1862,28 +1862,48 @@ def scan_barcode():
 
 @bp.route('/system/shutdown', methods=['POST'])
 def shutdown_system():
-    """시스템 종료"""
+    """시스템 종료 (DB 정리 + 브라우저 종료 + Flask 종료)"""
     try:
         current_app.logger.info('시스템 종료 요청 받음')
         
-        # 종료 전 정리 작업
-        # TODO: ESP32 연결 해제, 데이터 저장 등
-        
-        # Flask 서버 종료
         import os
         import signal
+        import subprocess
+        import threading
         
-        def shutdown_server():
+        def cleanup_and_shutdown():
             import time
-            time.sleep(1)  # 응답을 보낸 후 종료
+            time.sleep(1)  # 응답을 보낸 후 정리 시작
+            
+            # 1. DB 정리 (WAL 체크포인트)
+            try:
+                import sqlite3
+                db_path = 'instance/gym_system.db'
+                conn = sqlite3.connect(db_path, timeout=5.0)
+                conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+                conn.close()
+                print("[종료] DB WAL 체크포인트 완료")
+            except Exception as db_err:
+                print(f"[종료] DB 정리 오류 (무시): {db_err}")
+            
+            # 2. 브라우저 종료 (키오스크 모드 완전 종료)
+            try:
+                subprocess.run(['pkill', '-9', 'chromium'], timeout=5)
+                print("[종료] 브라우저 종료 완료")
+            except Exception as browser_err:
+                print(f"[종료] 브라우저 종료 오류 (무시): {browser_err}")
+            
+            time.sleep(0.5)
+            
+            # 3. Flask 서버 종료
+            print("[종료] Flask 서버 종료")
             os.kill(os.getpid(), signal.SIGTERM)
         
-        import threading
-        threading.Thread(target=shutdown_server).start()
+        threading.Thread(target=cleanup_and_shutdown, daemon=True).start()
         
         return jsonify({
             'success': True,
-            'message': '시스템이 종료됩니다.'
+            'message': '시스템이 종료됩니다. (DB 정리 → 브라우저 종료 → Flask 종료)'
         })
         
     except Exception as e:
@@ -3056,6 +3076,7 @@ def unregister_nfc(locker_number):
 @bp.route('/sensor/mappings', methods=['GET'])
 def get_sensor_mappings():
     """모든 센서 매핑 조회"""
+    db_manager = None
     try:
         from database.database_manager import DatabaseManager
 
@@ -3089,11 +3110,15 @@ def get_sensor_mappings():
             'success': False,
             'error': f'센서 매핑 조회 중 오류가 발생했습니다: {str(e)}'
         }), 500
+    finally:
+        if db_manager:
+            db_manager.close()
 
 
 @bp.route('/sensor/lookup', methods=['GET'])
 def lookup_sensor_mapping():
     """addr, chip_idx, pin으로 현재 매핑된 락커 조회"""
+    db_manager = None
     try:
         addr = request.args.get('addr')
         chip_idx = request.args.get('chip_idx', type=int)
@@ -3136,11 +3161,15 @@ def lookup_sensor_mapping():
             'success': False,
             'error': f'센서 매핑 조회 중 오류가 발생했습니다: {str(e)}'
         }), 500
+    finally:
+        if db_manager:
+            db_manager.close()
 
 
 @bp.route('/sensor/register', methods=['POST'])
 def register_sensor_mapping():
     """센서 매핑 등록"""
+    db_manager = None
     try:
         data = request.get_json()
         if not data:
@@ -3227,11 +3256,15 @@ def register_sensor_mapping():
             'success': False,
             'error': '센서 매핑 등록 중 오류가 발생했습니다.'
         }), 500
+    finally:
+        if db_manager:
+            db_manager.close()
 
 
 @bp.route('/sensor/unregister/<locker_id>', methods=['DELETE'])
 def unregister_sensor_mapping(locker_id):
     """센서 매핑 해제"""
+    db_manager = None
     try:
         from database.database_manager import DatabaseManager
 
@@ -3271,6 +3304,9 @@ def unregister_sensor_mapping(locker_id):
             'success': False,
             'error': '센서 매핑 해제 중 오류가 발생했습니다.'
         }), 500
+    finally:
+        if db_manager:
+            db_manager.close()
 
 
 # ==========================================

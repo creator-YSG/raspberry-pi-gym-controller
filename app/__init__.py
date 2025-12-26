@@ -88,9 +88,33 @@ def create_app(config_name='default'):
     # Google Sheets 동기화 스케줄러 시작
     setup_sync_scheduler(app)
     
+    # Flask 종료 시 DB 체크포인트 실행 (데이터 손실 방지)
+    setup_shutdown_hook(app)
+    
     app.logger.info("🚀 락카키 대여기 웹 애플리케이션 초기화 완료")
     
     return app
+
+
+def setup_shutdown_hook(app):
+    """Flask 종료 시 DB 체크포인트 실행"""
+    import atexit
+    import sqlite3
+    
+    def cleanup_on_exit():
+        """앱 종료 시 정리 작업"""
+        try:
+            # WAL 체크포인트 실행
+            db_path = 'instance/gym_system.db'
+            conn = sqlite3.connect(db_path, timeout=5.0)
+            conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            conn.close()
+            print("[SHUTDOWN] DB WAL 체크포인트 완료")
+        except Exception as e:
+            print(f"[SHUTDOWN] DB 정리 오류: {e}")
+    
+    atexit.register(cleanup_on_exit)
+    app.logger.info("종료 hook 등록 완료")
 
 
 def setup_camera_service(app):

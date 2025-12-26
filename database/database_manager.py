@@ -53,8 +53,12 @@ class DatabaseManager:
                 # WAL 모드 활성화 (동시성 향상)
                 self.conn.execute("PRAGMA journal_mode = WAL")
                 
-                # 동기화 모드 설정 (성능 향상)
-                self.conn.execute("PRAGMA synchronous = NORMAL")
+                # WAL 자동 체크포인트 설정 (100페이지마다 = 약 400KB)
+                # DB 손상 방지를 위해 WAL 파일 크기 제한
+                self.conn.execute("PRAGMA wal_autocheckpoint = 100")
+                
+                # 동기화 모드 설정 (FULL로 변경 - 안전성 우선)
+                self.conn.execute("PRAGMA synchronous = FULL")
                 
                 self.logger.info(f"데이터베이스 연결 성공: {self.db_path}")
                 return True
@@ -173,10 +177,17 @@ class DatabaseManager:
             self.logger.error(f"트랜잭션 롤백 실패: {e}")
     
     def close(self):
-        """연결 종료"""
+        """연결 종료 (WAL 체크포인트 포함)"""
         try:
             with self._lock:
                 if self.conn:
+                    # 종료 전 WAL 체크포인트 실행 (데이터 손실 방지)
+                    try:
+                        self.conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+                        self.logger.debug("WAL 체크포인트 완료")
+                    except Exception as wal_err:
+                        self.logger.warning(f"WAL 체크포인트 실패 (무시): {wal_err}")
+                    
                     self.conn.close()
                     self.conn = None
                     self.logger.info("데이터베이스 연결 종료")

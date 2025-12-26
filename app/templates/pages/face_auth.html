@@ -407,7 +407,7 @@ function checkAndAuthenticate() {
     });
 }
 
-// 2회 연속 인증 (같은 사람인지 확인)
+// 1회 인증 (2회 연속 인증 제거됨)
 async function attemptDoubleAuth() {
     if (isProcessingAuth) return;
     isProcessingAuth = true;
@@ -416,52 +416,26 @@ async function attemptDoubleAuth() {
     console.log('⏱️ [TIME] 인증 시작:', new Date().toISOString());
     
     try {
-        // 1차 인증
+        // 1회 인증만 수행
         const t1Start = Date.now();
-        const result1 = await fetch('/api/auth/face', {
+        const result = await fetch('/api/auth/face', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' }
         }).then(r => r.json());
         const t1End = Date.now();
         
-        console.log(`⏱️ [TIME] 1차 인증: ${t1End - t1Start}ms`, result1.success ? `✓ ${result1.member_id}` : '✗');
+        console.log(`⏱️ [TIME] 인증: ${t1End - t1Start}ms`, result.success ? `✓ ${result.member_id}` : '✗');
         
-        if (!result1.success) {
-            console.log(`⏱️ [TIME] 총 소요: ${Date.now() - startTime}ms (1차 실패)`);
-            handleAuthFailure(result1);
+        if (!result.success) {
+            console.log(`⏱️ [TIME] 총 소요: ${Date.now() - startTime}ms (인증 실패)`);
+            handleAuthFailure(result);
             return;
         }
         
-        updateStatus('processing', '재확인 중...');
-        
-        // 2차 인증 (바로 연속)
-        const t2Start = Date.now();
-        const result2 = await fetch('/api/auth/face', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
-        }).then(r => r.json());
-        const t2End = Date.now();
-        
-        console.log(`⏱️ [TIME] 2차 인증: ${t2End - t2Start}ms`, result2.success ? `✓ ${result2.member_id}` : '✗');
-        
-        if (!result2.success) {
-            console.log(`⏱️ [TIME] 총 소요: ${Date.now() - startTime}ms (2차 실패)`);
-            handleAuthFailure(result2);
-            return;
-        }
-        
-        // 같은 사람인지 확인
-        if (result1.member_id === result2.member_id) {
-            // 2회 연속 같은 사람 → 성공!
-            const totalTime = Date.now() - startTime;
-            console.log(`🎉 [TIME] 2회 인증 성공! 총 ${totalTime}ms (${result2.member_id})`);
-            handleAuthSuccess(result2);
-        } else {
-            // 다른 사람 → 실패
-            console.log(`❌ [TIME] 1차/2차 불일치: ${result1.member_id} ≠ ${result2.member_id}`);
-            updateStatus('error', '다시 시도해주세요');
-            isProcessingAuth = false;
-        }
+        // 인증 성공!
+        const totalTime = Date.now() - startTime;
+        console.log(`🎉 [TIME] 인증 성공! 총 ${totalTime}ms (${result.member_id})`);
+        handleAuthSuccess(result);
         
     } catch (error) {
         console.error('인증 오류:', error);
