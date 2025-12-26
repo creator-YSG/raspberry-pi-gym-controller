@@ -21,7 +21,7 @@
     <div class="password-modal" id="passwordModal" style="display: none;">
         <div class="password-modal-content">
             <div class="password-modal-title">관리자 비밀번호 입력</div>
-            <input type="password" id="adminPasswordInput" class="password-input" placeholder="비밀번호" maxlength="20" />
+            <input type="text" id="adminPasswordInput" class="password-input" placeholder="비밀번호" maxlength="20" inputmode="numeric" pattern="[0-9]*" autocomplete="off" />
             <div class="password-modal-buttons">
                 <button class="btn-cancel" onclick="closePasswordModal()">취소</button>
                 <button class="btn-confirm" onclick="verifyPassword()">확인</button>
@@ -72,26 +72,32 @@
     top: 0;
     left: 0;
     right: 0;
-    padding: 25px 0;
+    padding: 15px 0;
     text-align: center;
     z-index: 1000;
     cursor: pointer;
     user-select: none;
     -webkit-user-select: none;
     -webkit-tap-highlight-color: transparent;
+    background: linear-gradient(to bottom, rgba(0,0,0,0.3) 0%, transparent 100%);
 }
 
 .gym-name-text {
-    font-size: 2.2rem;
+    font-size: 1.6rem;
     font-weight: 700;
-    color: rgba(255, 255, 255, 0.95);
-    text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.3);
-    letter-spacing: 0.1em;
+    color: rgba(255, 255, 255, 0.9);
+    text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.5);
+    letter-spacing: 0.15em;
     transition: transform 0.1s ease;
 }
 
 .gym-name-section:active .gym-name-text {
     transform: scale(0.98);
+}
+
+/* 날짜/시간 섹션 위치 조정 */
+.home-container .datetime-section {
+    margin-top: 60px;
 }
 
 /* 비밀번호 모달 */
