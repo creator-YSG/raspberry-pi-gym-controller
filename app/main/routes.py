@@ -155,23 +155,33 @@ def member_check():
                     member_name = member_dict.get('member_name', '') if member_dict else ''
                     current_app.logger.info(f'📊 member_name 추출: "{member_name}"')
 
-                    current_app.logger.info(f'📊 append_rental_record 호출 직전')
-                    result = sheets_sync.append_rental_record(
-                        rental_id=rental_id,
-                        member_id=member_id,
-                        member_name=member_name,
-                        locker_number='PENDING',
-                        auth_method=auth_method,
-                        auth_time=rental_time,
-                        sensor_time='',  # 아직 센서 감지 안 됨
-                        status='pending',
-                        photo_url=''
-                    )
-                    current_app.logger.info(f'📊 append_rental_record 결과: {result}')
-                    if result:
-                        current_app.logger.info(f'📊 구글시트 대여 기록 추가 성공 (pending): rental_id={rental_id}')
-                    else:
-                        current_app.logger.warning(f'📊 구글시트 대여 기록 추가 실패 (pending): rental_id={rental_id}')
+                    # 🚀 구글 시트 업로드 - 백그라운드 처리
+                    import threading
+                    
+                    def async_sheet_upload():
+                        try:
+                            current_app.logger.info(f'📊 백그라운드 append_rental_record 시작')
+                            result = sheets_sync.append_rental_record(
+                                rental_id=rental_id,
+                                member_id=member_id,
+                                member_name=member_name,
+                                locker_number='PENDING',
+                                auth_method=auth_method,
+                                auth_time=rental_time,
+                                sensor_time='',  # 아직 센서 감지 안 됨
+                                status='pending',
+                                photo_url=''
+                            )
+                            if result:
+                                current_app.logger.info(f'📊 백그라운드 구글시트 대여 기록 추가 성공 (pending): rental_id={rental_id}')
+                            else:
+                                current_app.logger.warning(f'📊 백그라운드 구글시트 대여 기록 추가 실패 (pending): rental_id={rental_id}')
+                        except Exception as e:
+                            current_app.logger.error(f'📊 백그라운드 시트 업로드 오류: {e}')
+                    
+                    # 백그라운드 스레드로 실행
+                    threading.Thread(target=async_sheet_upload, daemon=True).start()
+                    current_app.logger.info(f'📊 구글시트 업로드 백그라운드 실행 시작: rental_id={rental_id}')
 
                     # 🆕 인증 사진 촬영 (pending rental 생성 직후)
                     try:

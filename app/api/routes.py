@@ -919,22 +919,30 @@ def process_rental():
                 
                 current_app.logger.info(f'✅ 대여 완료: {locker_id} → {member_id}')
                 
-                # 🆕 구글 시트 즉시 동기화 (대여 활성화 시)
+                # 🚀 구글 시트 백그라운드 동기화 (대여 활성화 시)
                 if pending_rental:
                     rental_id_for_sync = rental_id_to_update
-                    try:
-                        from app.services.sheets_sync import SheetsSync
-                        sheets_sync = SheetsSync()
-                        
-                        # 새 구조: sensor_time, status 업데이트
-                        sheets_sync.update_rental_status(
-                            rental_id=rental_id_for_sync,
-                            sensor_time=rental_time,
-                            status='active'
-                        )
-                        current_app.logger.info(f'📊 구글시트 업데이트 (active): rental_id={rental_id_for_sync}, locker={locker_id}')
-                    except Exception as sheet_error:
-                        current_app.logger.warning(f'⚠️ 시트 동기화 실패 (무시): {sheet_error}')
+                    
+                    import threading
+                    
+                    def async_update_rental_status():
+                        try:
+                            from app.services.sheets_sync import SheetsSync
+                            sheets_sync = SheetsSync()
+                            
+                            # 새 구조: sensor_time, status 업데이트
+                            sheets_sync.update_rental_status(
+                                rental_id=rental_id_for_sync,
+                                sensor_time=rental_time,
+                                status='active'
+                            )
+                            current_app.logger.info(f'📊 백그라운드 구글시트 업데이트 (active): rental_id={rental_id_for_sync}, locker={locker_id}')
+                        except Exception as sheet_error:
+                            current_app.logger.warning(f'⚠️ 백그라운드 시트 동기화 실패 (무시): {sheet_error}')
+                    
+                    # 백그라운드 스레드로 실행
+                    threading.Thread(target=async_update_rental_status, daemon=True).start()
+                    current_app.logger.info(f'📊 구글시트 백그라운드 업데이트 시작: rental_id={rental_id_for_sync}, locker={locker_id}')
                 
                 # 🆕 문 닫기 로직 추가 (백그라운드 스레드)
                 import threading
@@ -1080,37 +1088,44 @@ def process_rental():
                         
                         current_app.logger.info(f'✅ 반납 완료: {target_locker} ← {member_id}')
                         
-                        # 🆕 구글 시트 동기화 (반납 완료 시) - 새 구조: 별도 행 추가
-                        try:
-                            rental_id_for_sync = rental[0]  # rental_id
-                            auth_method_for_sync = rental[17] if len(rental) > 17 else 'barcode'
-                            return_barcode_time = rental[7] if len(rental) > 7 else return_time
-                            
-                            # 회원 이름 조회
-                            cursor_name = locker_service.db.execute_query(
-                                "SELECT member_name FROM members WHERE member_id = ?", (member_id,)
-                            )
-                            member_name_row = cursor_name.fetchone() if cursor_name else None
-                            member_name = member_name_row[0] if member_name_row else ''
-                            
-                            from app.services.sheets_sync import SheetsSync
-                            sheets_sync = SheetsSync()
-                            
-                            # 새 구조: 반납 기록 별도 행 추가
-                            sheets_sync.append_return_record(
-                                rental_id=rental_id_for_sync,
-                                member_id=member_id,
-                                member_name=member_name,
-                                locker_number=target_locker,
-                                auth_method=auth_method_for_sync,
-                                auth_time=return_barcode_time or '',
-                                sensor_time=return_time,
-                                status='returned',
-                                photo_url=''  # 반납 사진 URL은 나중에 업데이트
-                            )
-                            current_app.logger.info(f'📊 구글시트 반납 기록 추가: rental_id={rental_id_for_sync}')
-                        except Exception as sheet_error:
-                            current_app.logger.warning(f'⚠️ 시트 동기화 실패 (무시): {sheet_error}')
+                        # 🚀 구글 시트 백그라운드 동기화 (반납 완료 시) - 새 구조: 별도 행 추가
+                        rental_id_for_sync = rental[0]  # rental_id
+                        auth_method_for_sync = rental[17] if len(rental) > 17 else 'barcode'
+                        return_barcode_time = rental[7] if len(rental) > 7 else return_time
+                        
+                        # 회원 이름 조회
+                        cursor_name = locker_service.db.execute_query(
+                            "SELECT member_name FROM members WHERE member_id = ?", (member_id,)
+                        )
+                        member_name_row = cursor_name.fetchone() if cursor_name else None
+                        member_name = member_name_row[0] if member_name_row else ''
+                        
+                        import threading
+                        
+                        def async_append_return_record():
+                            try:
+                                from app.services.sheets_sync import SheetsSync
+                                sheets_sync = SheetsSync()
+                                
+                                # 새 구조: 반납 기록 별도 행 추가
+                                sheets_sync.append_return_record(
+                                    rental_id=rental_id_for_sync,
+                                    member_id=member_id,
+                                    member_name=member_name,
+                                    locker_number=target_locker,
+                                    auth_method=auth_method_for_sync,
+                                    auth_time=return_barcode_time or '',
+                                    sensor_time=return_time,
+                                    status='returned',
+                                    photo_url=''  # 반납 사진 URL은 나중에 업데이트
+                                )
+                                current_app.logger.info(f'📊 백그라운드 구글시트 반납 기록 추가: rental_id={rental_id_for_sync}')
+                            except Exception as sheet_error:
+                                current_app.logger.warning(f'⚠️ 백그라운드 시트 동기화 실패 (무시): {sheet_error}')
+                        
+                        # 백그라운드 스레드로 실행
+                        threading.Thread(target=async_append_return_record, daemon=True).start()
+                        current_app.logger.info(f'📊 구글시트 반납 기록 백그라운드 업로드 시작: rental_id={rental_id_for_sync}')
                         
                         # 🆕 문 닫기 로직 추가 (백그라운드 스레드)
                         import threading
