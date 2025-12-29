@@ -1101,14 +1101,20 @@ def process_rental():
                         member_name = member_name_row[0] if member_name_row else ''
                         
                         import threading
+                        import logging
+                        
+                        # 컨텍스트 독립적 로거
+                        bg_logger = logging.getLogger(__name__)
                         
                         def async_append_return_record():
                             try:
                                 from app.services.sheets_sync import SheetsSync
                                 sheets_sync = SheetsSync()
                                 
+                                bg_logger.info(f'📊 백그라운드 반납 기록 추가 시작: rental_id={rental_id_for_sync}')
+                                
                                 # 새 구조: 반납 기록 별도 행 추가
-                                sheets_sync.append_return_record(
+                                result = sheets_sync.append_return_record(
                                     rental_id=rental_id_for_sync,
                                     member_id=member_id,
                                     member_name=member_name,
@@ -1119,9 +1125,12 @@ def process_rental():
                                     status='returned',
                                     photo_url=''  # 반납 사진 URL은 나중에 업데이트
                                 )
-                                current_app.logger.info(f'📊 백그라운드 구글시트 반납 기록 추가: rental_id={rental_id_for_sync}')
+                                if result:
+                                    bg_logger.info(f'📊 백그라운드 구글시트 반납 기록 추가 성공: rental_id={rental_id_for_sync}')
+                                else:
+                                    bg_logger.warning(f'📊 백그라운드 구글시트 반납 기록 추가 실패: rental_id={rental_id_for_sync}')
                             except Exception as sheet_error:
-                                current_app.logger.warning(f'⚠️ 백그라운드 시트 동기화 실패 (무시): {sheet_error}')
+                                bg_logger.error(f'⚠️ 백그라운드 시트 동기화 오류: {sheet_error}', exc_info=True)
                         
                         # 백그라운드 스레드로 실행
                         threading.Thread(target=async_append_return_record, daemon=True).start()

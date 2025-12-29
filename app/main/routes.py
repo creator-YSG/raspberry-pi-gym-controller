@@ -157,10 +157,14 @@ def member_check():
 
                     # 🚀 구글 시트 업로드 - 백그라운드 처리
                     import threading
+                    import logging
+                    
+                    # 로거 미리 가져오기 (컨텍스트 독립적)
+                    bg_logger = logging.getLogger(__name__)
                     
                     def async_sheet_upload():
                         try:
-                            current_app.logger.info(f'📊 백그라운드 append_rental_record 시작')
+                            bg_logger.info(f'📊 백그라운드 append_rental_record 시작: rental_id={rental_id}')
                             result = sheets_sync.append_rental_record(
                                 rental_id=rental_id,
                                 member_id=member_id,
@@ -173,11 +177,11 @@ def member_check():
                                 photo_url=''
                             )
                             if result:
-                                current_app.logger.info(f'📊 백그라운드 구글시트 대여 기록 추가 성공 (pending): rental_id={rental_id}')
+                                bg_logger.info(f'📊 백그라운드 구글시트 대여 기록 추가 성공 (pending): rental_id={rental_id}')
                             else:
-                                current_app.logger.warning(f'📊 백그라운드 구글시트 대여 기록 추가 실패 (pending): rental_id={rental_id}')
+                                bg_logger.warning(f'📊 백그라운드 구글시트 대여 기록 추가 실패 (pending): rental_id={rental_id}')
                         except Exception as e:
-                            current_app.logger.error(f'📊 백그라운드 시트 업로드 오류: {e}')
+                            bg_logger.error(f'📊 백그라운드 시트 업로드 오류: {e}', exc_info=True)
                     
                     # 백그라운드 스레드로 실행
                     threading.Thread(target=async_sheet_upload, daemon=True).start()
