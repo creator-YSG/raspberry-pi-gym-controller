@@ -102,8 +102,11 @@
     <!-- 1단계: 회원 검색 -->
     <div class="search-section">
         <h2>1단계: 회원 검색</h2>
+        <div class="search-info">
+            <p>📝 이름을 입력하거나 📱 바코드/QR을 스캔하세요</p>
+        </div>
         <div class="search-box">
-            <input type="text" id="searchInput" placeholder="회원 이름 입력" autocomplete="off">
+            <input type="text" id="searchInput" placeholder="회원 이름 입력 또는 바코드/QR 스캔" autocomplete="off">
             <button onclick="searchMembers()" id="searchBtn">🔍 검색</button>
         </div>
         
@@ -303,8 +306,24 @@
     color: white;
     font-size: 20px;
     font-weight: 600;
-    margin-bottom: 15px;
+    margin-bottom: 10px;
     text-align: center;
+}
+
+.search-info {
+    text-align: center;
+    margin-bottom: 15px;
+}
+
+.search-info p {
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 14px;
+    margin: 0;
+    background: rgba(76, 175, 80, 0.1);
+    border: 1px solid rgba(76, 175, 80, 0.3);
+    border-radius: 8px;
+    padding: 8px 12px;
+    display: inline-block;
 }
 
 .search-box {
@@ -683,6 +702,7 @@ let selectedMemberId = null;
 let selectedMemberName = null;
 let currentLang = 'ko';
 let jamoBuffer = []; // 한글 자모 버퍼
+let barcodePollingInterval = null; // 바코드 폴링 인터벌
 
 // 페이지 로드 시 터치 이벤트 바인딩
 document.addEventListener('DOMContentLoaded', function() {
@@ -702,8 +722,58 @@ document.addEventListener('DOMContentLoaded', function() {
         }, {passive: false});
     });
     
+    // 바코드 폴링 시작
+    startBarcodePolling();
+    
     console.log('키보드 터치 이벤트 바인딩 완료');
+    console.log('바코드 폴링 시작');
 });
+
+// 바코드 폴링 시작
+function startBarcodePolling() {
+    if (barcodePollingInterval) return; // 이미 실행 중이면 리턴
+    
+    barcodePollingInterval = setInterval(() => {
+        fetch('/api/barcode/poll', { method: 'GET' })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.data) {
+                    console.log('바코드 감지:', data.data);
+                    handleBarcodeDetected(data.data);
+                }
+            })
+            .catch(error => {
+                // 폴링 에러는 무시 (너무 많은 로그 방지)
+            });
+    }, 300); // 300ms 간격으로 폴링
+}
+
+// 바코드 폴링 중지
+function stopBarcodePolling() {
+    if (barcodePollingInterval) {
+        clearInterval(barcodePollingInterval);
+        barcodePollingInterval = null;
+        console.log('바코드 폴링 중지');
+    }
+}
+
+// 바코드 감지 처리
+function handleBarcodeDetected(barcodeData) {
+    const code = barcodeData.code || barcodeData.value || barcodeData;
+    
+    if (!code || code.trim().length === 0) return;
+    
+    console.log('바코드 코드:', code);
+    
+    // 검색 입력창에 바코드 값 설정
+    const searchInput = document.getElementById('searchInput');
+    searchInput.value = code.trim();
+    
+    // 자동으로 검색 실행
+    setTimeout(() => {
+        searchMembers();
+    }, 100);
+}
 
 // 언어 전환
 function setLang(lang) {
@@ -935,6 +1005,21 @@ function resetForm() {
     selectedMemberId = null;
     selectedMemberName = null;
 }
+
+// 페이지를 떠날 때 바코드 폴링 중지
+window.addEventListener('beforeunload', function() {
+    stopBarcodePolling();
+});
+
+// 뒤로가기 버튼 클릭시에도 폴링 중지
+document.addEventListener('DOMContentLoaded', function() {
+    const backButton = document.querySelector('.back-button');
+    if (backButton) {
+        backButton.addEventListener('click', function() {
+            stopBarcodePolling();
+        });
+    }
+});
 </script>
 {% endblock %}
 
