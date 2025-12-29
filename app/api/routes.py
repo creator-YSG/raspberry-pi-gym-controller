@@ -2830,6 +2830,124 @@ def register_face(member_id):
         }), 500
 
 
+@bp.route('/face/detect', methods=['GET'])
+def detect_face():
+    """실시간 얼굴 검출 상태 확인 (등록용 UI)
+    
+    카메라에서 현재 프레임으로 얼굴 검출 여부만 확인
+    
+    Returns:
+        {
+            success: boolean,
+            face_detected: boolean,
+            face_count: int,
+            message: string,
+            quality_score: float (0.0-1.0)
+        }
+    """
+    try:
+        from app.services.camera_service import get_camera_service
+        from app.services.face_service import get_face_service
+        
+        camera_service = get_camera_service()
+        face_service = get_face_service()
+        
+        # 카메라 상태 확인
+        if not camera_service.is_running:
+            return jsonify({
+                'success': False,
+                'face_detected': False,
+                'face_count': 0,
+                'message': '카메라가 실행되지 않고 있습니다.',
+                'quality_score': 0.0
+            })
+        
+        # 프레임 가져오기
+        frame = camera_service.capture_frame()
+        if frame is None:
+            return jsonify({
+                'success': False,
+                'face_detected': False,
+                'face_count': 0,
+                'message': '카메라 프레임을 가져올 수 없습니다.',
+                'quality_score': 0.0
+            })
+        
+        # 얼굴 검출
+        import cv2
+        
+        if face_service.face_cascade is None:
+            return jsonify({
+                'success': False,
+                'face_detected': False,
+                'face_count': 0,
+                'message': '얼굴 검출 모델이 초기화되지 않았습니다.',
+                'quality_score': 0.0
+            })
+        
+        # 얼굴 검출 수행
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        faces = face_service.face_cascade.detectMultiScale(
+            gray,
+            scaleFactor=1.05,
+            minNeighbors=3,
+            minSize=(40, 40),
+            flags=cv2.CASCADE_SCALE_IMAGE
+        )
+        
+        face_count = len(faces)
+        face_detected = face_count > 0
+        
+        # 품질 점수 계산 (얼굴 크기 기준)
+        quality_score = 0.0
+        message = ""
+        
+        if face_detected:
+            # 가장 큰 얼굴의 크기로 품질 계산
+            largest_face = max(faces, key=lambda f: f[2] * f[3])
+            face_area = largest_face[2] * largest_face[3]
+            frame_area = frame.shape[0] * frame.shape[1]
+            area_ratio = face_area / frame_area
+            
+            # 품질 점수: 얼굴 크기가 전체 화면의 5-25%일 때 최적
+            if area_ratio < 0.02:
+                quality_score = 0.3
+                message = "카메라에 더 가까이 와주세요"
+            elif area_ratio < 0.05:
+                quality_score = 0.6  
+                message = "조금 더 가까이 와주세요"
+            elif area_ratio <= 0.25:
+                quality_score = 1.0
+                message = "얼굴 위치가 좋습니다!"
+            else:
+                quality_score = 0.7
+                message = "조금 멀어져 주세요"
+                
+            if face_count > 1:
+                quality_score *= 0.5
+                message = f"여러 얼굴이 감지됨 ({face_count}명). 한 명만 나와주세요"
+        else:
+            message = "얼굴을 찾을 수 없습니다. 카메라를 정면으로 봐주세요"
+        
+        return jsonify({
+            'success': True,
+            'face_detected': face_detected,
+            'face_count': face_count,
+            'message': message,
+            'quality_score': round(quality_score, 2)
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f'얼굴 검출 확인 오류: {e}', exc_info=True)
+        return jsonify({
+            'success': False,
+            'face_detected': False,
+            'face_count': 0,
+            'message': '얼굴 검출 확인 중 오류가 발생했습니다.',
+            'quality_score': 0.0
+        }), 500
+
+
 @bp.route('/face/unregister/<member_id>', methods=['DELETE'])
 def unregister_face(member_id):
     """회원 얼굴 등록 해제

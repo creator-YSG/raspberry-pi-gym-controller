@@ -222,7 +222,16 @@
 
         <div class="camera-preview">
             <img id="cameraFeed" src="" alt="카메라" style="display:none;">
-            <div class="face-guide-overlay"></div>
+            <div class="face-guide-overlay" id="faceGuide"></div>
+            <div class="face-status-overlay" id="faceStatusOverlay">
+                <div class="face-detection-status" id="faceDetectionStatus">
+                    <span class="status-icon">👤</span>
+                    <span class="status-text" id="faceStatusText">얼굴을 찾고 있습니다...</span>
+                </div>
+                <div class="face-quality-bar" id="faceQualityBar" style="display:none;">
+                    <div class="quality-fill" id="faceQualityFill"></div>
+                </div>
+            </div>
             <div class="camera-loading" id="cameraLoading">
                 <div class="loading-spinner"></div>
                 <p>카메라 준비 중...</p>
@@ -529,9 +538,80 @@
     transform: translate(-50%, -50%);
     width: 180px;
     height: 240px;
-    border: 3px dashed rgba(76, 175, 80, 0.7);
+    border: 3px dashed rgba(255, 255, 255, 0.5);
     border-radius: 50% 50% 45% 45%;
     pointer-events: none;
+    transition: border-color 0.3s ease;
+}
+
+.face-guide-overlay.face-detected {
+    border-color: #4caf50;
+    border-style: solid;
+    box-shadow: 0 0 20px rgba(76, 175, 80, 0.3);
+}
+
+.face-guide-overlay.face-good-quality {
+    border-color: #4caf50;
+    box-shadow: 0 0 30px rgba(76, 175, 80, 0.5);
+}
+
+/* 얼굴 상태 오버레이 */
+.face-status-overlay {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    right: 10px;
+    z-index: 10;
+    pointer-events: none;
+}
+
+.face-detection-status {
+    background: rgba(0, 0, 0, 0.7);
+    border-radius: 8px;
+    padding: 8px 12px;
+    color: white;
+    font-size: 14px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    transition: all 0.3s ease;
+}
+
+.face-detection-status.detected {
+    background: rgba(76, 175, 80, 0.8);
+}
+
+.face-detection-status.good-quality {
+    background: rgba(76, 175, 80, 0.9);
+    box-shadow: 0 0 15px rgba(76, 175, 80, 0.4);
+}
+
+.status-icon {
+    font-size: 16px;
+}
+
+.status-text {
+    flex: 1;
+    text-align: center;
+}
+
+/* 얼굴 품질 바 */
+.face-quality-bar {
+    background: rgba(0, 0, 0, 0.5);
+    border-radius: 10px;
+    height: 8px;
+    overflow: hidden;
+    margin-top: 4px;
+}
+
+.quality-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #f44336 0%, #ff9800 30%, #4caf50 70%, #4caf50 100%);
+    border-radius: 10px;
+    transition: width 0.3s ease;
+    width: 0%;
 }
 
 .camera-loading {
@@ -587,9 +667,27 @@
 }
 
 .btn-register:disabled {
-    opacity: 0.5;
+    opacity: 0.4;
     cursor: not-allowed;
     transform: none;
+    background: rgba(100, 100, 100, 0.3);
+    border-color: rgba(100, 100, 100, 0.5);
+}
+
+.btn-register.ready {
+    background: rgba(76, 175, 80, 0.6);
+    border-color: #4caf50;
+    box-shadow: 0 0 15px rgba(76, 175, 80, 0.3);
+    animation: pulse-ready 2s infinite;
+}
+
+@keyframes pulse-ready {
+    0%, 100% {
+        box-shadow: 0 0 15px rgba(76, 175, 80, 0.3);
+    }
+    50% {
+        box-shadow: 0 0 25px rgba(76, 175, 80, 0.6);
+    }
 }
 
 .btn-cancel {
@@ -703,6 +801,8 @@ let selectedMemberName = null;
 let currentLang = 'ko';
 let jamoBuffer = []; // 한글 자모 버퍼
 let barcodePollingInterval = null; // 바코드 폴링 인터벌
+let faceDetectionInterval = null; // 얼굴 검출 폴링 인터벌
+let isRegisteringFace = false; // 등록 진행 중 플래그
 
 // 페이지 로드 시 터치 이벤트 바인딩
 document.addEventListener('DOMContentLoaded', function() {
@@ -930,6 +1030,12 @@ function selectMember(memberId, memberName, memberCategory) {
     // 카메라 섹션 표시
     document.getElementById('cameraSection').style.display = 'block';
 
+    // 등록 버튼 비활성화 (얼굴 검출 전까지)
+    const registerBtn = document.getElementById('registerBtn');
+    registerBtn.disabled = true;
+    registerBtn.textContent = '👤 얼굴을 인식하는 중...';
+    registerBtn.classList.remove('ready');
+
     // 카메라 피드 시작
     const cameraFeed = document.getElementById('cameraFeed');
     const cameraLoading = document.getElementById('cameraLoading');
@@ -943,10 +1049,114 @@ function selectMember(memberId, memberName, memberCategory) {
     cameraFeed.onload = function() {
         cameraLoading.style.display = 'none';
         cameraFeed.style.display = 'block';
+        
+        // 카메라 로드 완료 후 얼굴 검출 시작
+        startFaceDetection();
     };
 
     // 스크롤
     document.getElementById('cameraSection').scrollIntoView({ behavior: 'smooth' });
+}
+
+// 실시간 얼굴 검출 시작
+function startFaceDetection() {
+    if (faceDetectionInterval) {
+        clearInterval(faceDetectionInterval);
+    }
+    
+    console.log('👤 실시간 얼굴 검출 시작');
+    
+    faceDetectionInterval = setInterval(() => {
+        if (isRegisteringFace) {
+            return; // 등록 중에는 검출 중지
+        }
+        
+        fetch('/api/face/detect', { method: 'GET' })
+            .then(response => response.json())
+            .then(data => {
+                updateFaceDetectionUI(data);
+            })
+            .catch(error => {
+                console.error('얼굴 검출 오류:', error);
+                updateFaceDetectionUI({
+                    success: false,
+                    face_detected: false,
+                    face_count: 0,
+                    message: '얼굴 검출 연결 오류',
+                    quality_score: 0.0
+                });
+            });
+    }, 500); // 500ms 간격으로 폴링
+}
+
+// 얼굴 검출 중지
+function stopFaceDetection() {
+    if (faceDetectionInterval) {
+        clearInterval(faceDetectionInterval);
+        faceDetectionInterval = null;
+        console.log('👤 얼굴 검출 중지');
+    }
+}
+
+// UI 업데이트
+function updateFaceDetectionUI(data) {
+    const faceGuide = document.getElementById('faceGuide');
+    const faceStatusText = document.getElementById('faceStatusText');
+    const faceDetectionStatus = document.getElementById('faceDetectionStatus');
+    const faceQualityBar = document.getElementById('faceQualityBar');
+    const faceQualityFill = document.getElementById('faceQualityFill');
+    const registerBtn = document.getElementById('registerBtn');
+    
+    // 기본 상태 초기화
+    faceGuide.classList.remove('face-detected', 'face-good-quality');
+    faceDetectionStatus.classList.remove('detected', 'good-quality');
+    registerBtn.classList.remove('ready');
+    
+    if (!data.success) {
+        faceStatusText.textContent = data.message || '얼굴 검출 오류';
+        faceQualityBar.style.display = 'none';
+        registerBtn.disabled = true;
+        registerBtn.textContent = '❌ 카메라 오류';
+        return;
+    }
+    
+    // 상태 텍스트 업데이트
+    faceStatusText.textContent = data.message;
+    
+    // 품질 바 표시/업데이트
+    if (data.face_detected && data.quality_score > 0) {
+        faceQualityBar.style.display = 'block';
+        faceQualityFill.style.width = (data.quality_score * 100) + '%';
+    } else {
+        faceQualityBar.style.display = 'none';
+    }
+    
+    // 얼굴 검출 상태에 따른 UI 변경
+    if (data.face_detected) {
+        faceGuide.classList.add('face-detected');
+        faceDetectionStatus.classList.add('detected');
+        
+        if (data.quality_score >= 0.8) {
+            // 고품질 얼굴 검출
+            faceGuide.classList.add('face-good-quality');
+            faceDetectionStatus.classList.add('good-quality');
+            registerBtn.disabled = false;
+            registerBtn.textContent = '📷 촬영 및 등록';
+            registerBtn.classList.add('ready');
+        } else if (data.quality_score >= 0.6) {
+            // 중간 품질
+            registerBtn.disabled = false;
+            registerBtn.textContent = '📷 촬영 및 등록';
+        } else {
+            // 낮은 품질
+            registerBtn.disabled = true;
+            registerBtn.textContent = '👤 위치를 조정해주세요';
+        }
+    } else {
+        // 얼굴 미검출
+        registerBtn.disabled = true;
+        registerBtn.textContent = '👤 얼굴을 인식하는 중...';
+    }
 }
 
 // 얼굴 등록
@@ -959,11 +1169,18 @@ function registerFace() {
     const registerBtn = document.getElementById('registerBtn');
     const statusMessage = document.getElementById('statusMessage');
 
-    // 버튼 비활성화
+    // 등록 진행 상태 설정
+    isRegisteringFace = true;
+    
+    // 실시간 얼굴 검출 일시 중지
+    stopFaceDetection();
+
+    // 버튼 비활성화 및 상태 변경
     registerBtn.disabled = true;
     registerBtn.textContent = '⏳ 등록 중...';
+    registerBtn.classList.remove('ready');
 
-    statusMessage.innerHTML = '<p class="status-processing">📷 얼굴을 인식하고 있습니다...</p>';
+    statusMessage.innerHTML = '<p class="status-processing">📷 얼굴을 등록하고 있습니다...</p>';
 
     console.log(`📷 얼굴 등록 시작: ${selectedMemberId} (${selectedMemberName})`);
 
@@ -996,6 +1213,15 @@ function registerFace() {
                     ✅ ${selectedMemberName}님의 얼굴이 성공적으로 등록되었습니다!
                 </p>
             `;
+
+            // 등록 완료 상태 업데이트
+            updateFaceDetectionUI({
+                success: true,
+                face_detected: true,
+                face_count: 1,
+                message: '등록 완료! ✅',
+                quality_score: 1.0
+            });
 
             // 카메라 피드 중지
             document.getElementById('cameraFeed').src = '';
@@ -1038,8 +1264,10 @@ function registerFace() {
                 </p>
                 <p class="status-help">${helpMessage}</p>
             `;
-            registerBtn.disabled = false;
-            registerBtn.textContent = '📷 촬영 및 등록';
+            
+            // 등록 진행 상태 해제 및 얼굴 검출 재시작
+            isRegisteringFace = false;
+            startFaceDetection();
         }
     })
     .catch(error => {
@@ -1048,34 +1276,71 @@ function registerFace() {
             <p class="status-error">❌ 네트워크 오류: ${error.message}</p>
             <p class="status-help">네트워크 연결을 확인하고 다시 시도해주세요.</p>
         `;
-        registerBtn.disabled = false;
-        registerBtn.textContent = '📷 촬영 및 등록';
+        
+        // 등록 진행 상태 해제 및 얼굴 검출 재시작
+        isRegisteringFace = false;
+        startFaceDetection();
+    })
+    .finally(() => {
+        // 등록 완료 여부와 관계없이 상태 초기화
+        if (!isRegisteringFace) {
+            // 3초 후에 실행되는 resetForm에 의해 처리되지 않는 경우만
+            setTimeout(() => {
+                if (isRegisteringFace === false && faceDetectionInterval === null) {
+                    startFaceDetection();
+                }
+            }, 100);
+        }
     });
 }
 
 // 등록 취소
 function cancelRegistration() {
+    // 얼굴 검출 중지
+    stopFaceDetection();
+    
+    // 등록 진행 상태 해제
+    isRegisteringFace = false;
+    
     // 카메라 피드 중지
     document.getElementById('cameraFeed').src = '';
 
     document.getElementById('cameraSection').style.display = 'none';
     selectedMemberId = null;
     selectedMemberName = null;
+    
+    console.log('등록 취소됨');
 }
 
 // 폼 초기화
 function resetForm() {
+    // 모든 검출 및 폴링 중지
+    stopFaceDetection();
+    stopBarcodePolling();
+    
+    // 상태 초기화
+    isRegisteringFace = false;
+    
+    // UI 초기화
     document.getElementById('searchInput').value = '';
     document.getElementById('resultsSection').style.display = 'none';
     document.getElementById('cameraSection').style.display = 'none';
     document.getElementById('statusMessage').innerHTML = '';
+    
+    // 변수 초기화
     selectedMemberId = null;
     selectedMemberName = null;
+    
+    // 바코드 폴링 재시작 (검색용)
+    startBarcodePolling();
+    
+    console.log('폼 초기화 완료');
 }
 
-// 페이지를 떠날 때 바코드 폴링 중지
+// 페이지를 떠날 때 모든 폴링 중지
 window.addEventListener('beforeunload', function() {
     stopBarcodePolling();
+    stopFaceDetection();
 });
 
 // 뒤로가기 버튼 클릭시에도 폴링 중지
@@ -1084,6 +1349,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (backButton) {
         backButton.addEventListener('click', function() {
             stopBarcodePolling();
+            stopFaceDetection();
         });
     }
 });
