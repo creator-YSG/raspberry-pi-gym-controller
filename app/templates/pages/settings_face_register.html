@@ -965,14 +965,31 @@ function registerFace() {
 
     statusMessage.innerHTML = '<p class="status-processing">📷 얼굴을 인식하고 있습니다...</p>';
 
+    console.log(`📷 얼굴 등록 시작: ${selectedMemberId} (${selectedMemberName})`);
+
     fetch(`/api/face/register/${selectedMemberId}`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
         }
     })
-    .then(response => response.json())
-    .then(data => {
+    .then(response => {
+        console.log('📊 서버 응답:', response.status, response.statusText);
+        
+        // 응답이 JSON인지 확인
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+            throw new Error(`서버에서 잘못된 응답 형식을 반환했습니다 (${response.status})`);
+        }
+        
+        return response.json().then(data => ({
+            status: response.status,
+            data: data
+        }));
+    })
+    .then(({status, data}) => {
+        console.log('📊 등록 응답:', status, data);
+        
         if (data.success) {
             statusMessage.innerHTML = `
                 <p class="status-success">
@@ -988,20 +1005,48 @@ function registerFace() {
                 resetForm();
             }, 3000);
         } else {
+            // 서버에서 반환한 구체적인 에러 메시지 표시
+            const errorMsg = data.error || '알 수 없는 오류가 발생했습니다';
+            const errorType = data.error_type || 'unknown_error';
+            
+            console.error('❌ 등록 실패:', errorType, errorMsg);
+            
+            let helpMessage = '';
+            switch (errorType) {
+                case 'face_not_found':
+                    helpMessage = '카메라를 정면으로 보고 충분한 조명을 확보해주세요.';
+                    break;
+                case 'camera_error':
+                case 'camera_not_running':
+                case 'camera_init_error':
+                    helpMessage = '카메라 연결을 확인하고 새로고침 후 다시 시도해주세요.';
+                    break;
+                case 'face_detector_not_initialized':
+                case 'face_embedding_not_initialized':
+                    helpMessage = '얼굴인식 모델 로딩 중입니다. 잠시 후 다시 시도해주세요.';
+                    break;
+                case 'member_not_found':
+                    helpMessage = '회원 정보를 다시 확인해주세요.';
+                    break;
+                default:
+                    helpMessage = '다시 시도해주세요.';
+            }
+            
             statusMessage.innerHTML = `
                 <p class="status-error">
-                    ❌ 등록 실패: ${data.error}
+                    ❌ 등록 실패: ${errorMsg}
                 </p>
-                <p class="status-help">다시 시도해주세요.</p>
+                <p class="status-help">${helpMessage}</p>
             `;
             registerBtn.disabled = false;
             registerBtn.textContent = '📷 촬영 및 등록';
         }
     })
     .catch(error => {
-        console.error('등록 오류:', error);
+        console.error('❌ 등록 네트워크 오류:', error);
         statusMessage.innerHTML = `
-            <p class="status-error">❌ 등록 중 오류가 발생했습니다.</p>
+            <p class="status-error">❌ 네트워크 오류: ${error.message}</p>
+            <p class="status-help">네트워크 연결을 확인하고 다시 시도해주세요.</p>
         `;
         registerBtn.disabled = false;
         registerBtn.textContent = '📷 촬영 및 등록';

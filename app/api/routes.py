@@ -2723,48 +2723,109 @@ def register_face(member_id):
         실패: {success: false, error, error_type}
     """
     try:
+        current_app.logger.info(f"📷 얼굴 등록 시작: {member_id}")
+        
         from app.services.camera_service import get_camera_service
         from app.services.face_service import get_face_service
-        
-        camera_service = get_camera_service()
-        face_service = get_face_service()
         
         # 회원 존재 확인
         member_service = MemberService()
         member = member_service.get_member(member_id)
         
         if not member:
+            current_app.logger.warning(f"❌ 회원 없음: {member_id}")
             return jsonify({
                 'success': False,
                 'error': f'회원을 찾을 수 없습니다: {member_id}',
                 'error_type': 'member_not_found'
             }), 404
         
+        current_app.logger.info(f"✅ 회원 확인: {member.name} ({member_id})")
+        
+        # 카메라 서비스 초기화 확인
+        try:
+            camera_service = get_camera_service()
+            current_app.logger.info(f"📹 카메라 서비스 상태: running={camera_service.is_running}")
+            
+            if not camera_service.is_running:
+                current_app.logger.error("❌ 카메라 서비스가 실행되지 않음")
+                return jsonify({
+                    'success': False,
+                    'error': '카메라 서비스가 실행되지 않고 있습니다.',
+                    'error_type': 'camera_not_running'
+                }), 500
+        except Exception as e:
+            current_app.logger.error(f"❌ 카메라 서비스 초기화 실패: {e}")
+            return jsonify({
+                'success': False,
+                'error': '카메라 서비스 초기화에 실패했습니다.',
+                'error_type': 'camera_init_error'
+            }), 500
+        
+        # 얼굴 서비스 초기화 확인
+        try:
+            face_service = get_face_service()
+            status = face_service.get_status()
+            current_app.logger.info(f"👤 얼굴 서비스 상태: {status}")
+            
+            if not status['detector_initialized']:
+                current_app.logger.error("❌ 얼굴 검출 모델이 초기화되지 않음")
+                return jsonify({
+                    'success': False,
+                    'error': '얼굴 검출 모델이 초기화되지 않았습니다.',
+                    'error_type': 'face_detector_not_initialized'
+                }), 500
+                
+            if not status['embedding_initialized']:
+                current_app.logger.error("❌ 얼굴 임베딩 모델이 초기화되지 않음")
+                return jsonify({
+                    'success': False,
+                    'error': '얼굴 임베딩 모델이 초기화되지 않았습니다.',
+                    'error_type': 'face_embedding_not_initialized'
+                }), 500
+                
+        except Exception as e:
+            current_app.logger.error(f"❌ 얼굴 서비스 초기화 실패: {e}")
+            return jsonify({
+                'success': False,
+                'error': '얼굴 서비스 초기화에 실패했습니다.',
+                'error_type': 'face_service_init_error'
+            }), 500
+        
         # 카메라에서 현재 프레임 가져오기
+        current_app.logger.info("📸 프레임 캡처 시도...")
         frame = camera_service.capture_frame()
         
         if frame is None:
+            current_app.logger.error("❌ 프레임 캡처 실패")
             return jsonify({
                 'success': False,
-                'error': '카메라에서 프레임을 가져올 수 없습니다.',
+                'error': '카메라에서 프레임을 가져올 수 없습니다. 카메라가 연결되어 있는지 확인해주세요.',
                 'error_type': 'camera_error'
             }), 500
         
+        current_app.logger.info(f"✅ 프레임 캡처 성공: {frame.shape}")
+        
         # 얼굴 등록
+        current_app.logger.info("👤 얼굴 등록 처리 시작...")
         result = face_service.register_face(member_id, frame, save_photo=True)
         
-        current_app.logger.info(f"얼굴 등록: {member_id} - {'성공' if result.get('success') else '실패'}")
+        current_app.logger.info(f"📊 얼굴 등록 결과: {result}")
         
         if result.get('success'):
+            current_app.logger.info(f"✅ 얼굴 등록 성공: {member_id} - {result.get('message', '')}")
             return jsonify(result)
         else:
+            error_msg = result.get('error', '알 수 없는 오류')
+            error_type = result.get('error_type', 'unknown_error')
+            current_app.logger.warning(f"⚠️ 얼굴 등록 실패: {member_id} - {error_msg} ({error_type})")
             return jsonify(result), 400
         
     except Exception as e:
-        current_app.logger.error(f'얼굴 등록 오류: {member_id}, {e}', exc_info=True)
+        current_app.logger.error(f'❌ 얼굴 등록 시스템 오류: {member_id}, {e}', exc_info=True)
         return jsonify({
             'success': False,
-            'error': '얼굴 등록 중 오류가 발생했습니다.',
+            'error': '얼굴 등록 중 시스템 오류가 발생했습니다. 관리자에게 문의하세요.',
             'error_type': 'system_error'
         }), 500
 
