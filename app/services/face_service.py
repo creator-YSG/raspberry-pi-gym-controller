@@ -395,12 +395,12 @@ class FaceService:
             }
     
     def authenticate_by_face(self, image: np.ndarray, 
-                             threshold: float = 0.5) -> Optional[Tuple[str, float]]:
+                             threshold: float = 0.7) -> Optional[Tuple[str, float]]:
         """얼굴로 회원 인증 (1:N 검색)
         
         Args:
             image: BGR 이미지 배열
-            threshold: 유사도 임계값 (0.5 = 50%)
+            threshold: 유사도 임계값 (0.7 = 70%)
             
         Returns:
             (member_id, similarity) 튜플 또는 None
@@ -448,7 +448,7 @@ class FaceService:
         
         try:
             # 1. 얼굴 인증
-            result = self.authenticate_by_face(image, threshold=0.5)
+            result = self.authenticate_by_face(image, threshold=0.7)
             
             t_auth = time.time()
             
