@@ -822,11 +822,33 @@ document.addEventListener('DOMContentLoaded', function() {
         }, {passive: false});
     });
     
+    // 🚀 물리 키보드 입력 지원 추가
+    const searchInput = document.getElementById('searchInput');
+    if (searchInput) {
+        // 검색 입력 필드에 포커스 유지
+        searchInput.focus();
+        
+        // 물리 키보드 입력 허용
+        searchInput.addEventListener('input', function(e) {
+            console.log('💻 물리 키보드 입력:', e.target.value);
+        });
+        
+        // 포커스 잃었을 때 다시 포커스 설정 (터치스크린 환경)
+        searchInput.addEventListener('blur', function() {
+            setTimeout(() => {
+                if (document.activeElement !== searchInput) {
+                    searchInput.focus();
+                }
+            }, 100);
+        });
+    }
+    
     // 바코드 폴링 시작
     console.log('📱 바코드 폴링 시작 준비...');
     startBarcodePolling();
     
     console.log('키보드 터치 이벤트 바인딩 완료');
+    console.log('💻 물리 키보드 입력 지원 활성화');
     console.log('📱 바코드 폴링 활성화됨');
 });
 
