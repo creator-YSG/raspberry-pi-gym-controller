@@ -1071,7 +1071,7 @@ function startFaceDetection() {
             return; // 등록 중에는 검출 중지
         }
         
-        fetch('/api/face/detect', { method: 'GET' })
+        fetch('/api/face/detect-quality', { method: 'GET' })
             .then(response => response.json())
             .then(data => {
                 updateFaceDetectionUI(data);
