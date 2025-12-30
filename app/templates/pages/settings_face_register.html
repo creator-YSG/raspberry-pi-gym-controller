@@ -1095,16 +1095,35 @@ function selectMember(memberId, memberName, memberCategory) {
     // 카메라 스트림 시작
     cameraFeed.src = '/api/video_feed?' + Date.now();
 
+    // 즉시 스크롤 (카메라 섹션이 표시되면 바로)
+    setTimeout(() => {
+        document.getElementById('cameraSection').scrollIntoView({ 
+            behavior: 'smooth',
+            block: 'start'
+        });
+        console.log('📱 카메라 섹션으로 스크롤 실행');
+    }, 300); // 300ms 후 실행
+
     cameraFeed.onload = function() {
         cameraLoading.style.display = 'none';
         cameraFeed.style.display = 'block';
         
         // 카메라 로드 완료 후 얼굴 검출 시작
         startFaceDetection();
+        
+        console.log('📷 카메라 피드 로드 완료');
     };
 
-    // 스크롤
-    document.getElementById('cameraSection').scrollIntoView({ behavior: 'smooth' });
+    // 카메라 로드 실패 시 대안 처리
+    cameraFeed.onerror = function() {
+        cameraLoading.style.display = 'none';
+        cameraFeed.style.display = 'block';
+        
+        // 에러 발생해도 얼굴 검출 시작 (API로 대체)
+        startFaceDetection();
+        
+        console.log('📷 카메라 피드 로드 실패, API로 대체');
+    };
 }
 
 // 실시간 얼굴 검출 시작
