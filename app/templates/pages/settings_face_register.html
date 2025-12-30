@@ -810,7 +810,27 @@ document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('.key').forEach(function(btn) {
         btn.addEventListener('touchend', function(e) {
             e.preventDefault();
-            this.click();
+            
+            // onclick 속성에서 함수 호출 정보 추출하여 직접 실행
+            const onclickAttr = this.getAttribute('onclick');
+            if (onclickAttr) {
+                try {
+                    // "typeKey('ㅂ')" 형태에서 문자 추출
+                    const match = onclickAttr.match(/typeKey\('(.+)'\)/);
+                    if (match) {
+                        const char = match[1];
+                        console.log('🔤 터치 입력:', char);
+                        typeKey(char);
+                    } else if (onclickAttr.includes('backspace')) {
+                        console.log('⌫ 터치 백스페이스');
+                        backspace();
+                    }
+                } catch (error) {
+                    console.error('터치 이벤트 처리 오류:', error);
+                    // 실패 시 기본 click() 호출
+                    this.click();
+                }
+            }
         }, {passive: false});
     });
     
@@ -932,10 +952,16 @@ function setLang(lang) {
 function typeKey(char) {
     const input = document.getElementById('searchInput');
     
+    console.log(`🔤 typeKey 호출: "${char}", currentLang: ${currentLang}, isJamo: ${isJamo(char)}`);
+    console.log(`🔤 현재 jamoBuffer:`, jamoBuffer);
+    console.log(`🔤 입력 전 값: "${input.value}"`);
+    
     if (currentLang === 'ko' && isJamo(char)) {
         // 한글 자모 조합
         jamoBuffer.push(char);
-        input.value = Hangul.assemble(jamoBuffer);
+        const assembled = Hangul.assemble(jamoBuffer);
+        input.value = assembled;
+        console.log(`🔤 한글 조합 결과: "${assembled}", jamoBuffer:`, jamoBuffer);
     } else {
         // 영어 또는 스페이스
         if (jamoBuffer.length > 0) {
@@ -943,6 +969,7 @@ function typeKey(char) {
         }
         input.value += char;
         jamoBuffer = Hangul.disassemble(input.value);
+        console.log(`🔤 영어/스페이스 입력 결과: "${input.value}"`);
     }
 }
 
