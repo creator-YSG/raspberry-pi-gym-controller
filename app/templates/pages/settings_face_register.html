@@ -1085,6 +1085,14 @@ function startFaceDetection() {
                     message: '얼굴 검출 연결 오류',
                     quality_score: 0.0
                 });
+                
+                // API 오류 시 등록 버튼 강제 비활성화
+                const registerBtn = document.getElementById('registerBtn');
+                if (registerBtn) {
+                    registerBtn.disabled = true;
+                    registerBtn.textContent = '❌ 카메라 연결 오류';
+                    registerBtn.classList.remove('ready');
+                }
             });
     }, 500); // 500ms 간격으로 폴링
 }
@@ -1168,6 +1176,12 @@ function registerFace() {
 
     const registerBtn = document.getElementById('registerBtn');
     const statusMessage = document.getElementById('statusMessage');
+
+    // 🚨 중요: 버튼이 disabled 상태인지 한 번 더 체크
+    if (registerBtn.disabled) {
+        console.warn('⚠️ 등록 버튼이 비활성화 상태입니다. 등록을 중단합니다.');
+        return;
+    }
 
     // 등록 진행 상태 설정
     isRegisteringFace = true;
