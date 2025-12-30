@@ -1097,12 +1097,44 @@ function selectMember(memberId, memberName, memberCategory) {
 
     // 즉시 스크롤 (카메라 섹션이 표시되면 바로)
     setTimeout(() => {
-        document.getElementById('cameraSection').scrollIntoView({ 
-            behavior: 'smooth',
-            block: 'start'
-        });
-        console.log('📱 카메라 섹션으로 스크롤 실행');
-    }, 300); // 300ms 후 실행
+        const cameraSection = document.getElementById('cameraSection');
+        
+        // 여러 방법으로 스크롤 시도
+        try {
+            // 방법 1: scrollIntoView
+            cameraSection.scrollIntoView({ 
+                behavior: 'smooth',
+                block: 'start'
+            });
+            console.log('📱 방법1 스크롤 실행: scrollIntoView');
+        } catch (e) {
+            console.error('방법1 실패:', e);
+        }
+        
+        // 방법 2: window.scrollTo (백업)
+        setTimeout(() => {
+            try {
+                const rect = cameraSection.getBoundingClientRect();
+                const scrollTop = window.pageYOffset + rect.top - 50; // 50px 여유
+                window.scrollTo({ top: scrollTop, behavior: 'smooth' });
+                console.log('📱 방법2 스크롤 실행: window.scrollTo');
+            } catch (e) {
+                console.error('방법2 실패:', e);
+            }
+        }, 100);
+        
+        // 방법 3: 즉시 스크롤 (비상용)
+        setTimeout(() => {
+            try {
+                const rect = cameraSection.getBoundingClientRect();
+                window.scrollTo(0, window.pageYOffset + rect.top - 50);
+                console.log('📱 방법3 스크롤 실행: 즉시 스크롤');
+            } catch (e) {
+                console.error('방법3 실패:', e);
+            }
+        }, 500);
+        
+    }, 200); // 200ms 후 실행
 
     cameraFeed.onload = function() {
         cameraLoading.style.display = 'none';
